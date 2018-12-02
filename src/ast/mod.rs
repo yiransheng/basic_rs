@@ -5,11 +5,18 @@ mod token;
 
 pub use self::token::*;
 
+use self::function::Func;
+
 pub type Number = f64;
 pub type LineNo = usize;
 
-pub struct Variable([u8; 2]);
+#[derive(Debug)]
+pub struct Variable(pub [u8; 2]);
 
+#[derive(Debug)]
+pub struct List(pub [u8; 2]);
+
+#[derive(Debug)]
 pub enum Relop {
     Less,
     LessEqual,
@@ -19,17 +26,25 @@ pub enum Relop {
     NotEqual,
 }
 
-pub enum Expression {
+#[derive(Debug)]
+pub enum Primary {
     Num(Number),
     Var(Variable),
+}
+
+#[derive(Debug)]
+pub enum Expression {
+    Val(Primary),
     Neg(Box<Expression>),
     Add(Box<Expression>, Box<Expression>),
     Sub(Box<Expression>, Box<Expression>),
     Mul(Box<Expression>, Box<Expression>),
     Div(Box<Expression>, Box<Expression>),
     Pow(Box<Expression>, Box<Expression>),
+    Call(Func, Box<Expression>),
 }
 
+#[derive(Debug)]
 pub enum Printable {
     Label(String),
     Expr(Expression),
@@ -37,11 +52,19 @@ pub enum Printable {
     Advance5, // ,
 }
 
+#[derive(Debug)]
 pub struct Program {
-    statements: Vec<(LineNo, Statement)>,
+    pub statements: Vec<Statement>,
 }
 
-pub enum Statement {
+#[derive(Debug)]
+pub struct Statement {
+    pub statement: Stmt,
+    pub line_no: LineNo,
+}
+
+#[derive(Debug)]
+pub enum Stmt {
     Let(LetStmt),
     Read(ReadStmt),
     Data(DataStmt),
@@ -53,58 +76,71 @@ pub enum Statement {
     Next(NextStmt),
     Def(DefStmt),
     Dim(DimStmt),
+    Rem,
     End,
     Stop,
     Return,
 }
 
+#[derive(Debug)]
 pub struct LetStmt {
-    var: Variable,
-    expr: Expression,
+    pub var: Variable,
+    pub expr: Expression,
 }
 
+#[derive(Debug)]
 pub struct ReadStmt {
-    vars: Vec<Variable>,
+    pub vars: Vec<Variable>,
 }
 
+#[derive(Debug)]
 pub struct DataStmt {
-    vals: Vec<Number>,
+    pub vals: Vec<Number>,
 }
 
+#[derive(Debug)]
 pub struct PrintStmt {
-    parts: Vec<Printable>,
+    pub parts: Vec<Printable>,
 }
 
+#[derive(Debug)]
 pub struct GotoStmt {
-    goto: LineNo,
+    pub goto: LineNo,
 }
+
+#[derive(Debug)]
 pub struct GosubStmt {
-    goto: LineNo,
+    pub goto: LineNo,
 }
 
+#[derive(Debug)]
 pub struct IfStmt {
-    op: Relop,
-    lhs: Expression,
-    rhs: Expression,
-    then: LineNo,
+    pub op: Relop,
+    pub lhs: Expression,
+    pub rhs: Expression,
+    pub then: LineNo,
 }
 
+#[derive(Debug)]
 pub struct ForStmt {
-    var: Variable,
-    from: Expression,
-    to: Expression,
-    step: Option<Expression>,
+    pub var: Variable,
+    pub from: Expression,
+    pub to: Expression,
+    pub step: Option<Expression>,
 }
 
+#[derive(Debug)]
 pub struct NextStmt {
-    var: Variable,
+    pub var: Variable,
 }
 
+#[derive(Debug)]
 pub struct DefStmt {
-    func_id: u8, // 0 - 25 or A-Z
-    var: Variable,
-    expr: Expression,
+    pub func_id: u8, // 0 - 25 or A-Z
+    pub var: Variable,
+    pub expr: Expression,
 }
 
 // TODO
+#[derive(Debug)]
 pub struct DimStmt {}

@@ -45,6 +45,18 @@ pub struct SourceMapped<T> {
     pub loc: SourceLoc,
 }
 
+impl<T> SourceMapped<T> {
+    pub fn map<U, F>(self, f: F) -> SourceMapped<U>
+    where
+        F: Fn(T) -> U,
+    {
+        SourceMapped {
+            value: f(self.value),
+            loc: self.loc,
+        }
+    }
+}
+
 #[derive(Debug, Copy, Clone)]
 pub struct SourceLoc {
     pub line: usize,

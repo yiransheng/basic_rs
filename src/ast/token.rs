@@ -28,6 +28,12 @@ pub enum Token {
 }
 
 impl Token {
+    pub fn take(&mut self) -> Self {
+        match self {
+            Token::Label(s) => ::std::mem::replace(self, Token::Label(String::new())),
+            _ => self.clone(),
+        }
+    }
     #[cfg(test)]
     pub fn ty(&self) -> &'static str {
         use self::Token::*;
