@@ -6,6 +6,7 @@ mod token;
 pub use self::token::*;
 
 use self::function::Func;
+use either::Either;
 
 pub type Number = f64;
 pub type LineNo = usize;
@@ -14,7 +15,16 @@ pub type LineNo = usize;
 pub struct Variable(pub [u8; 2]);
 
 #[derive(Debug)]
-pub struct List(pub [u8; 2]);
+pub struct List {
+    pub var: Variable,
+    pub subscript: Expression,
+}
+
+#[derive(Debug)]
+pub struct Table {
+    pub var: Variable,
+    pub subscript: (Expression, Expression),
+}
 
 #[derive(Debug)]
 pub enum Relop {
@@ -27,21 +37,23 @@ pub enum Relop {
 }
 
 #[derive(Debug)]
-pub enum Primary {
-    Num(Number),
+pub enum LValue {
     Var(Variable),
+    List(List),
+    Table(Table),
 }
 
 #[derive(Debug)]
 pub enum Expression {
-    Val(Primary),
+    Lit(Number),
+    Var(Box<LValue>),
     Neg(Box<Expression>),
+    Call(Func, Box<Expression>),
     Add(Box<Expression>, Box<Expression>),
     Sub(Box<Expression>, Box<Expression>),
     Mul(Box<Expression>, Box<Expression>),
     Div(Box<Expression>, Box<Expression>),
     Pow(Box<Expression>, Box<Expression>),
-    Call(Func, Box<Expression>),
 }
 
 #[derive(Debug)]
@@ -84,13 +96,13 @@ pub enum Stmt {
 
 #[derive(Debug)]
 pub struct LetStmt {
-    pub var: Variable,
+    pub var: LValue,
     pub expr: Expression,
 }
 
 #[derive(Debug)]
 pub struct ReadStmt {
-    pub vars: Vec<Variable>,
+    pub vars: Vec<LValue>,
 }
 
 #[derive(Debug)]
@@ -123,7 +135,7 @@ pub struct IfStmt {
 
 #[derive(Debug)]
 pub struct ForStmt {
-    pub var: Variable,
+    pub var: LValue,
     pub from: Expression,
     pub to: Expression,
     pub step: Option<Expression>,
@@ -131,16 +143,17 @@ pub struct ForStmt {
 
 #[derive(Debug)]
 pub struct NextStmt {
-    pub var: Variable,
+    pub var: LValue,
 }
 
 #[derive(Debug)]
 pub struct DefStmt {
-    pub func_id: u8, // 0 - 25 or A-Z
+    pub func: Func,
     pub var: Variable,
     pub expr: Expression,
 }
 
-// TODO
 #[derive(Debug)]
-pub struct DimStmt {}
+pub struct DimStmt {
+    pub dims: Vec<Either<List, Table>>,
+}

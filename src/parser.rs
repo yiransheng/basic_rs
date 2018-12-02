@@ -1,6 +1,6 @@
 use std::mem;
 
-use void::Void;
+use either::Either;
 
 use crate::ast::keyword::Keyword;
 use crate::ast::*;
@@ -13,6 +13,8 @@ pub enum ErrorInner {
     ScanError(ScanError),
     UnexpectedToken(Token),
     BadLineNo(f64),
+    BadSubscript,
+    BadArgument,
 }
 
 impl From<ScanError> for ErrorInner {
@@ -39,25 +41,17 @@ macro_rules! consume_token {
     };
 }
 
-// expression ::= term ((+|-) term)*
+macro_rules! parse_statement {
+    ($self:ident, $kw:ident, $b:block) => {{
+        consume_token!($self, Token::Keyword(Keyword::$kw));
 
-// term ::= factor ((*|/) factor)*
+        let r = $b;
 
-// factor ::= unary (^ unary)*
+        consume_token!($self, Token::Eol | Token::Eof);
 
-// unary ::= var | number | expression
-
-/*
- * expression     → equality ;
- * equality       → comparison ( ( "!=" | "==" ) comparison )* ;
- * comparison     → addition ( ( ">" | ">=" | "<" | "<=" ) addition )* ;
- * addition       → multiplication ( ( "-" | "+" ) multiplication )* ;
- * multiplication → unary ( ( "/" | "*" ) unary )* ;
- * unary          → ( "!" | "-" ) unary
- *                | primary ;
- * primary        → NUMBER | STRING | "false" | "true" | "nil"
- *                | "(" expression ")" ;
- */
+        r
+    }};
+}
 
 impl<'a> Parser<'a> {
     pub fn new(scanner: Scanner<'a>) -> Self {
@@ -227,20 +221,53 @@ impl<'a> Parser<'a> {
     }
 
     fn next_statement(&mut self) -> Result<NextStmt, Error> {
-        consume_token!(self, Token::Keyword(Keyword::Next));
-        let var = self.variable()?;
-
-        consume_token!(self, Token::Eol | Token::Eof);
+        let var = parse_statement!(self, Next, { self.variable()? });
 
         Ok(NextStmt { var })
     }
 
     fn def_statement(&mut self) -> Result<DefStmt, Error> {
-        unimplemented!()
+        let (func, expr, var) = parse_statement!(self, Def, {
+            let func = match &self.current {
+                Token::Function(func) => *func,
+                _ => return self.unexpected_token(),
+            };
+            self.advance()?;
+
+            consume_token!(self, Token::OpenParen);
+            let var = self.variable()?;
+            consume_token!(self, Token::CloseParen);
+            consume_token!(self, Token::Equal);
+            let expr = self.expression()?;
+
+            (func, expr, var)
+        });
+
+        match var {
+            LValue::Var(var) => Ok(DefStmt { func, var, expr }),
+            _ => self.error_current(ErrorInner::BadArgument),
+        }
     }
 
     fn dim_statement(&mut self) -> Result<DimStmt, Error> {
-        unimplemented!()
+        consume_token!(self, Token::Keyword(Keyword::Dim));
+
+        let mut lvals = self.many(Self::variable)?;
+        let n = lvals.len();
+        let dims = lvals
+            .drain(..)
+            .filter_map(|v| match v {
+                LValue::List(list) => Some(Either::Left(list)),
+                LValue::Table(table) => Some(Either::Right(table)),
+                LValue::Var(_) => None,
+            })
+            .collect::<Vec<_>>();
+
+        if dims.len() == n {
+            Ok(DimStmt { dims })
+        } else {
+            self.error_current(ErrorInner::BadSubscript)
+        }
     }
 
     fn printable(&mut self) -> Result<Printable, Error> {
@@ -348,7 +375,6 @@ impl<'a> Parser<'a> {
             _ => self.primary(),
         }
     }
-
     fn primary(&mut self) -> Result<Expression, Error> {
         match &self.current {
             Token::OpenParen => {
@@ -361,13 +387,13 @@ impl<'a> Parser<'a> {
             }
             Token::Number(n) => {
                 let n = self.number()?;
-                let val = Primary::Num(n);
-                Ok(Expression::Val(val))
+                Ok(Expression::Lit(n))
             }
             Token::Varname(_) => {
-                let val = self.variable()?;
-                let val = Primary::Var(val);
-                Ok(Expression::Val(val))
+                let var = self.variable()?;
+                let var = Box::new(var);
+
+                Ok(Expression::Var(var))
             }
             _ => self.unexpected_token(),
         }
@@ -384,14 +410,46 @@ impl<'a> Parser<'a> {
         Ok(n)
     }
 
-    fn variable(&mut self) -> Result<Variable, Error> {
+    fn variable(&mut self) -> Result<LValue, Error> {
         let var = match &self.current {
-            Token::Varname(var) => *var,
+            Token::Varname(var) => Variable(*var),
             _ => return self.unexpected_token(),
         };
-
         self.advance()?;
-        Ok(Variable(var))
+
+        let value = match &self.current {
+            Token::OpenParen => {
+                self.advance()?;
+                let mut subscripts = self.list_of(Self::expression)?;
+                consume_token!(self, Token::CloseParen);
+
+                match subscripts.len() {
+                    1 | 2 => {}
+                    _ => return self.error_current(ErrorInner::BadSubscript),
+                }
+
+                let s1 = subscripts.pop();
+                let s0 = subscripts.pop();
+
+                match (s0, s1) {
+                    (Some(s0), Some(s1)) => {
+                        let table = Table {
+                            var,
+                            subscript: (s0, s1),
+                        };
+                        LValue::Table(table)
+                    }
+                    (None, Some(s0)) => {
+                        let list = List { var, subscript: s0 };
+                        LValue::List(list)
+                    }
+                    _ => return self.error_current(ErrorInner::BadSubscript),
+                }
+            }
+            _ => LValue::Var(var),
+        };
+
+        Ok(value)
     }
 
     fn relop(&mut self) -> Result<Relop, Error> {
@@ -521,6 +579,9 @@ mod tests {
             70     PRINT N ^ P,
             75   NEXT P
             80   PRINT S
+            81 DIM A(3, 2) B(9)
+            82 READ A(1, 1), P9, B(3)
+            83 LET Z = A(1, 2)^9 - B(3)
             85 NEXT N
             99 END"
         );
@@ -528,7 +589,8 @@ mod tests {
         let scanner = Scanner::new(program);
         let mut parser = Parser::new(scanner);
 
-        let ast = parser.parse().unwrap();
+        let ast = parser.parse();
+        let ast = ast.unwrap();
 
         for stmt in &ast.statements {
             println!("{:?}", stmt);
