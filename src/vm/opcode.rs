@@ -32,4 +32,6 @@ pub enum OpCode {
     Equal,
     Less,
     Greater,
+
+    Noop,
 }

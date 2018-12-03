@@ -39,6 +39,7 @@ impl VM {
         loop {
             let instr = OpCode::from_u8(self.read_byte()).ok_or(RuntimeError)?;
             match instr {
+                OpCode::Noop => continue,
                 OpCode::Stop => return Ok(()),
                 OpCode::Jump => {
                     let jump_point: JumpPoint = self.read_operand();

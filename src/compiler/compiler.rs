@@ -67,6 +67,9 @@ impl<'a> Visitor<()> for Compiler<'a> {
             Stmt::End => {
                 self.visit_end();
             }
+            Stmt::Rem => {
+                self.visit_rem();
+            }
             _ => {}
         }
     }
@@ -143,7 +146,9 @@ impl<'a> Visitor<()> for Compiler<'a> {
 
     fn visit_dim(&mut self, stmt: &DimStmt) {}
 
-    fn visit_rem(&mut self) {}
+    fn visit_rem(&mut self) {
+        self.chunk.write_opcode(OpCode::Noop, self.state.line);
+    }
 
     fn visit_end(&mut self) {
         self.chunk.write_opcode(OpCode::Stop, self.state.line);
