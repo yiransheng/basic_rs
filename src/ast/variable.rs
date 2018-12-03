@@ -73,6 +73,12 @@ impl Variable {
     }
 }
 
+impl Into<[u8; 2]> for Variable {
+    fn into(self) -> [u8; 2] {
+        self.0
+    }
+}
+
 impl ::std::fmt::Display for Variable {
     #[inline]
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> Result<(), ::std::fmt::Error> {

@@ -1,8 +1,10 @@
-use crate::ast::*;
-use int_hash::IntHashMap;
 use std::collections::VecDeque;
 
+use int_hash::IntHashMap;
+use num_traits::FromPrimitive;
+
 use self::value::*;
+use crate::ast::*;
 
 pub mod value;
 
@@ -35,66 +37,48 @@ impl VM {
 
     pub fn run(&mut self) -> Result<(), RuntimeError> {
         loop {
-            let instr: u8 = self.read_byte();
+            let instr = OpCode::from_u8(self.read_byte()).ok_or(RuntimeError)?;
             match instr {
-                OP_STOP => return Ok(()),
-                OP_PRINT => {
-                    if let Some(v) = self.pop_value() {
-                        self.print_value(v);
-                    }
+                OpCode::Stop => return Ok(()),
+                OpCode::Jump => {
+                    let jump_point: JumpPoint = self.read_operand();
+                    self.ip = jump_point.0;
                 }
-                OP_CONSTANT => {
-                    let constant = self.read_constant();
-                    match constant {
-                        Variant::Number(n) => {
-                            self.push_value(n);
-                        }
-                        _ => return Err(RuntimeError),
-                    }
+                OpCode::Constant => {
+                    let value = self.read_operand();
+                    self.push_value(value);
                 }
-                OP_POP => {
-                    let _ = self.pop_value().ok_or(RuntimeError)?;
+                OpCode::Pop => {
+                    self.pop_value().ok_or(RuntimeError)?;
                 }
-                OP_GET_GLOBAL => {
-                    let constant = self.read_constant();
-                    match constant {
-                        Variant::Varname(v) => {
-                            let var = Variable::from_bytes_unchecked(v);
-                            let v = self.globals.get(&var).ok_or(RuntimeError)?;
-                            self.push_value(*v);
-                        }
-                        _ => return Err(RuntimeError),
-                    }
+                OpCode::GetGlobal => {
+                    let var: Variable = self.read_inline_operand();
+                    let v = self.globals.get(&var).ok_or(RuntimeError)?;
+                    self.push_value(*v);
                 }
-                OP_SET_GLOBAL => {
-                    let constant = self.read_constant();
-                    match constant {
-                        Variant::Varname(v) => {
-                            let var = Variable::from_bytes_unchecked(v);
-                            let value = self.pop_value().ok_or(RuntimeError)?;
-                            self.globals.insert(var, value);
-                        }
-                        _ => return Err(RuntimeError),
-                    }
+                OpCode::SetGlobal => {
+                    let var: Variable = self.read_inline_operand();
+                    let value = self.pop_value().ok_or(RuntimeError)?;
+                    self.globals.insert(var, value);
                 }
-                OP_NEGATE => {
+                OpCode::Negate => {
                     let value = self.pop_value().ok_or(RuntimeError)?;
                     let neg_value = -value;
                     self.push_value(neg_value);
                 }
-                OP_ADD => {
+                OpCode::Add => {
                     let value = self.binary_op(|a, b| Some(a + b)).ok_or(RuntimeError)?;
                     self.push_value(value);
                 }
-                OP_SUBTRACT => {
+                OpCode::Sub => {
                     let value = self.binary_op(|a, b| Some(a - b)).ok_or(RuntimeError)?;
                     self.push_value(value);
                 }
-                OP_MULTIPLY => {
+                OpCode::Mul => {
                     let value = self.binary_op(|a, b| Some(a * b)).ok_or(RuntimeError)?;
                     self.push_value(value);
                 }
-                OP_DIVIDE => {
+                OpCode::Div => {
                     let value = self
                         .binary_op(|a, b| {
                             let v = a / b;
@@ -105,14 +89,17 @@ impl VM {
                             }
                         })
                         .ok_or(RuntimeError)?;
+                    self.push_value(value);
                 }
-                OP_PRINT => {
+                OpCode::Print => {
                     let value = self.pop_value().ok_or(RuntimeError)?;
                     self.print_value(value);
                 }
-                _ => return Err(RuntimeError),
+                _ => break,
             }
         }
+
+        Ok(())
     }
 
     fn read_byte(&mut self) -> u8 {
@@ -122,16 +109,20 @@ impl VM {
 
         byte
     }
-    fn read_constant(&mut self) -> Variant {
-        let constant = self.chunk.read_constant(self.ip);
+    fn read_operand<T: Operand>(&mut self) -> T {
+        let o = self.chunk.read_operand(self.ip);
+        self.ip += 2;
 
-        self.ip += 1;
+        o
+    }
+    fn read_inline_operand<T: InlineOperand>(&mut self) -> T {
+        let o = self.chunk.read_inline_operand(self.ip);
+        self.ip += 2;
 
-        constant
+        o
     }
 
     fn push_value(&mut self, v: Number) {
-        // panic on overflow
         self.stack.push_back(v);
     }
     fn pop_value(&mut self) -> Option<Number> {

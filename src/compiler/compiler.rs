@@ -1,5 +1,4 @@
 use crate::ast::*;
-use crate::vm::value::{Static, Variant};
 use crate::vm::*;
 
 struct CompileState {
@@ -70,7 +69,7 @@ impl<'a> Visitor<()> for Compiler<'a> {
             match part {
                 Printable::Expr(ref expr) => {
                     self.visit_expr(expr);
-                    self.chunk.write(OP_PRINT, self.state.line);
+                    self.chunk.write_opcode(OpCode::Print, self.state.line);
                 }
                 _ => {}
             }
@@ -94,7 +93,7 @@ impl<'a> Visitor<()> for Compiler<'a> {
     fn visit_rem(&mut self) {}
 
     fn visit_end(&mut self) {
-        self.chunk.write(OP_STOP, self.state.line);
+        self.chunk.write_opcode(OpCode::Stop, self.state.line);
     }
 
     fn visit_stop(&mut self) {}
@@ -112,13 +111,13 @@ impl<'a> Visitor<()> for Compiler<'a> {
 
     fn visit_variable(&mut self, lval: &Variable) {
         if self.state.assign {
-            self.chunk.write(OP_SET_GLOBAL, self.state.line);
+            self.chunk.write_opcode(OpCode::SetGlobal, self.state.line);
         } else {
-            self.chunk.write(OP_GET_GLOBAL, self.state.line);
+            self.chunk.write_opcode(OpCode::GetGlobal, self.state.line);
         }
 
-        let offset = self.chunk.add_constant(Variant::from(*lval));
-        self.chunk.write(offset as u8, self.state.line);
+        self.chunk
+            .add_inline_oprerand(lval.clone(), self.state.line);
     }
 
     fn visit_list(&mut self, list: &List) {}
@@ -131,40 +130,40 @@ impl<'a> Visitor<()> for Compiler<'a> {
         }
         match expr {
             Expression::Lit(n) => {
-                self.chunk
-                    .write_constant(Variant::Number(*n), self.state.line);
+                self.chunk.write_opcode(OpCode::Constant, self.state.line);
+                self.chunk.add_operand(*n, self.state.line);
             }
             Expression::Var(ref v) => {
                 self.visit_lvalue(v);
             }
             Expression::Neg(ref expr) => {
                 self.visit_expr(expr);
-                self.chunk.write(OP_NEGATE, self.state.line);
+                self.chunk.write_opcode(OpCode::Negate, self.state.line);
             }
             Expression::Add(ref lhs, ref rhs) => {
                 self.visit_expr(lhs);
                 self.visit_expr(rhs);
-                self.chunk.write(OP_ADD, self.state.line);
+                self.chunk.write_opcode(OpCode::Add, self.state.line);
             }
             Expression::Sub(ref lhs, ref rhs) => {
                 self.visit_expr(lhs);
                 self.visit_expr(rhs);
-                self.chunk.write(OP_SUBTRACT, self.state.line);
+                self.chunk.write_opcode(OpCode::Sub, self.state.line);
             }
             Expression::Mul(ref lhs, ref rhs) => {
                 self.visit_expr(lhs);
                 self.visit_expr(rhs);
-                self.chunk.write(OP_MULTIPLY, self.state.line);
+                self.chunk.write_opcode(OpCode::Mul, self.state.line);
             }
             Expression::Div(ref lhs, ref rhs) => {
                 self.visit_expr(lhs);
                 self.visit_expr(rhs);
-                self.chunk.write(OP_DIVIDE, self.state.line);
+                self.chunk.write_opcode(OpCode::Div, self.state.line);
             }
             Expression::Pow(ref lhs, ref rhs) => {
                 self.visit_expr(lhs);
                 self.visit_expr(rhs);
-                self.chunk.write(OP_POWER, self.state.line);
+                self.chunk.write_opcode(OpCode::Pow, self.state.line);
             }
             _ => panic!(),
         }
