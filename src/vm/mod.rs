@@ -44,6 +44,13 @@ impl VM {
                     let jump_point: JumpPoint = self.read_operand();
                     self.ip = jump_point.0;
                 }
+                OpCode::CondJump => {
+                    let value = self.pop_value().ok_or(RuntimeError)?;
+                    if value != 0.0 {
+                        let jump_point: JumpPoint = self.read_operand();
+                        self.ip = jump_point.0;
+                    }
+                }
                 OpCode::Constant => {
                     let value = self.read_operand();
                     self.push_value(value);

@@ -58,6 +58,9 @@ impl<'a> Visitor<()> for Compiler<'a> {
             Stmt::Goto(ref s) => {
                 self.visit_goto(s);
             }
+            Stmt::If(ref s) => {
+                self.visit_if(s);
+            }
             Stmt::Print(ref s) => {
                 self.visit_print(s);
             }
@@ -99,7 +102,38 @@ impl<'a> Visitor<()> for Compiler<'a> {
 
     fn visit_gosub(&mut self, stmt: &GosubStmt) {}
 
-    fn visit_if(&mut self, stmt: &IfStmt) {}
+    fn visit_if(&mut self, stmt: &IfStmt) {
+        self.visit_expr(&stmt.lhs);
+        self.visit_expr(&stmt.rhs);
+
+        match stmt.op {
+            Relop::Equal => {
+                self.chunk.write_opcode(OpCode::Equal, self.state.line);
+            }
+            Relop::NotEqual => {
+                self.chunk.write_opcode(OpCode::Equal, self.state.line);
+                self.chunk.write_opcode(OpCode::Not, self.state.line);
+            }
+            Relop::Less => {
+                self.chunk.write_opcode(OpCode::Less, self.state.line);
+            }
+            Relop::Greater => {
+                self.chunk.write_opcode(OpCode::Greater, self.state.line);
+            }
+            Relop::LessEqual => {
+                self.chunk.write_opcode(OpCode::Greater, self.state.line);
+                self.chunk.write_opcode(OpCode::Not, self.state.line);
+            }
+            Relop::GreaterEqual => {
+                self.chunk.write_opcode(OpCode::Less, self.state.line);
+                self.chunk.write_opcode(OpCode::Not, self.state.line);
+            }
+        }
+
+        self.chunk.write_opcode(OpCode::CondJump, self.state.line);
+        let jp_index = self.chunk.add_operand(JumpPoint(0), self.state.line);
+        self.jumps.insert(stmt.then, jp_index);
+    }
 
     fn visit_for(&mut self, stmt: &ForStmt) {}
 
@@ -202,13 +236,13 @@ mod tests {
     fn test_simple() {
         let program = indoc!(
             "
-            5  GOTO 20
-            10 LET X = X - 10
-            15 GOTO 30 
-            20 LET X = 30
-            25 GOTO 10
-            30 PRINT X, X, X
-            40 END"
+            10 LET X = 10
+            20 LET Y = 20
+            30 IF X < Y THEN 50
+            40 PRINT X
+            50 PRINT Y
+            55 IF X > Y THEN 10
+            60 END"
         );
 
         let scanner = Scanner::new(program);
