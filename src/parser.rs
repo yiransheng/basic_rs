@@ -467,6 +467,8 @@ impl<'a> Parser<'a> {
             _ => return self.unexpected_token(),
         };
 
+        self.advance()?;
+
         Ok(relop)
     }
 
@@ -587,6 +589,7 @@ mod tests {
             82 READ A(1, 1), P9, B(3)
             83 LET Z = A(1, 2)^9 - B(3)
             85 NEXT N
+            90 DEF FNA(X) = X + Y
             99 END"
         );
 
@@ -612,6 +615,7 @@ mod tests {
             82 READ A(1, 1), P9, B(3)
             83 LET Z = A(1, 2)^9 - B(3)
             85 NEXT N
+            90 DEF FNA(X) = X + Y
             99 END"
         );
 
