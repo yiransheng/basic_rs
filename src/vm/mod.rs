@@ -37,6 +37,7 @@ impl VM {
         loop {
             let instr: u8 = self.read_byte();
             match instr {
+                OP_STOP => return Ok(()),
                 OP_PRINT => {
                     if let Some(v) = self.pop_value() {
                         self.print_value(v);

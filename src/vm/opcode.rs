@@ -7,6 +7,7 @@ pub const OP_COND_JUMP: u8 = 0x04;
 pub const OP_SUBROUTINE: u8 = 0x05;
 pub const OP_CALL_NATIVE: u8 = 0x06;
 pub const OP_CALL: u8 = 0x07;
+pub const OP_STOP: u8 = 0x08;
 
 pub const OP_POP: u8 = 0x0a;
 pub const OP_GET_GLOBAL: u8 = 0x0b;

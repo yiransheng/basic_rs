@@ -47,6 +47,9 @@ impl<'a> Visitor<()> for Compiler<'a> {
             Stmt::Print(ref s) => {
                 self.visit_print(s);
             }
+            Stmt::End => {
+                self.visit_end();
+            }
             _ => {}
         }
     }
@@ -90,7 +93,9 @@ impl<'a> Visitor<()> for Compiler<'a> {
 
     fn visit_rem(&mut self) {}
 
-    fn visit_end(&mut self) {}
+    fn visit_end(&mut self) {
+        self.chunk.write(OP_STOP, self.state.line);
+    }
 
     fn visit_stop(&mut self) {}
 
@@ -195,5 +200,7 @@ mod tests {
 
         let mut vm = VM::new(chunk);
         vm.run();
+
+        assert!(false);
     }
 }
