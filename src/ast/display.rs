@@ -214,14 +214,14 @@ impl fmt::Display for ReadStmt {
 
 impl fmt::Display for DataStmt {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(f, "READ ")?;
+        write!(f, "DATA ")?;
         intersperse(&self.vals, &COMMA_SEP, f)
     }
 }
 
 impl fmt::Display for PrintStmt {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(f, "READ ")?;
+        write!(f, "PRINT ")?;
         intersperse(&self.parts, &SPACE_SEP, f)
     }
 }
