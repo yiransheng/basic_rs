@@ -2,10 +2,13 @@ pub mod function;
 pub mod keyword;
 pub mod variable;
 
+mod display;
 mod token;
 
 pub use self::token::*;
 pub use self::variable::*;
+
+use std::fmt;
 
 use either::Either;
 

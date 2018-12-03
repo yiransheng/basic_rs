@@ -15,7 +15,7 @@ pub enum ErrorInner {
     BadLineNo(f64),
     BadListOrTableName(Variable),
     BadSubscript,
-    BadArgument,
+    BadArgument(String),
 }
 
 impl From<ScanError> for ErrorInner {
@@ -246,7 +246,7 @@ impl<'a> Parser<'a> {
 
         match var {
             LValue::Variable(var) => Ok(DefStmt { func, var, expr }),
-            _ => self.error_current(ErrorInner::BadArgument),
+            _ => self.error_current(ErrorInner::BadArgument(var.to_string())),
         }
     }
 
