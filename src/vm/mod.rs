@@ -66,6 +66,11 @@ impl VM {
                     let neg_value = -value;
                     self.push_value(neg_value);
                 }
+                OpCode::Not => {
+                    let value = self.pop_value().ok_or(RuntimeError)?;
+                    let not_value = if value == 0.0 { 1.0 } else { 0.0 };
+                    self.push_value(not_value);
+                }
                 OpCode::Add => {
                     let value = self.binary_op(|a, b| Some(a + b)).ok_or(RuntimeError)?;
                     self.push_value(value);
@@ -88,6 +93,24 @@ impl VM {
                                 None
                             }
                         })
+                        .ok_or(RuntimeError)?;
+                    self.push_value(value);
+                }
+                OpCode::Equal => {
+                    let value = self
+                        .binary_op(|a, b| Some(if a == b { 1.0 } else { 0.0 }))
+                        .ok_or(RuntimeError)?;
+                    self.push_value(value);
+                }
+                OpCode::Less => {
+                    let value = self
+                        .binary_op(|a, b| Some(if a < b { 1.0 } else { 0.0 }))
+                        .ok_or(RuntimeError)?;
+                    self.push_value(value);
+                }
+                OpCode::Greater => {
+                    let value = self
+                        .binary_op(|a, b| Some(if a > b { 1.0 } else { 0.0 }))
                         .ok_or(RuntimeError)?;
                     self.push_value(value);
                 }

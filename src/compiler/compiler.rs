@@ -1,3 +1,5 @@
+use int_hash::IntHashMap;
+
 use crate::ast::*;
 use crate::vm::*;
 
@@ -12,6 +14,8 @@ pub enum Error {
 
 pub struct Compiler<'a> {
     state: CompileState,
+    line_addr_map: IntHashMap<LineNo, usize>,
+    jumps: IntHashMap<LineNo, u16>,
     chunk: &'a mut Chunk,
 }
 
@@ -19,6 +23,8 @@ impl<'a> Compiler<'a> {
     pub fn new(chunk: &'a mut Chunk) -> Self {
         Compiler {
             chunk,
+            line_addr_map: IntHashMap::default(),
+            jumps: IntHashMap::default(),
             state: CompileState {
                 assign: false,
                 line: 0,
@@ -32,16 +38,25 @@ impl<'a> Visitor<()> for Compiler<'a> {
         for s in &prog.statements {
             self.visit_statement(s);
         }
+
+        for (line_no, index) in self.jumps.iter() {
+            let jp = self.line_addr_map.get(line_no).unwrap();
+            self.chunk.set_operand(*index, JumpPoint(*jp));
+        }
     }
 
     fn visit_statement(&mut self, stmt: &Statement) {
         let line_no = stmt.line_no;
 
         self.state.line = line_no;
+        self.line_addr_map.insert(line_no, self.chunk.len());
 
         match &stmt.statement {
             Stmt::Let(ref s) => {
                 self.visit_let(s);
+            }
+            Stmt::Goto(ref s) => {
+                self.visit_goto(s);
             }
             Stmt::Print(ref s) => {
                 self.visit_print(s);
@@ -76,7 +91,11 @@ impl<'a> Visitor<()> for Compiler<'a> {
         }
     }
 
-    fn visit_goto(&mut self, stmt: &GotoStmt) {}
+    fn visit_goto(&mut self, stmt: &GotoStmt) {
+        self.chunk.write_opcode(OpCode::Jump, self.state.line);
+        let jp_index = self.chunk.add_operand(JumpPoint(0), self.state.line);
+        self.jumps.insert(stmt.goto, jp_index);
+    }
 
     fn visit_gosub(&mut self, stmt: &GosubStmt) {}
 
@@ -183,8 +202,11 @@ mod tests {
     fn test_simple() {
         let program = indoc!(
             "
-            10 LET X = 10
-            20 LET X = X + 20
+            5  GOTO 20
+            10 LET X = X - 10
+            15 GOTO 30 
+            20 LET X = 30
+            25 GOTO 10
             30 PRINT X, X, X
             40 END"
         );

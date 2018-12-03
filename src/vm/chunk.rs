@@ -25,7 +25,7 @@ pub trait Operand: Clone {
     where
         Self: Sized;
 
-    fn add_to_chunk(self, chunk: &mut Chunk)
+    fn add_to_chunk(self, chunk: &mut Chunk) -> u16
     where
         Self: Sized,
     {
@@ -35,7 +35,11 @@ pub trait Operand: Clone {
 
         where_to.push(self);
 
-        chunk.write_index(index as u16);
+        let index = index as u16;
+
+        chunk.write_index(index);
+
+        index
     }
 
     fn read_from_chunk(offset: usize, chunk: &mut Chunk) -> Self
@@ -80,6 +84,10 @@ impl Chunk {
         }
     }
 
+    pub fn len(&self) -> usize {
+        self.code.len()
+    }
+
     #[inline(always)]
     pub fn write_opcode(&mut self, code: OpCode, line: usize) {
         self.write(code as u8, line)
@@ -89,9 +97,16 @@ impl Chunk {
         self.line_map.push_line(line);
     }
 
-    pub fn add_operand<O: Operand>(&mut self, o: O, line: usize) {
-        o.add_to_chunk(self);
+    //TODO: this should return Result
+    pub fn add_operand<O: Operand>(&mut self, o: O, line: usize) -> u16 {
+        let slot = o.add_to_chunk(self);
         self.line_map.push_line(line);
+        slot
+    }
+
+    pub fn set_operand<O: Operand>(&mut self, index: u16, o: O) {
+        let storage = O::storage(self);
+        storage[index as usize] = o;
     }
 
     pub fn add_inline_oprerand<O: InlineOperand>(&mut self, o: O, line: usize) {
