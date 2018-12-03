@@ -1,18 +1,18 @@
 pub mod function;
 pub mod keyword;
+pub mod variable;
 
 mod token;
 
 pub use self::token::*;
+pub use self::variable::*;
+
+use either::Either;
 
 use self::function::Func;
-use either::Either;
 
 pub type Number = f64;
 pub type LineNo = usize;
-
-#[derive(Debug)]
-pub struct Variable(pub [u8; 2]);
 
 #[derive(Debug)]
 pub struct List {
@@ -38,7 +38,7 @@ pub enum Relop {
 
 #[derive(Debug)]
 pub enum LValue {
-    Var(Variable),
+    Variable(Variable),
     List(List),
     Table(Table),
 }

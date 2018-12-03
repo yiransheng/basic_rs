@@ -6,7 +6,7 @@ mod number;
 use std::iter::IntoIterator;
 
 use crate::ast::keyword::Keyword;
-use crate::ast::Token;
+use crate::ast::{NameError, Token, Variable};
 
 use self::dfa::Dfa;
 use self::function::FuncDFA;
@@ -19,7 +19,13 @@ pub enum Error {
     UnexpectedLineBreak,
     UnexpectedEof,
     BadNumber,
-    BadIdentifier,
+    BadIdentifier(Option<NameError>),
+}
+
+impl From<NameError> for Error {
+    fn from(err: NameError) -> Self {
+        Error::BadIdentifier(Some(err))
+    }
 }
 
 pub type ScanResult = Result<SourceMapped<Token>, SourceMapped<Error>>;
@@ -29,7 +35,7 @@ fn match_ident(s: &str) -> Result<(Token, usize), Error> {
         .map(|kw| kw.into())
         .alternative::<FuncDFA>();
 
-    d.match_str(s).ok_or(Error::BadIdentifier)
+    d.match_str(s).ok_or(Error::BadIdentifier(None))
 }
 
 fn match_number(s: &str) -> Result<(Token, usize), Error> {
@@ -200,7 +206,8 @@ impl<'a> Scanner<'a> {
             c if is_alpha(c) => match self.peek() {
                 Some(d) if is_numeric(d) => {
                     self.advance();
-                    Token::Varname([upper(c) as u8, d as u8])
+                    let var = Variable::from_bytes(upper(c) as u8, d as u8)?;
+                    Token::Varname(var)
                 }
                 Some(d) if is_alpha(d) => {
                     let rest = self.remainder().ok_or(Error::UnexpectedEof)?;
@@ -208,7 +215,10 @@ impl<'a> Scanner<'a> {
                     self.current = self.start + consumed;
                     token
                 }
-                _ => Token::Varname([upper(c) as u8, 0]),
+                _ => {
+                    let var = Variable::from_byte(upper(c) as u8)?;
+                    Token::Varname(var)
+                }
             },
             c @ _ => return Err(Error::UnexpectedChar(c)),
         };

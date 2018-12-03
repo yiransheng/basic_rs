@@ -1,30 +1,31 @@
 use super::function::Func;
 use super::keyword::Keyword;
+use super::variable::Variable;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token {
-    Number(f64),      // 1.0, 2, 10, 3E10
-    Varname([u8; 2]), // [A-Z]\d?
-    Function(Func),   // see: function.rs
-    Keyword(Keyword), // see: keyword.rs
-    Label(String),    // double-quoted string (no escaping)
-    Equal,            // =
-    Less,             // <
-    Greater,          // >
-    LessEqual,        // <=
-    GreaterEqual,     // >=
-    NotEqual,         // <>
-    OpenParen,        // (
-    CloseParen,       // )
-    Plus,             // -
-    Minus,            // +
-    Star,             // *
-    Slash,            // /
-    CaretUp,          // ^
-    Comma,            // ,
-    SemiColon,        // ;
-    Eol,              // End of line
-    Eof,              // End of input
+    Number(f64),       // 1.0, 2, 10, 3E10
+    Varname(Variable), // [A-Z]\d?
+    Function(Func),    // see: function.rs
+    Keyword(Keyword),  // see: keyword.rs
+    Label(String),     // double-quoted string (no escaping)
+    Equal,             // =
+    Less,              // <
+    Greater,           // >
+    LessEqual,         // <=
+    GreaterEqual,      // >=
+    NotEqual,          // <>
+    OpenParen,         // (
+    CloseParen,        // )
+    Plus,              // -
+    Minus,             // +
+    Star,              // *
+    Slash,             // /
+    CaretUp,           // ^
+    Comma,             // ,
+    SemiColon,         // ;
+    Eol,               // End of line
+    Eof,               // End of input
 }
 
 impl Token {

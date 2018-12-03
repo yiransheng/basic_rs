@@ -13,6 +13,7 @@ pub enum ErrorInner {
     ScanError(ScanError),
     UnexpectedToken(Token),
     BadLineNo(f64),
+    BadListOrTableName(Variable),
     BadSubscript,
     BadArgument,
 }
@@ -244,7 +245,7 @@ impl<'a> Parser<'a> {
         });
 
         match var {
-            LValue::Var(var) => Ok(DefStmt { func, var, expr }),
+            LValue::Variable(var) => Ok(DefStmt { func, var, expr }),
             _ => self.error_current(ErrorInner::BadArgument),
         }
     }
@@ -259,7 +260,7 @@ impl<'a> Parser<'a> {
             .filter_map(|v| match v {
                 LValue::List(list) => Some(Either::Left(list)),
                 LValue::Table(table) => Some(Either::Right(table)),
-                LValue::Var(_) => None,
+                LValue::Variable(_) => None,
             })
             .collect::<Vec<_>>();
 
@@ -412,13 +413,16 @@ impl<'a> Parser<'a> {
 
     fn variable(&mut self) -> Result<LValue, Error> {
         let var = match &self.current {
-            Token::Varname(var) => Variable(*var),
+            Token::Varname(var) => *var,
             _ => return self.unexpected_token(),
         };
         self.advance()?;
 
         let value = match &self.current {
             Token::OpenParen => {
+                if !var.can_name_list_or_table() {
+                    return self.error_current(ErrorInner::BadListOrTableName(var));
+                }
                 self.advance()?;
                 let mut subscripts = self.list_of(Self::expression)?;
                 consume_token!(self, Token::CloseParen);
@@ -446,7 +450,7 @@ impl<'a> Parser<'a> {
                     _ => return self.error_current(ErrorInner::BadSubscript),
                 }
             }
-            _ => LValue::Var(var),
+            _ => LValue::Variable(var),
         };
 
         Ok(value)
