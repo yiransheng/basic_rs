@@ -590,16 +590,37 @@ mod tests {
             99 END"
         );
 
+        let parsed = indoc!(
+            "
+            10 REM <comment omitted>
+            11 READ 8, 4
+            15 READ N0, P0
+            20 READ \"N\" ,
+            25 FOR P = 2 TO P0
+            30 READ \"N ^\" P ,
+            35 NEXT P
+            40 READ \"SUM\"
+            45 LET S = 0
+            50 FOR N = 2 TO N0 STEP 1
+            55 READ N ,
+            60 FOR P = 2 TO P0
+            65 LET S = S + N^P
+            70 READ N^P ,
+            75 NEXT P
+            80 READ S
+            81 DIM A(3, 2) B(9)
+            82 READ A(1, 1), P9, B(3)
+            83 LET Z = A(1, 2)^9 - B(3)
+            85 NEXT N
+            99 END"
+        );
+
         let scanner = Scanner::new(program);
         let mut parser = Parser::new(scanner);
 
         let ast = parser.parse();
         let ast = ast.unwrap();
 
-        for stmt in &ast.statements {
-            println!("{:?}", stmt);
-        }
-
-        assert!(false);
+        assert_eq!(parsed, &ast.to_string());
     }
 }
