@@ -1,5 +1,6 @@
+use num_derive::{FromPrimitive, ToPrimitive};
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, FromPrimitive, ToPrimitive)]
 pub enum Func {
     Sin,
     Cos,

@@ -2,6 +2,7 @@ use std::io::{Read, Write};
 
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use int_hash::IntHashMap;
+use num_traits::{FromPrimitive, ToPrimitive};
 
 use super::line_mapping::LineMapping;
 use super::opcode::OpCode;
@@ -19,6 +20,20 @@ impl InlineOperand for Variable {
     #[inline(always)]
     fn from_bytes_unchecked(bytes: [u8; 2]) -> Self {
         Variable::from_bytes_unchecked(bytes)
+    }
+}
+
+impl Into<[u8; 2]> for Func {
+    fn into(self) -> [u8; 2] {
+        let b = self.to_u8().unwrap();
+        [b, 0]
+    }
+}
+
+impl InlineOperand for Func {
+    #[inline(always)]
+    fn from_bytes_unchecked(bytes: [u8; 2]) -> Self {
+        Func::from_u8(bytes[0]).unwrap()
     }
 }
 
@@ -85,6 +100,8 @@ impl Chunk {
             jump_points: Vec::new(),
             strings: Vec::new(),
             line_map: LineMapping::new(),
+
+            user_fns: IntHashMap::default(),
         }
     }
 
@@ -100,6 +117,14 @@ impl Chunk {
         self.code.push(byte.into());
         self.line_map.push_line(line);
     }
+    pub fn add_function(&mut self, func: Func, chunk: Chunk) {
+        let p: [u8; 2] = func.into();
+        self.user_fns.insert(func, chunk);
+    }
+    #[inline(always)]
+    pub fn get_function(&mut self, func: &Func) -> Option<&mut Chunk> {
+        self.user_fns.get_mut(func)
+    }
 
     //TODO: this should return Result
     pub fn add_operand<O: Operand>(&mut self, o: O, line: usize) -> u16 {
@@ -113,7 +138,7 @@ impl Chunk {
         storage[index as usize] = o;
     }
 
-    pub fn add_inline_oprerand<O: InlineOperand>(&mut self, o: O, line: usize) {
+    pub fn add_inline_operand<O: InlineOperand>(&mut self, o: O, line: usize) {
         let bytes = o.into();
         self.write(bytes[0], line);
         self.write(bytes[1], line);

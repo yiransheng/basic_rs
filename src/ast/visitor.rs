@@ -35,8 +35,6 @@ pub trait Visitor<T> {
 
     fn visit_return(&mut self) -> T;
 
-    // needed?
-
     fn visit_lvalue(&mut self, lval: &LValue) -> T;
 
     fn visit_variable(&mut self, lval: &Variable) -> T;

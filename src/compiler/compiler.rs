@@ -1,7 +1,7 @@
-use either::Either;
 use int_hash::IntHashMap;
 
 use super::anon_var::AnonVarGen;
+use super::func_compiler::FuncCompiler;
 use crate::ast::*;
 use crate::vm::*;
 
@@ -73,23 +73,26 @@ impl<'a> Visitor<()> for Compiler<'a> {
         self.line_addr_map.insert(line_no, self.chunk.len());
 
         match &stmt.statement {
-            Stmt::Let(ref s) => {
+            Stmt::Let(s) => {
                 self.visit_let(s);
             }
-            Stmt::Goto(ref s) => {
+            Stmt::Goto(s) => {
                 self.visit_goto(s);
             }
-            Stmt::If(ref s) => {
+            Stmt::If(s) => {
                 self.visit_if(s);
             }
-            Stmt::For(ref s) => {
+            Stmt::For(s) => {
                 self.visit_for(s);
             }
-            Stmt::Next(ref s) => {
+            Stmt::Next(s) => {
                 self.visit_next(s);
             }
-            Stmt::Print(ref s) => {
+            Stmt::Print(s) => {
                 self.visit_print(s);
+            }
+            Stmt::Def(s) => {
+                self.visit_def(s);
             }
             Stmt::End => {
                 self.visit_end();
@@ -231,7 +234,14 @@ impl<'a> Visitor<()> for Compiler<'a> {
             .add_operand(JumpPoint(loop_start), self.state.line);
     }
 
-    fn visit_def(&mut self, stmt: &DefStmt) {}
+    fn visit_def(&mut self, stmt: &DefStmt) {
+        let mut fchunk = Chunk::new();
+        let mut fc = FuncCompiler::new(stmt.func, stmt.var, self.state.line, &mut fchunk);
+        fc.visit_expr(&stmt.expr);
+        fchunk.write_opcode(OpCode::Return, self.state.line);
+
+        self.chunk.add_function(stmt.func, fchunk);
+    }
 
     fn visit_dim(&mut self, stmt: &DimStmt) {}
 
@@ -247,8 +257,6 @@ impl<'a> Visitor<()> for Compiler<'a> {
 
     fn visit_return(&mut self) {}
 
-    // needed?
-
     fn visit_lvalue(&mut self, lval: &LValue) {
         match lval {
             LValue::Variable(ref var) => self.visit_variable(var),
@@ -263,8 +271,7 @@ impl<'a> Visitor<()> for Compiler<'a> {
             self.chunk.write_opcode(OpCode::GetGlobal, self.state.line);
         }
 
-        self.chunk
-            .add_inline_oprerand(lval.clone(), self.state.line);
+        self.chunk.add_inline_operand(lval.clone(), self.state.line);
     }
 
     fn visit_list(&mut self, list: &List) {}
@@ -280,39 +287,47 @@ impl<'a> Visitor<()> for Compiler<'a> {
                 self.chunk.write_opcode(OpCode::Constant, self.state.line);
                 self.chunk.add_operand(*n, self.state.line);
             }
-            Expression::Var(ref v) => {
+            Expression::Var(v) => {
                 self.visit_lvalue(v);
             }
-            Expression::Neg(ref expr) => {
+            Expression::Call(func, arg) => {
+                self.visit_expr(arg);
+                if func.is_native() {
+                    self.chunk.write_opcode(OpCode::CallNative, self.state.line);
+                } else {
+                    self.chunk.write_opcode(OpCode::Call, self.state.line);
+                }
+                self.chunk.add_inline_operand(*func, self.state.line);
+            }
+            Expression::Neg(expr) => {
                 self.visit_expr(expr);
                 self.chunk.write_opcode(OpCode::Negate, self.state.line);
             }
-            Expression::Add(ref lhs, ref rhs) => {
+            Expression::Add(lhs, rhs) => {
                 self.visit_expr(lhs);
                 self.visit_expr(rhs);
                 self.chunk.write_opcode(OpCode::Add, self.state.line);
             }
-            Expression::Sub(ref lhs, ref rhs) => {
+            Expression::Sub(lhs, rhs) => {
                 self.visit_expr(lhs);
                 self.visit_expr(rhs);
                 self.chunk.write_opcode(OpCode::Sub, self.state.line);
             }
-            Expression::Mul(ref lhs, ref rhs) => {
+            Expression::Mul(lhs, rhs) => {
                 self.visit_expr(lhs);
                 self.visit_expr(rhs);
                 self.chunk.write_opcode(OpCode::Mul, self.state.line);
             }
-            Expression::Div(ref lhs, ref rhs) => {
+            Expression::Div(lhs, rhs) => {
                 self.visit_expr(lhs);
                 self.visit_expr(rhs);
                 self.chunk.write_opcode(OpCode::Div, self.state.line);
             }
-            Expression::Pow(ref lhs, ref rhs) => {
+            Expression::Pow(lhs, rhs) => {
                 self.visit_expr(lhs);
                 self.visit_expr(rhs);
                 self.chunk.write_opcode(OpCode::Pow, self.state.line);
             }
-            _ => panic!(),
         }
     }
 }
@@ -330,7 +345,7 @@ mod tests {
     fn test_simple() {
         let program = indoc!(
             "
-            10 LET X = 10
+            10 LET X = SIN(10)
             20 LET Y = 20
             21 FOR I = 1 TO 10 STEP 2
             22   PRINT I
@@ -338,10 +353,11 @@ mod tests {
             24 FOR I = 10 TO 1 STEP -1
             25   PRINT I
             26 NEXT I
-            24 PRINT I
-            24 PRINT 77777
-            30 IF X < Y THEN 50
-            40 PRINT X
+            27 PRINT I
+            31 DEF FNA(X) = X + 10
+            31 DEF FNB(X) = X + FNA(X) + Y
+            35 PRINT 99999
+            40 PRINT FNB(Y)
             50 REM IGNORE ME
             55 PRINT Y
             55 IF X > Y THEN 10

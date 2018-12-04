@@ -19,6 +19,9 @@ pub enum OpCode {
     GetGlobalArray2d,
     SetGlobalArray2d,
 
+    GetLocal,
+    SetLocal,
+
     Print,
 
     Dup,

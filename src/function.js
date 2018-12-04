@@ -53,8 +53,9 @@ const funcnames = [
 
 const Type = "Func";
 
-const typecode =`
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
+const typecode =`use num_derive::{FromPrimitive, ToPrimitive};
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, FromPrimitive, ToPrimitive)]
 ${typegen(Type, funcnames, false)}
 
 impl ${Type} {
