@@ -1,4 +1,4 @@
-use std::io::{Error, Write};
+use std::io::{BufWriter, Error, Write};
 use std::mem;
 use std::str::from_utf8_unchecked;
 
@@ -35,6 +35,13 @@ impl<W: Write> Printer<W> {
             state: PrintState::Idle,
         }
     }
+    pub fn new_buffered(out: W) -> Printer<BufWriter<W>> {
+        Printer {
+            num: Vec::new(),
+            out: BufWriter::with_capacity(100, out),
+            state: PrintState::Idle,
+        }
+    }
     pub fn write_start(&mut self) {
         match self.state {
             PrintState::Printing(_) => {}
@@ -44,7 +51,12 @@ impl<W: Write> Printer<W> {
         }
     }
     pub fn write_end(&mut self) {
-        write!(&mut self.out, "\n");
+        match self.state {
+            PrintState::Printing(_) => {
+                write!(&mut self.out, "\n");
+            }
+            _ => {}
+        }
         self.state = PrintState::Idle;
     }
     pub fn write_num(&mut self, n: f64) -> Result<(), PrintError> {
@@ -72,15 +84,16 @@ impl<W: Write> Printer<W> {
         }
     }
 
+    #[inline(always)]
     pub fn advance_to_multiple(&mut self, k: usize) -> Result<(), PrintError> {
         debug_assert!(k > 0);
 
         match self.state {
             PrintState::Printing(ref mut written) => {
                 let n = k - *written % k;
+                *written += n;
                 for _ in 0..n {
                     write!(self.out, " ")?;
-                    *written += 1;
                 }
                 Ok(())
             }
