@@ -18,7 +18,7 @@ mod opcode;
 pub use self::chunk::*;
 pub use self::opcode::*;
 
-use self::array::{Array, Subscript};
+use self::array::{Array, Error as ArrayError, Subscript};
 
 pub const DEFAULT_ARRAY_SIZE: u8 = 10;
 
@@ -41,6 +41,12 @@ pub struct VM {
 
 #[derive(Debug)]
 pub struct RuntimeError;
+
+impl From<ArrayError> for RuntimeError {
+    fn from(err: ArrayError) -> RuntimeError {
+        RuntimeError
+    }
+}
 
 impl VM {
     pub fn new(chunk: Chunk) -> Self {
@@ -65,6 +71,7 @@ impl VM {
     pub fn run(&mut self) -> Result<(), RuntimeError> {
         loop {
             let instr = OpCode::from_u8(self.read_byte()?).ok_or(RuntimeError)?;
+            // println!("{:?} {:?}", instr, self.stack);
             match instr {
                 OpCode::InitArray => {
                     let var: Variable = self.read_inline_operand()?;
@@ -172,7 +179,7 @@ impl VM {
                         _ => return Err(RuntimeError),
                     };
                     let list = self.global_lists.get(&var).ok_or(RuntimeError)?;
-                    let v = list.get(i).ok_or(RuntimeError)?;
+                    let v = list.get(i)?;
                     self.push_value(v);
                 }
                 OpCode::SetGlobalArray => {
@@ -183,7 +190,7 @@ impl VM {
                     };
                     let v = self.pop_value().ok_or(RuntimeError)?;
                     let list = self.global_lists.get_mut(&var).ok_or(RuntimeError)?;
-                    list.set(i, v).ok_or(RuntimeError)?;
+                    list.set(i, v)?;
                 }
                 OpCode::GetGlobalArray2d => {
                     let var: Variable = self.read_inline_operand()?;
@@ -196,7 +203,7 @@ impl VM {
                         _ => return Err(RuntimeError),
                     };
                     let table = self.global_tables.get(&var).ok_or(RuntimeError)?;
-                    let v = table.get([i, j]).ok_or(RuntimeError)?;
+                    let v = table.get([i, j])?;
                     self.push_value(v);
                 }
                 OpCode::SetGlobalArray2d => {
@@ -211,7 +218,29 @@ impl VM {
                     };
                     let v = self.pop_value().ok_or(RuntimeError)?;
                     let table = self.global_tables.get_mut(&var).ok_or(RuntimeError)?;
-                    table.set([i, j], v).ok_or(RuntimeError)?;
+                    table.set([i, j], v)?;
+                }
+                OpCode::SetArrayBound => {
+                    let var: Variable = self.read_inline_operand()?;
+                    let value = self
+                        .pop_value()
+                        .and_then(|v| v.to_u8())
+                        .ok_or(RuntimeError)?;
+                    let list = self.global_lists.get_mut(&var).ok_or(RuntimeError)?;
+                    list.set_bound(value)?;
+                }
+                OpCode::SetArrayBound2d => {
+                    let var: Variable = self.read_inline_operand()?;
+                    let n = self
+                        .pop_value()
+                        .and_then(|v| v.to_u8())
+                        .ok_or(RuntimeError)?;
+                    let m = self
+                        .pop_value()
+                        .and_then(|v| v.to_u8())
+                        .ok_or(RuntimeError)?;
+                    let table = self.global_tables.get_mut(&var).ok_or(RuntimeError)?;
+                    table.set_bound([m, n])?;
                 }
                 OpCode::Negate => {
                     let value = self.pop_value().ok_or(RuntimeError)?;

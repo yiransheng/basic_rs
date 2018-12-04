@@ -259,9 +259,8 @@ impl<'a> Parser<'a> {
     }
 
     fn dim_statement(&mut self) -> Result<DimStmt, Error> {
-        consume_token!(self, Token::Keyword(Keyword::Dim));
+        let mut lvals = parse_statement!(self, Dim, { self.list_of(Self::variable)? });
 
-        let mut lvals = self.many(Self::variable)?;
         let n = lvals.len();
         let dims = lvals
             .drain(..)
@@ -593,7 +592,7 @@ mod tests {
             70     PRINT N ^ P,
             75   NEXT P
             80   PRINT S
-            81 DIM A(3, 2) B(9)
+            81 DIM A(3, 2), B(9)
             82 READ A(1, 1), P9, B(3)
             83 LET Z = A(1, 2)^9 - B(3)
             85 NEXT N
@@ -619,7 +618,7 @@ mod tests {
             70 PRINT N^P ,
             75 NEXT P
             80 PRINT S
-            81 DIM A(3, 2) B(9)
+            81 DIM A(3, 2), B(9)
             82 READ A(1, 1), P9, B(3)
             83 LET Z = A(1, 2)^9 - B(3)
             85 NEXT N

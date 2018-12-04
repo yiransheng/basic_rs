@@ -26,8 +26,15 @@ impl Subscript for [u8; 2] {
     }
 }
 
+#[derive(Debug, Copy, Clone)]
+pub enum Error {
+    OutOfBound,
+    UnInitialized,
+    RedefineDim,
+}
+
 pub struct Array<I> {
-    values: Vec<f64>,
+    values: Vec<Option<f64>>,
     bound: I,
 }
 
@@ -41,15 +48,41 @@ impl<I> Array<I> {
 }
 
 impl<I: Subscript> Array<I> {
-    pub fn get(&self, i: I) -> Option<f64> {
-        let index = i.to_usize(self)?;
-        let v = self.values.get(index)?;
-        Some(*v)
+    pub fn get(&self, i: I) -> Result<f64, Error> {
+        let index = i.to_usize(self).ok_or(Error::OutOfBound)?;
+        let v = self
+            .values
+            .get(index)
+            .and_then(|x| *x)
+            .ok_or(Error::UnInitialized)?;
+        Ok(v)
     }
-    pub fn set(&mut self, i: I, x: f64) -> Option<()> {
-        let index = i.to_usize(self)?;
-        let v = self.values.get_mut(index)?;
-        *v = x;
-        Some(())
+    pub fn set(&mut self, i: I, x: f64) -> Result<(), Error> {
+        let index = i.to_usize(self).ok_or(Error::OutOfBound)?;
+        let v = self.values.get_mut(index);
+        if let Some(v) = v {
+            *v = Some(x);
+            Ok(())
+        } else {
+            self.grow_to(index);
+            self.values[index] = Some(x);
+            Ok(())
+        }
+    }
+
+    pub fn set_bound(&mut self, bound: I) -> Result<(), Error> {
+        if self.values.is_empty() {
+            self.bound = bound;
+            Ok(())
+        } else {
+            Err(Error::RedefineDim)
+        }
+    }
+
+    #[inline]
+    fn grow_to(&mut self, index: usize) {
+        while self.values.len() <= index + 1 {
+            self.values.push(None);
+        }
     }
 }

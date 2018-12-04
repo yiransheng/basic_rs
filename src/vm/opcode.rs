@@ -24,6 +24,8 @@ pub enum OpCode {
 
     InitArray,
     InitArray2d,
+    SetArrayBound,
+    SetArrayBound2d,
 
     Print,
 

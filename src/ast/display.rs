@@ -277,17 +277,8 @@ impl fmt::Display for DefStmt {
 
 impl fmt::Display for DimStmt {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(f, "DIM")?;
-        for d in &self.dims {
-            match d {
-                Either::Left(ref list) => {
-                    write!(f, " {}", list)?;
-                }
-                Either::Right(ref table) => {
-                    write!(f, " {}", table)?;
-                }
-            }
-        }
+        write!(f, "DIM ")?;
+        intersperse(&self.dims, &COMMA_SEP, f)?;
 
         Ok(())
     }

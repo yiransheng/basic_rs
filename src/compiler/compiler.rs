@@ -1,3 +1,4 @@
+use either::Either;
 use int_hash::IntHashMap;
 
 use super::anon_var::AnonVarGen;
@@ -6,17 +7,10 @@ use super::func_compiler::FuncCompiler;
 use crate::ast::*;
 use crate::vm::*;
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
-enum ArrayType {
-    List,
-    Table,
-}
-
 struct CompileState {
     assign: bool,
     line: LineNo,
     var_gen: AnonVarGen,
-    array_types: IntHashMap<Variable, ArrayType>,
 }
 
 struct ForState {
@@ -49,7 +43,6 @@ impl<'a> Compiler<'a> {
                 assign: false,
                 line: 0,
                 var_gen: AnonVarGen::new(),
-                array_types: IntHashMap::default(),
             },
         }
     }
@@ -57,9 +50,19 @@ impl<'a> Compiler<'a> {
     where
         F: FnMut(&mut Self),
     {
+        let prev_assign = self.state.assign;
         self.state.assign = true;
         f(self);
+        self.state.assign = prev_assign;
+    }
+    fn evaluating<F>(&mut self, mut f: F)
+    where
+        F: FnMut(&mut Self),
+    {
+        let prev_assign = self.state.assign;
         self.state.assign = false;
+        f(self);
+        self.state.assign = prev_assign;
     }
 }
 
@@ -85,42 +88,29 @@ impl<'a> Visitor<()> for Compiler<'a> {
         self.line_addr_map.insert(line_no, self.chunk.len());
 
         match &stmt.statement {
-            Stmt::Let(s) => {
-                self.visit_let(s);
-            }
-            Stmt::Goto(s) => {
-                self.visit_goto(s);
-            }
-            Stmt::If(s) => {
-                self.visit_if(s);
-            }
-            Stmt::For(s) => {
-                self.visit_for(s);
-            }
-            Stmt::Next(s) => {
-                self.visit_next(s);
-            }
-            Stmt::Print(s) => {
-                self.visit_print(s);
-            }
-            Stmt::Def(s) => {
-                self.visit_def(s);
-            }
-            Stmt::End => {
-                self.visit_end();
-            }
-            Stmt::Rem => {
-                self.visit_rem();
-            }
-            _ => {}
+            Stmt::Let(s) => self.visit_let(s),
+            Stmt::Read(s) => self.visit_read(s),
+            Stmt::Data(s) => self.visit_data(s),
+            Stmt::Print(s) => self.visit_print(s),
+            Stmt::Goto(s) => self.visit_goto(s),
+            Stmt::Gosub(s) => self.visit_gosub(s),
+            Stmt::If(s) => self.visit_if(s),
+            Stmt::For(s) => self.visit_for(s),
+            Stmt::Next(s) => self.visit_next(s),
+            Stmt::Def(s) => self.visit_def(s),
+            Stmt::Dim(s) => self.visit_dim(s),
+            Stmt::End => self.visit_end(),
+            Stmt::Rem => self.visit_rem(),
+            Stmt::Stop => self.visit_stop(),
+            Stmt::Return => self.visit_return(),
         }
     }
 
     fn visit_let(&mut self, stmt: &LetStmt) {
         self.visit_expr(&stmt.expr);
-        self.state.assign = true;
-        self.visit_lvalue(&stmt.var);
-        self.state.assign = false;
+        self.assigning(|this| {
+            this.visit_lvalue(&stmt.var);
+        });
     }
 
     fn visit_read(&mut self, stmt: &ReadStmt) {}
@@ -255,7 +245,25 @@ impl<'a> Visitor<()> for Compiler<'a> {
         self.chunk.add_function(stmt.func, fchunk);
     }
 
-    fn visit_dim(&mut self, stmt: &DimStmt) {}
+    fn visit_dim(&mut self, stmt: &DimStmt) {
+        for dim in &stmt.dims {
+            match dim {
+                Either::Left(list) => {
+                    self.visit_expr(&list.subscript);
+                    self.chunk
+                        .write_opcode(OpCode::SetArrayBound, self.state.line);
+                    self.chunk.add_inline_operand(list.var, self.state.line);
+                }
+                Either::Right(table) => {
+                    self.visit_expr(&table.subscript.0);
+                    self.visit_expr(&table.subscript.1);
+                    self.chunk
+                        .write_opcode(OpCode::SetArrayBound2d, self.state.line);
+                    self.chunk.add_inline_operand(table.var, self.state.line);
+                }
+            }
+        }
+    }
 
     fn visit_rem(&mut self) {
         self.chunk.write_opcode(OpCode::Noop, self.state.line);
@@ -265,15 +273,12 @@ impl<'a> Visitor<()> for Compiler<'a> {
         self.chunk.write_opcode(OpCode::Stop, self.state.line);
     }
 
-    fn visit_stop(&mut self) {}
+    fn visit_stop(&mut self) {
+        self.chunk.write_opcode(OpCode::Stop, self.state.line);
+    }
 
-    fn visit_return(&mut self) {}
-
-    fn visit_lvalue(&mut self, lval: &LValue) {
-        match lval {
-            LValue::Variable(ref var) => self.visit_variable(var),
-            _ => panic!(),
-        }
+    fn visit_return(&mut self) {
+        self.chunk.write_opcode(OpCode::Return, self.state.line);
     }
 
     fn visit_variable(&mut self, lval: &Variable) {
@@ -286,17 +291,33 @@ impl<'a> Visitor<()> for Compiler<'a> {
         self.chunk.add_inline_operand(lval.clone(), self.state.line);
     }
 
-    fn visit_list(&mut self, list: &List) {}
+    fn visit_list(&mut self, list: &List) {
+        self.evaluating(|this| {
+            this.visit_expr(&list.subscript);
+        });
+        if self.state.assign {
+            self.chunk
+                .write_opcode(OpCode::SetGlobalArray, self.state.line);
+        } else {
+            self.chunk
+                .write_opcode(OpCode::GetGlobalArray, self.state.line);
+        }
+        self.chunk.add_inline_operand(list.var, self.state.line);
+    }
 
     fn visit_table(&mut self, table: &Table) {
-        let ty = self.state.array_types.get(&table.var);
-        match ty {
-            Some(ArrayType::List) => panic!(),
-            None => {
-                self.state.array_types.insert(table.var, ArrayType::Table);
-            }
-            _ => {}
+        self.evaluating(|this| {
+            this.visit_expr(&table.subscript.0);
+            this.visit_expr(&table.subscript.1);
+        });
+        if self.state.assign {
+            self.chunk
+                .write_opcode(OpCode::SetGlobalArray2d, self.state.line);
+        } else {
+            self.chunk
+                .write_opcode(OpCode::GetGlobalArray2d, self.state.line);
         }
+        self.chunk.add_inline_operand(table.var, self.state.line);
     }
 
     fn visit_expr(&mut self, expr: &Expression) {
@@ -367,21 +388,21 @@ mod tests {
         let program = indoc!(
             "
             10 LET X = SIN(10)
+            15 DIM X(20, 20), Y(15)
             20 LET Y = 20
-            21 FOR I = 1 TO 10 STEP 2
-            22   PRINT I
+            21 FOR I = 0 TO 14
+            22   LET Y(I) = I + 1000
             23 NEXT I
             24 FOR I = 10 TO 1 STEP -1
-            25   PRINT I
+            25   PRINT Y(I)
             26 NEXT I
-            27 PRINT I
             31 DEF FNA(X) = X + 10
             31 DEF FNB(X) = X + FNA(X) + Y
             35 PRINT 99999
             40 PRINT FNB(Y)
             50 REM IGNORE ME
-            55 PRINT Y
-            55 IF X > Y THEN 10
+            55 LET X(3, 3) = 99
+            55 PRINT X(3, 3)
             60 END"
         );
 
