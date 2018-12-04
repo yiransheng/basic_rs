@@ -69,6 +69,8 @@ impl VM {
     }
 
     pub fn run(&mut self) -> Result<(), RuntimeError> {
+        assert!(self.chunk.len() > 0, "Empty chunk");
+
         loop {
             let instr = OpCode::from_u8(self.read_byte()?).ok_or(RuntimeError)?;
             // println!("{:?} {:?}", instr, self.stack);

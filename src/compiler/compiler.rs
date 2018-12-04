@@ -457,7 +457,7 @@ mod tests {
             25   PRINT Y(I)
             26 NEXT I
             31 DEF FNA(X) = X + 10
-            31 DEF FNB(X) = X + FNA(X) + Y
+            32 DEF FNB(X) = X + FNA(X) + Y
             35 PRINT 99999
             40 PRINT FNB(Y)
             50 REM IGNORE ME
@@ -479,7 +479,8 @@ mod tests {
         let mut chunk = Chunk::new();
         let mut compiler = Compiler::new(&mut chunk);
 
-        compiler.visit_program(&ast);
+        let result = compiler.visit_program(&ast);
+        eprintln!("{:?}", result);
 
         let mut vm = VM::new(chunk);
         vm.run();
