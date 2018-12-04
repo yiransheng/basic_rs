@@ -1,6 +1,6 @@
 use std::hash::{Hash, Hasher};
 
-#[derive(Copy, Clone, Eq, PartialEq)]
+#[derive(Copy, Clone, Eq, PartialEq, Hash)]
 pub struct Variable([u8; 2]);
 
 #[derive(Debug, Copy, Clone)]
@@ -10,7 +10,21 @@ pub enum NameError {
     LowerCase,
 }
 
+fn u16_to_bytes(b: u16) -> [u8; 2] {
+    let b1 = (b & 0xff) as u8;
+    let b2 = ((b >> 8) & 0xff) as u8;
+    [b1, b2]
+}
+
 impl Variable {
+    pub fn from_u16(b: u16) -> Result<Self, NameError> {
+        let [b1, b2] = u16_to_bytes(b);
+        if b2 == 0 {
+            Self::from_byte(b1 as u8)
+        } else {
+            Self::from_bytes(b1 as u8, b2 as u8)
+        }
+    }
     pub fn from_byte(b: u8) -> Result<Self, NameError> {
         match b {
             b'A'...b'Z' => Ok(Variable([b, 0])),
@@ -33,27 +47,17 @@ impl Variable {
     pub fn from_bytes_unchecked(bytes: [u8; 2]) -> Self {
         Variable(bytes)
     }
+    pub fn from_u16_unchecked(b: u16) -> Self {
+        Variable(u16_to_bytes(b))
+    }
 
+    // Requires List of Table Name to be A-Z (no follow up digit)
     pub fn can_name_list_or_table(&self) -> bool {
         self.0[1] == 0
     }
 
     pub fn raw(self) -> [u8; 2] {
         self.0
-    }
-
-    fn hash_usize(&self) -> usize {
-        let b0 = self.0[0]; // b'A'-b'Z'
-        let b1 = self.0[1]; // 0 or b'0' - b'9'
-
-        let b0 = (b0 % 26) as usize;
-
-        if b1 == 0 {
-            b0
-        } else {
-            let b1 = ((b1 % 10 + 1) as usize) << 5;
-            b1 | b0
-        }
     }
 
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> Result<(), ::std::fmt::Error> {
@@ -89,11 +93,5 @@ impl ::std::fmt::Debug for Variable {
     #[inline]
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> Result<(), ::std::fmt::Error> {
         self.fmt(f)
-    }
-}
-
-impl Hash for Variable {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.hash_usize().hash(state);
     }
 }

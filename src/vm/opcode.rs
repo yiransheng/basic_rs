@@ -21,6 +21,9 @@ pub enum OpCode {
 
     Print,
 
+    Dup,
+    Swap,
+    Sign,
     Negate,
     Not,
     Add,

@@ -198,6 +198,10 @@ impl<'a> Parser<'a> {
     fn for_statement(&mut self) -> Result<ForStmt, Error> {
         consume_token!(self, Token::Keyword(Keyword::For));
         let var = self.variable()?;
+        let var = match var {
+            LValue::Variable(var) => var,
+            _ => return self.unexpected_token(),
+        };
         consume_token!(self, Token::Equal);
         let from = self.expression()?;
         consume_token!(self, Token::Keyword(Keyword::To));
@@ -223,6 +227,10 @@ impl<'a> Parser<'a> {
 
     fn next_statement(&mut self) -> Result<NextStmt, Error> {
         let var = parse_statement!(self, Next, { self.variable()? });
+        let var = match var {
+            LValue::Variable(var) => var,
+            _ => return self.unexpected_token(),
+        };
 
         Ok(NextStmt { var })
     }

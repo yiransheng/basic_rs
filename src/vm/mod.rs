@@ -1,4 +1,5 @@
 use std::collections::VecDeque;
+use std::f64;
 
 use int_hash::IntHashMap;
 use num_traits::FromPrimitive;
@@ -47,8 +48,9 @@ impl VM {
                 }
                 OpCode::CondJump => {
                     let value = self.pop_value().ok_or(RuntimeError)?;
+                    let jump_point: JumpPoint = self.read_operand();
+
                     if value != 0.0 {
-                        let jump_point: JumpPoint = self.read_operand();
                         self.ip = jump_point.0;
                     }
                 }
@@ -58,6 +60,16 @@ impl VM {
                 }
                 OpCode::Pop => {
                     self.pop_value().ok_or(RuntimeError)?;
+                }
+                OpCode::Dup => {
+                    let value = self.peek(0).ok_or(RuntimeError)?;
+                    self.push_value(value);
+                }
+                OpCode::Swap => {
+                    let v1 = self.pop_value().ok_or(RuntimeError)?;
+                    let v2 = self.pop_value().ok_or(RuntimeError)?;
+                    self.push_value(v1);
+                    self.push_value(v2);
                 }
                 OpCode::GetGlobal => {
                     let var: Variable = self.read_inline_operand();
@@ -73,6 +85,10 @@ impl VM {
                     let value = self.pop_value().ok_or(RuntimeError)?;
                     let neg_value = -value;
                     self.push_value(neg_value);
+                }
+                OpCode::Sign => {
+                    let value = self.pop_value().ok_or(RuntimeError)?;
+                    self.push_value(value.signum());
                 }
                 OpCode::Not => {
                     let value = self.pop_value().ok_or(RuntimeError)?;

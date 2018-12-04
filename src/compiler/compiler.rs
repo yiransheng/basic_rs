@@ -1,11 +1,21 @@
+use either::Either;
 use int_hash::IntHashMap;
 
+use super::anon_var::AnonVarGen;
 use crate::ast::*;
 use crate::vm::*;
 
 struct CompileState {
     assign: bool,
     line: LineNo,
+    var_gen: AnonVarGen,
+}
+
+struct ForState {
+    var: Variable,
+    step: Variable,
+    to: Variable,
+    start_code_point: usize,
 }
 
 pub enum Error {
@@ -16,6 +26,7 @@ pub struct Compiler<'a> {
     state: CompileState,
     line_addr_map: IntHashMap<LineNo, usize>,
     jumps: IntHashMap<LineNo, u16>,
+    for_states: IntHashMap<Variable, ForState>,
     chunk: &'a mut Chunk,
 }
 
@@ -25,11 +36,21 @@ impl<'a> Compiler<'a> {
             chunk,
             line_addr_map: IntHashMap::default(),
             jumps: IntHashMap::default(),
+            for_states: IntHashMap::default(),
             state: CompileState {
                 assign: false,
                 line: 0,
+                var_gen: AnonVarGen::new(),
             },
         }
+    }
+    fn assigning<F>(&mut self, mut f: F)
+    where
+        F: FnMut(&mut Self),
+    {
+        self.state.assign = true;
+        f(self);
+        self.state.assign = false;
     }
 }
 
@@ -60,6 +81,12 @@ impl<'a> Visitor<()> for Compiler<'a> {
             }
             Stmt::If(ref s) => {
                 self.visit_if(s);
+            }
+            Stmt::For(ref s) => {
+                self.visit_for(s);
+            }
+            Stmt::Next(ref s) => {
+                self.visit_next(s);
             }
             Stmt::Print(ref s) => {
                 self.visit_print(s);
@@ -138,9 +165,71 @@ impl<'a> Visitor<()> for Compiler<'a> {
         self.jumps.insert(stmt.then, jp_index);
     }
 
-    fn visit_for(&mut self, stmt: &ForStmt) {}
+    fn visit_for(&mut self, stmt: &ForStmt) {
+        self.visit_expr(&stmt.from);
+        self.assigning(|this| {
+            this.visit_variable(&stmt.var);
+        });
 
-    fn visit_next(&mut self, stmt: &NextStmt) {}
+        let step_var = self.state.var_gen.next_anonymous();
+        let to_var = self.state.var_gen.next_anonymous();
+
+        self.visit_expr(&stmt.to);
+        self.assigning(|this| {
+            this.visit_variable(&to_var);
+        });
+
+        match stmt.step {
+            Some(ref step_expr) => {
+                self.visit_expr(step_expr);
+            }
+            None => {
+                self.chunk.write_opcode(OpCode::Constant, self.state.line);
+                self.chunk.add_operand(1.0, self.state.line);
+            }
+        }
+        self.assigning(|this| {
+            this.visit_variable(&step_var);
+        });
+
+        let for_state = ForState {
+            var: stmt.var,
+            step: step_var,
+            to: to_var,
+            start_code_point: self.chunk.len(),
+        };
+
+        self.for_states.insert(stmt.var, for_state);
+    }
+
+    fn visit_next(&mut self, stmt: &NextStmt) {
+        // TODO: error handling
+        let for_state = self.for_states.remove(&stmt.var).unwrap();
+        let step_var = for_state.step;
+        let to_var = for_state.to;
+        let loop_start = for_state.start_code_point;
+
+        self.visit_variable(&step_var);
+
+        self.chunk.write_opcode(OpCode::Dup, self.state.line);
+        self.chunk.write_opcode(OpCode::Sign, self.state.line);
+        self.chunk.write_opcode(OpCode::Swap, self.state.line);
+        self.visit_variable(&stmt.var);
+        self.chunk.write_opcode(OpCode::Add, self.state.line);
+        self.chunk.write_opcode(OpCode::Dup, self.state.line);
+
+        self.assigning(|this| {
+            this.visit_variable(&stmt.var);
+        });
+        self.visit_variable(&to_var);
+        // value stack: [<step sign>, current, to]
+        self.chunk.write_opcode(OpCode::Sub, self.state.line);
+        self.chunk.write_opcode(OpCode::Sign, self.state.line);
+        self.chunk.write_opcode(OpCode::Sub, self.state.line);
+        self.chunk.write_opcode(OpCode::CondJump, self.state.line);
+        self.chunk
+            .add_operand(JumpPoint(loop_start), self.state.line);
+    }
 
     fn visit_def(&mut self, stmt: &DefStmt) {}
 
@@ -243,9 +332,18 @@ mod tests {
             "
             10 LET X = 10
             20 LET Y = 20
+            21 FOR I = 1 TO 10 STEP 2
+            22   PRINT I
+            23 NEXT I
+            24 FOR I = 10 TO 1 STEP -1
+            25   PRINT I
+            26 NEXT I
+            24 PRINT I
+            24 PRINT 77777
             30 IF X < Y THEN 50
             40 PRINT X
-            50 PRINT Y
+            50 REM IGNORE ME
+            55 PRINT Y
             55 IF X > Y THEN 10
             60 END"
         );

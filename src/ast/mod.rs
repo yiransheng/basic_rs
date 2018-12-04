@@ -140,7 +140,7 @@ pub struct IfStmt {
 
 #[derive(Debug)]
 pub struct ForStmt {
-    pub var: LValue,
+    pub var: Variable,
     pub from: Expression,
     pub to: Expression,
     pub step: Option<Expression>,
@@ -148,7 +148,7 @@ pub struct ForStmt {
 
 #[derive(Debug)]
 pub struct NextStmt {
-    pub var: LValue,
+    pub var: Variable,
 }
 
 #[derive(Debug)]
