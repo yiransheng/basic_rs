@@ -1,4 +1,5 @@
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub enum Func {
     Sin,
     Cos,
@@ -36,4 +37,22 @@ pub enum Func {
     Fnx,
     Fny,
     Fnz,
+}
+
+impl Func {
+    pub fn is_native(&self) -> bool {
+        match self {
+            Func::Sin => true,
+            Func::Cos => true,
+            Func::Tan => true,
+            Func::Atn => true,
+            Func::Exp => true,
+            Func::Abs => true,
+            Func::Log => true,
+            Func::Sqr => true,
+            Func::Rnd => true,
+            Func::Int => true,
+            _ => false,
+        }
+    }
 }

@@ -1,9 +1,11 @@
 use std::io::{Read, Write};
 
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
+use int_hash::IntHashMap;
 
 use super::line_mapping::LineMapping;
 use super::opcode::OpCode;
+use crate::ast::function::Func;
 use crate::ast::variable::Variable;
 
 #[derive(Copy, Clone, Eq, PartialEq)]
@@ -71,6 +73,8 @@ pub struct Chunk {
     jump_points: Vec<JumpPoint>,
     strings: Vec<String>,
     line_map: LineMapping,
+
+    user_fns: IntHashMap<Func, Chunk>,
 }
 
 impl Chunk {

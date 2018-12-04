@@ -53,7 +53,29 @@ const funcnames = [
 
 const Type = "Func";
 
-fs.writeFileSync(toFilePath(typePath), typegen(Type, funcnames));
+const typecode =`
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
+${typegen(Type, funcnames, false)}
+
+impl ${Type} {
+    pub fn is_native(&self) -> bool {
+        match self {
+            ${Type}::Sin => true,
+            ${Type}::Cos => true,
+            ${Type}::Tan => true,
+            ${Type}::Atn => true,
+            ${Type}::Exp => true,
+            ${Type}::Abs => true,
+            ${Type}::Log => true,
+            ${Type}::Sqr => true,
+            ${Type}::Rnd => true,
+            ${Type}::Int => true,
+            _ => false,
+        }
+    }
+}`;
+
+fs.writeFileSync(toFilePath(typePath), typecode);
 
 const scanner = `use crate::${toModPath(typePath)}::${Type};
 use super::dfa::{Dfa, State};
