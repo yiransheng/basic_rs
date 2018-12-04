@@ -157,6 +157,17 @@ impl VM {
                     };
                     self.call_stack.push_back(new_frame);
                 }
+                OpCode::Subroutine => {
+                    let current_depth = self.current_frame().depth;
+                    let jp: JumpPoint = self.read_operand()?;
+                    let new_frame = CallFrame {
+                        depth: current_depth + 1,
+                        func: None,
+                        local: None,
+                        ip: jp.0,
+                    };
+                    self.call_stack.push_back(new_frame);
+                }
                 OpCode::GetLocal => {
                     let frame = self.current_frame();
                     let x = frame.local.ok_or(RuntimeError)?;

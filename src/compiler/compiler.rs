@@ -135,7 +135,11 @@ impl<'a> Visitor<()> for Compiler<'a> {
         self.jumps.insert(stmt.goto, jp_index);
     }
 
-    fn visit_gosub(&mut self, stmt: &GosubStmt) {}
+    fn visit_gosub(&mut self, stmt: &GosubStmt) {
+        self.chunk.write_opcode(OpCode::Subroutine, self.state.line);
+        let jp_index = self.chunk.add_operand(JumpPoint(0), self.state.line);
+        self.jumps.insert(stmt.goto, jp_index);
+    }
 
     fn visit_if(&mut self, stmt: &IfStmt) {
         self.visit_expr(&stmt.lhs);
@@ -402,8 +406,13 @@ mod tests {
             40 PRINT FNB(Y)
             50 REM IGNORE ME
             55 LET X(3, 3) = 99
-            55 PRINT X(3, 3)
-            60 END"
+            60 GOSUB 100
+            70 PRINT X(3, 3)
+            80 GOTO 800
+            100 REM SUBROUTING
+            110 PRINT 78787878
+            120 RETURN
+            800 END"
         );
 
         let scanner = Scanner::new(program);
