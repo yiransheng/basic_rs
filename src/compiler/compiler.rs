@@ -3,6 +3,7 @@ use int_hash::IntHashMap;
 
 use super::anon_var::AnonVarGen;
 use super::array_dims::ArrayDims;
+use super::data::PrepareData;
 use super::func_compiler::FuncCompiler;
 use crate::ast::*;
 use crate::vm::*;
@@ -71,6 +72,9 @@ impl<'a> Visitor<()> for Compiler<'a> {
         let mut array_dims = ArrayDims::new(self.chunk);
         array_dims.visit_program(prog).unwrap();
 
+        let mut prep_data = PrepareData::new(self.chunk);
+        prep_data.visit_program(prog).unwrap();
+
         for s in &prog.statements {
             self.visit_statement(s);
         }
@@ -113,9 +117,17 @@ impl<'a> Visitor<()> for Compiler<'a> {
         });
     }
 
-    fn visit_read(&mut self, stmt: &ReadStmt) {}
+    fn visit_read(&mut self, stmt: &ReadStmt) {
+        self.assigning(|this| {
+            for var in &stmt.vars {
+                this.visit_lvalue(var);
+            }
+        });
+    }
 
-    fn visit_data(&mut self, stmt: &DataStmt) {}
+    fn visit_data(&mut self, stmt: &DataStmt) {
+        self.chunk.write_opcode(OpCode::Noop, self.state.line);
+    }
 
     fn visit_print(&mut self, stmt: &PrintStmt) {
         for part in &stmt.parts {
@@ -393,7 +405,7 @@ mod tests {
             "
             10 LET X = SIN(10)
             15 DIM X(20, 20), Y(15)
-            20 LET Y = 20
+            20 READ X, Y, A
             21 FOR I = 0 TO 14
             22   LET Y(I) = I + 1000
             23 NEXT I
@@ -411,7 +423,9 @@ mod tests {
             80 GOTO 800
             100 REM SUBROUTING
             110 PRINT 78787878
-            120 RETURN
+            120 PRINT A
+            130 RETURN
+            150 DATA 10, 20, 30
             800 END"
         );
 
