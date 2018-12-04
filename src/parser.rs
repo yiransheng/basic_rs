@@ -1,3 +1,5 @@
+use std::error;
+use std::fmt;
 use std::mem;
 
 use either::Either;
@@ -14,8 +16,34 @@ pub enum ErrorInner {
     UnexpectedToken(Token),
     BadLineNo(f64),
     BadListOrTableName(Variable),
-    BadSubscript,
+    BadSubscript(String),
     BadArgument(String),
+}
+impl fmt::Display for ErrorInner {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let desc = error::Error::description(self);
+        match self {
+            ErrorInner::ScanError(e) => e.fmt(f),
+            ErrorInner::UnexpectedToken(t) => write!(f, "{}: {}", desc, t.ty()),
+            ErrorInner::BadListOrTableName(var) => write!(f, "{}: {}", desc, var),
+            ErrorInner::BadArgument(arg) => write!(f, "{}: {}", desc, arg),
+            ErrorInner::BadSubscript(sub) => write!(f, "{}: {}", desc, sub),
+            ErrorInner::BadLineNo(n) => write!(f, "{}: {}", desc, n),
+        }
+    }
+}
+
+impl error::Error for ErrorInner {
+    fn description(&self) -> &str {
+        match self {
+            ErrorInner::ScanError(err) => err.description(),
+            ErrorInner::UnexpectedToken(_) => "Unexpected Token",
+            ErrorInner::BadLineNo(_) => "Line number is not a positive integer",
+            ErrorInner::BadListOrTableName(_) => "Invalid list/table name",
+            ErrorInner::BadSubscript(_) => "Invalid list/table subscripts",
+            ErrorInner::BadArgument(_) => "Invalid function argument",
+        }
+    }
 }
 
 impl From<ScanError> for ErrorInner {
@@ -262,19 +290,23 @@ impl<'a> Parser<'a> {
         let mut lvals = parse_statement!(self, Dim, { self.list_of(Self::variable)? });
 
         let n = lvals.len();
+        let mut dim_var: Option<Variable> = None;
         let dims = lvals
             .drain(..)
             .filter_map(|v| match v {
                 LValue::List(list) => Some(Either::Left(list)),
                 LValue::Table(table) => Some(Either::Right(table)),
-                LValue::Variable(_) => None,
+                LValue::Variable(var) => {
+                    dim_var = Some(var);
+                    None
+                }
             })
             .collect::<Vec<_>>();
 
-        if dims.len() == n {
-            Ok(DimStmt { dims })
+        if let Some(var) = dim_var {
+            self.error_current(ErrorInner::BadSubscript(var.to_string()))
         } else {
-            self.error_current(ErrorInner::BadSubscript)
+            Ok(DimStmt { dims })
         }
     }
 
@@ -436,7 +468,12 @@ impl<'a> Parser<'a> {
 
                 match subscripts.len() {
                     1 | 2 => {}
-                    _ => return self.error_current(ErrorInner::BadSubscript),
+                    _ => {
+                        return self.error_current(ErrorInner::BadSubscript(format!(
+                            "Wrong number of subscripts for {}",
+                            var
+                        )))
+                    }
                 }
 
                 let s1 = subscripts.pop();
@@ -454,7 +491,7 @@ impl<'a> Parser<'a> {
                         let list = List { var, subscript: s0 };
                         LValue::List(list)
                     }
-                    _ => return self.error_current(ErrorInner::BadSubscript),
+                    _ => unreachable!(),
                 }
             }
             _ => LValue::Variable(var),

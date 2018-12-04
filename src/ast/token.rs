@@ -35,7 +35,6 @@ impl Token {
             _ => self.clone(),
         }
     }
-    #[cfg(test)]
     pub fn ty(&self) -> &'static str {
         use self::Token::*;
 

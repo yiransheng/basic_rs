@@ -3,6 +3,8 @@ mod function;
 mod keyword;
 mod number;
 
+use std::error;
+use std::fmt;
 use std::iter::IntoIterator;
 
 use crate::ast::keyword::Keyword;
@@ -14,12 +16,72 @@ use self::keyword::KeywordDFA;
 use self::number::MatchFloat;
 
 #[derive(Debug, Copy, Clone)]
+pub struct SourceMapped<T> {
+    pub value: T,
+    pub loc: SourceLoc,
+}
+
+impl<T> SourceMapped<T> {
+    pub fn map<U, F>(self, f: F) -> SourceMapped<U>
+    where
+        F: Fn(T) -> U,
+    {
+        SourceMapped {
+            value: f(self.value),
+            loc: self.loc,
+        }
+    }
+}
+
+impl<T> fmt::Display for SourceMapped<T>
+where
+    T: fmt::Display,
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        writeln!(f, "Line:{} Col:{}", self.loc.line, self.loc.col)?;
+        self.value.fmt(f)
+    }
+}
+
+impl<E> error::Error for SourceMapped<E>
+where
+    E: error::Error,
+{
+    fn description(&self) -> &str {
+        self.value.description()
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
 pub enum Error {
     UnexpectedChar(char),
     UnexpectedLineBreak,
     UnexpectedEof,
     BadNumber,
     BadIdentifier(Option<NameError>),
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let desc = error::Error::description(self);
+        match self {
+            Error::UnexpectedChar(c) => write!(f, "{}: {}", desc, c),
+            _ => f.write_str(desc),
+        }
+    }
+}
+
+impl error::Error for Error {
+    fn description(&self) -> &str {
+        match self {
+            Error::UnexpectedChar(_) => "Unexpected character",
+            Error::UnexpectedLineBreak => "Unexpected line break",
+            Error::UnexpectedEof => "Unexpected end of input",
+            Error::BadNumber => "Malformed number",
+            Error::BadIdentifier(Some(e)) => e.description(),
+            Error::BadIdentifier(None) => "Invalid identifier",
+        }
+    }
 }
 
 impl From<NameError> for Error {
@@ -43,24 +105,6 @@ fn match_number(s: &str) -> Result<(Token, usize), Error> {
         .map(|n| Token::Number(n))
         .match_str(s)
         .ok_or(Error::BadNumber)
-}
-
-#[derive(Debug, Copy, Clone)]
-pub struct SourceMapped<T> {
-    pub value: T,
-    pub loc: SourceLoc,
-}
-
-impl<T> SourceMapped<T> {
-    pub fn map<U, F>(self, f: F) -> SourceMapped<U>
-    where
-        F: Fn(T) -> U,
-    {
-        SourceMapped {
-            value: f(self.value),
-            loc: self.loc,
-        }
-    }
 }
 
 #[derive(Debug, Copy, Clone)]
