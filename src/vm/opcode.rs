@@ -22,6 +22,9 @@ pub enum OpCode {
     GetLocal,
     SetLocal,
 
+    InitArray,
+    InitArray2d,
+
     Print,
 
     Dup,

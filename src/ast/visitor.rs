@@ -3,7 +3,25 @@ use super::*;
 pub trait Visitor<T> {
     fn visit_program(&mut self, prog: &Program) -> T;
 
-    fn visit_statement(&mut self, stmt: &Statement) -> T;
+    fn visit_statement(&mut self, stmt: &Statement) -> T {
+        match &stmt.statement {
+            Stmt::Let(s) => self.visit_let(s),
+            Stmt::Read(s) => self.visit_read(s),
+            Stmt::Data(s) => self.visit_data(s),
+            Stmt::Print(s) => self.visit_print(s),
+            Stmt::Goto(s) => self.visit_goto(s),
+            Stmt::Gosub(s) => self.visit_gosub(s),
+            Stmt::If(s) => self.visit_if(s),
+            Stmt::For(s) => self.visit_for(s),
+            Stmt::Next(s) => self.visit_next(s),
+            Stmt::Def(s) => self.visit_def(s),
+            Stmt::Dim(s) => self.visit_dim(s),
+            Stmt::End => self.visit_end(),
+            Stmt::Rem => self.visit_rem(),
+            Stmt::Stop => self.visit_stop(),
+            Stmt::Return => self.visit_return(),
+        }
+    }
 
     fn visit_let(&mut self, stmt: &LetStmt) -> T;
 
@@ -35,7 +53,13 @@ pub trait Visitor<T> {
 
     fn visit_return(&mut self) -> T;
 
-    fn visit_lvalue(&mut self, lval: &LValue) -> T;
+    fn visit_lvalue(&mut self, lval: &LValue) -> T {
+        match lval {
+            LValue::Variable(var) => self.visit_variable(var),
+            LValue::List(list) => self.visit_list(list),
+            LValue::Table(table) => self.visit_table(table),
+        }
+    }
 
     fn visit_variable(&mut self, lval: &Variable) -> T;
 

@@ -1,14 +1,22 @@
 use int_hash::IntHashMap;
 
 use super::anon_var::AnonVarGen;
+use super::array_dims::ArrayDims;
 use super::func_compiler::FuncCompiler;
 use crate::ast::*;
 use crate::vm::*;
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+enum ArrayType {
+    List,
+    Table,
+}
 
 struct CompileState {
     assign: bool,
     line: LineNo,
     var_gen: AnonVarGen,
+    array_types: IntHashMap<Variable, ArrayType>,
 }
 
 struct ForState {
@@ -41,6 +49,7 @@ impl<'a> Compiler<'a> {
                 assign: false,
                 line: 0,
                 var_gen: AnonVarGen::new(),
+                array_types: IntHashMap::default(),
             },
         }
     }
@@ -56,6 +65,9 @@ impl<'a> Compiler<'a> {
 
 impl<'a> Visitor<()> for Compiler<'a> {
     fn visit_program(&mut self, prog: &Program) {
+        let mut array_dims = ArrayDims::new(self.chunk);
+        array_dims.visit_program(prog).unwrap();
+
         for s in &prog.statements {
             self.visit_statement(s);
         }
@@ -276,7 +288,16 @@ impl<'a> Visitor<()> for Compiler<'a> {
 
     fn visit_list(&mut self, list: &List) {}
 
-    fn visit_table(&mut self, table: &Table) {}
+    fn visit_table(&mut self, table: &Table) {
+        let ty = self.state.array_types.get(&table.var);
+        match ty {
+            Some(ArrayType::List) => panic!(),
+            None => {
+                self.state.array_types.insert(table.var, ArrayType::Table);
+            }
+            _ => {}
+        }
+    }
 
     fn visit_expr(&mut self, expr: &Expression) {
         if self.state.assign {
