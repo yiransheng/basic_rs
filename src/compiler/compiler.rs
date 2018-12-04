@@ -9,6 +9,7 @@ use super::array_dims::ArrayDims;
 use super::data::PrepareData;
 use super::error::CompileError;
 use super::func_compiler::FuncCompiler;
+use super::line_order::LineOrder;
 
 struct CompileState {
     assign: bool,
@@ -75,6 +76,9 @@ type Result = ::std::result::Result<(), CompileError>;
 
 impl<'a> Visitor<Result> for Compiler<'a> {
     fn visit_program(&mut self, prog: &Program) -> Result {
+        let mut line_order = LineOrder::new(self.chunk);
+        line_order.visit_program(prog)?;
+
         let mut array_dims = ArrayDims::new(self.chunk);
         array_dims.visit_program(prog)?;
 
