@@ -27,7 +27,12 @@ pub enum OpCode {
     SetArrayBound,
     SetArrayBound2d,
 
-    Print,
+    PrintStart,
+    PrintExpr,
+    PrintLabel,
+    PrintAdvance3,
+    PrintAdvance15,
+    PrintEnd,
 
     Dup,
     Swap,

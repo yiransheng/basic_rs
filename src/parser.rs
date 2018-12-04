@@ -286,7 +286,7 @@ impl<'a> Parser<'a> {
             }
             Token::Comma => {
                 self.advance()?;
-                Ok(Printable::Advance5)
+                Ok(Printable::Advance15)
             }
             Token::SemiColon => {
                 self.advance()?;

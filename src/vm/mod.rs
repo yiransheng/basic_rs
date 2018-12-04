@@ -1,5 +1,6 @@
 use std::collections::VecDeque;
 use std::f64;
+use std::io;
 
 use int_hash::IntHashMap;
 use num_traits::{FromPrimitive, ToPrimitive};
@@ -14,11 +15,13 @@ mod array;
 mod chunk;
 mod line_mapping;
 mod opcode;
+mod print;
 
 pub use self::chunk::*;
 pub use self::opcode::*;
 
 use self::array::{Array, Error as ArrayError, Subscript};
+use self::print::{PrintError, Printer};
 
 pub const DEFAULT_ARRAY_SIZE: u8 = 10;
 
@@ -48,6 +51,12 @@ impl From<ArrayError> for RuntimeError {
     }
 }
 
+impl From<PrintError> for RuntimeError {
+    fn from(err: PrintError) -> RuntimeError {
+        RuntimeError
+    }
+}
+
 impl VM {
     pub fn new(chunk: Chunk) -> Self {
         let mut call_stack = VecDeque::new();
@@ -68,13 +77,35 @@ impl VM {
         }
     }
 
-    pub fn run(&mut self) -> Result<(), RuntimeError> {
+    pub fn run<W: io::Write>(&mut self, out: W) -> Result<(), RuntimeError> {
         assert!(self.chunk.len() > 0, "Empty chunk");
+
+        let mut printer = Printer::new(out);
 
         loop {
             let instr = OpCode::from_u8(self.read_byte()?).ok_or(RuntimeError)?;
             // println!("{:?} {:?}", instr, self.stack);
             match instr {
+                OpCode::PrintStart => {
+                    printer.write_start();
+                }
+                OpCode::PrintEnd => {
+                    printer.write_end();
+                }
+                OpCode::PrintExpr => {
+                    let value = self.pop_value().ok_or(RuntimeError)?;
+                    printer.write_num(value)?;
+                }
+                OpCode::PrintLabel => {
+                    let s: &String = self.read_operand_ref()?;
+                    printer.write_str(s)?;
+                }
+                OpCode::PrintAdvance3 => {
+                    printer.advance_to_multiple(3)?;
+                }
+                OpCode::PrintAdvance15 => {
+                    printer.advance_to_multiple(15)?;
+                }
                 OpCode::InitArray => {
                     let var: Variable = self.read_inline_operand()?;
                     let arr = Array::new(DEFAULT_ARRAY_SIZE);
@@ -312,10 +343,6 @@ impl VM {
                         .ok_or(RuntimeError)?;
                     self.push_value(value);
                 }
-                OpCode::Print => {
-                    let value = self.pop_value().ok_or(RuntimeError)?;
-                    self.print_value(value);
-                }
                 _ => break,
             }
         }
@@ -357,6 +384,14 @@ impl VM {
         let chunk = self.current_chunk()?;
         let o = chunk.read_operand(ip);
         *self.get_ip() += 2;
+
+        Ok(o)
+    }
+    fn read_operand_ref<T: Operand>(&mut self) -> Result<&T, RuntimeError> {
+        let ip = *self.get_ip();
+        *self.get_ip() += 2;
+        let chunk = self.current_chunk()?;
+        let o = chunk.read_operand_ref(ip);
 
         Ok(o)
     }

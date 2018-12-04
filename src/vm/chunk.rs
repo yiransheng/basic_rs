@@ -68,6 +68,16 @@ pub trait Operand: Clone {
 
         where_to[index].clone()
     }
+
+    fn read_ref_from_chunk(offset: usize, chunk: &mut Chunk) -> &Self
+    where
+        Self: Sized,
+    {
+        let index = chunk.read_index(offset) as usize;
+        let where_to = Self::storage(chunk);
+
+        &where_to[index]
+    }
 }
 
 impl Operand for JumpPoint {
@@ -79,6 +89,12 @@ impl Operand for JumpPoint {
 impl Operand for f64 {
     fn storage(chunk: &mut Chunk) -> &mut Vec<Self> {
         &mut chunk.constants
+    }
+}
+
+impl Operand for String {
+    fn storage(chunk: &mut Chunk) -> &mut Vec<Self> {
+        &mut chunk.strings
     }
 }
 
@@ -153,6 +169,11 @@ impl Chunk {
     #[inline(always)]
     pub fn read_operand<O: Operand>(&mut self, offset: usize) -> O {
         O::read_from_chunk(offset, self)
+    }
+
+    #[inline(always)]
+    pub fn read_operand_ref<O: Operand>(&mut self, offset: usize) -> &O {
+        O::read_ref_from_chunk(offset, self)
     }
 
     #[inline(always)]

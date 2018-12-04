@@ -149,15 +149,30 @@ impl<'a> Visitor<Result> for Compiler<'a> {
     }
 
     fn visit_print(&mut self, stmt: &PrintStmt) -> Result {
+        self.chunk.write_opcode(OpCode::PrintStart, self.state.line);
         for part in &stmt.parts {
             match part {
-                Printable::Expr(ref expr) => {
+                Printable::Expr(expr) => {
                     self.visit_expr(expr)?;
-                    self.chunk.write_opcode(OpCode::Print, self.state.line);
+                    self.chunk.write_opcode(OpCode::PrintExpr, self.state.line);
+                }
+                Printable::Advance3 => {
+                    self.chunk
+                        .write_opcode(OpCode::PrintAdvance3, self.state.line);
+                }
+                Printable::Advance15 => {
+                    self.chunk
+                        .write_opcode(OpCode::PrintAdvance15, self.state.line);
+                }
+                Printable::Label(s) => {
+                    self.chunk.write_opcode(OpCode::PrintLabel, self.state.line);
+                    self.chunk.add_operand(s.clone(), self.state.line);
                 }
                 _ => {}
             }
         }
+
+        self.chunk.write_opcode(OpCode::PrintEnd, self.state.line);
 
         Ok(())
     }
@@ -458,16 +473,14 @@ mod tests {
             26 NEXT I
             31 DEF FNA(X) = X + 10
             32 DEF FNB(X) = X + FNA(X) + Y
-            35 PRINT 99999
-            40 PRINT FNB(Y)
+            40 PRINT \"FNB(Y)\", FNB(Y)
             50 REM IGNORE ME
             55 LET X(3, 3) = 99
             60 GOSUB 100
-            70 PRINT X(3, 3)
+            70 PRINT \"X(3, 3)\"; X(3, 3)
             80 GOTO 800
             100 REM SUBROUTING
-            110 PRINT 78787878
-            120 PRINT A
+            120 PRINT \"A\", A
             130 RETURN
             150 DATA 10, 20, 30
             800 END"
@@ -483,7 +496,10 @@ mod tests {
         eprintln!("{:?}", result);
 
         let mut vm = VM::new(chunk);
-        vm.run();
+        let mut output = Vec::new();
+        vm.run(&mut output);
+
+        println!("{}", ::std::str::from_utf8(&output).unwrap());
 
         assert!(false);
     }

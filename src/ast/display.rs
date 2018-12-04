@@ -151,7 +151,7 @@ impl fmt::Display for Printable {
             }
             Expr(ref v) => v.fmt(f),
             Advance3 => write!(f, ";"),
-            Advance5 => write!(f, ","),
+            Advance15 => write!(f, ","),
         }
     }
 }

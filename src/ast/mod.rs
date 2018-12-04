@@ -65,8 +65,8 @@ pub enum Expression {
 pub enum Printable {
     Label(String),
     Expr(Expression),
-    Advance3, // ;
-    Advance5, // ,
+    Advance3,  // ;
+    Advance15, // ,
 }
 
 #[derive(Debug)]
