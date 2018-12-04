@@ -5,11 +5,8 @@ use std::io;
 use int_hash::IntHashMap;
 use num_traits::{FromPrimitive, ToPrimitive};
 
-use self::value::*;
 use crate::ast::function::Func;
 use crate::ast::*;
-
-pub mod value;
 
 mod array;
 mod chunk;
@@ -80,7 +77,7 @@ impl VM {
     pub fn run<W: io::Write>(&mut self, out: W) -> Result<(), RuntimeError> {
         assert!(self.chunk.len() > 0, "Empty chunk");
 
-        let mut printer = Printer::new(out);
+        let mut printer = Printer::new_buffered(out);
 
         loop {
             let instr = OpCode::from_u8(self.read_byte()?).ok_or(RuntimeError)?;
@@ -407,18 +404,16 @@ impl VM {
     fn push_value(&mut self, v: Number) {
         self.stack.push_back(v);
     }
+
     fn pop_value(&mut self) -> Option<Number> {
         self.stack.pop_back()
     }
+
     fn peek(&self, distance: usize) -> Option<Number> {
         let n = self.stack.len();
         let index = n - 1 - distance;
 
         self.stack.get(index).cloned()
-    }
-
-    fn print_value(&mut self, v: Number) {
-        println!("{}", v);
     }
 
     fn binary_op<F>(&mut self, f: F) -> Option<Number>
