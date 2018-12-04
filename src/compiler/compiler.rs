@@ -485,6 +485,23 @@ mod tests {
             150 DATA 10, 20, 30
             800 END"
         );
+        let printed = indoc!(
+            "
+            1010
+            1009
+            1008
+            1007
+            1006
+            1005
+            1004
+            1003
+            1002
+            1001
+            FNB(Y)         70
+            拼音           30
+            X(3, 3)  99
+            "
+        );
 
         let scanner = Scanner::new(program);
         let ast = Parser::new(scanner).parse().unwrap();
@@ -493,14 +510,11 @@ mod tests {
         let mut compiler = Compiler::new(&mut chunk);
 
         let result = compiler.visit_program(&ast);
-        eprintln!("{:?}", result);
 
         let mut vm = VM::new(chunk);
         let mut output = Vec::new();
         vm.run(&mut output);
 
-        println!("{}", ::std::str::from_utf8(&output).unwrap());
-
-        assert!(false);
+        assert_eq!(::std::str::from_utf8(&output), Ok(printed));
     }
 }
