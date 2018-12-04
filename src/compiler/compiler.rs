@@ -480,7 +480,7 @@ mod tests {
             70 PRINT \"X(3, 3)\"; X(3, 3)
             80 GOTO 800
             100 REM SUBROUTING
-            120 PRINT \"A\", A
+            120 PRINT \"拼音\", A
             130 RETURN
             150 DATA 10, 20, 30
             800 END"
