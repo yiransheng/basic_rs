@@ -8,7 +8,7 @@
 
 111 REM Added from Norvig's version: http://nbviewer.jupyter.org/github/norvig/pytudes/blob/master/ipynb/BASIC.ipynb
 112 REM Python implementation above do not check/enforce array dimension limits
-113 REM Default 10x10 is not enough for this program (20 is arbitrarily chosen)
+113 REM Default 11x11 is not enough for this program (20 is arbitrarily chosen)
 115 DIM A(20, 20)
 
 120 READ G,      M,      L(0,3), L(1,3), L(1,2)

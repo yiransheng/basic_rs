@@ -27,6 +27,7 @@ struct ForState {
 pub struct Compiler<'a> {
     state: CompileState,
     line_addr_map: IntHashMap<LineNo, usize>,
+    // TODO: this needs to be a Vec
     jumps: IntHashMap<u16, LineNo>,
     for_states: IntHashMap<Variable, ForState>,
     chunk: &'a mut Chunk,
