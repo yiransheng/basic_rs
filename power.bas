@@ -11,7 +11,7 @@
 55   PRINT N,
 60   FOR P = 2 TO P0
 65     LET S = S + N ^ P
-70     PRINT S,
+70     PRINT N ^ P,
 75   NEXT P
 80   PRINT S
 85 NEXT N
