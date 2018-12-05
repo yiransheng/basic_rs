@@ -93,6 +93,8 @@ impl<'a> Visitor<Result> for Compiler<'a> {
             self.chunk.set_operand(*index, JumpPoint(*jp));
         }
 
+        self.chunk.write_opcode(OpCode::Stop, self.state.line + 1);
+
         Ok(())
     }
 

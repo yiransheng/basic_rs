@@ -344,7 +344,6 @@ impl VM {
                     self.push_value(value);
                 }
             }
-            // println!("{:?} {:?}", instr, self.stack);
         }
     }
 

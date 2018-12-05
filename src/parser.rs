@@ -90,7 +90,7 @@ impl<'a> Parser<'a> {
             current: Token::Eof,
             current_loc: SourceLoc { line: 0, col: 0 },
         };
-        parser.advance();
+        parser.advance().unwrap();
 
         parser
     }
@@ -150,6 +150,13 @@ impl<'a> Parser<'a> {
             Keyword::To | Keyword::Step | Keyword::Then => return self.unexpected_token(),
         };
 
+        match &self.current {
+            Token::Eol => {
+                self.advance()?;
+            }
+            _ => {}
+        }
+
         Ok(Statement {
             statement: stmt,
             line_no,
@@ -189,8 +196,12 @@ impl<'a> Parser<'a> {
     fn print_statement(&mut self) -> Result<PrintStmt, Error> {
         consume_token!(self, Token::Keyword(Keyword::Print));
 
-        let parts = self.many(Self::printable)?;
+        let parts = match self.current {
+            Token::Eof | Token::Eol => vec![],
+            _ => self.many(Self::printable)?,
+        };
 
+        consume_token!(self, Token::Eol | Token::Eof);
         Ok(PrintStmt { parts })
     }
 
@@ -425,7 +436,7 @@ impl<'a> Parser<'a> {
 
                 Ok(expr)
             }
-            Token::Number(n) => {
+            Token::Number(_) => {
                 let n = self.number()?;
                 Ok(Expression::Lit(n))
             }
@@ -574,17 +585,9 @@ impl<'a> Parser<'a> {
 
         'outter: loop {
             match &self.current {
-                Token::Eof => {
-                    self.advance()?;
+                Token::Eof | Token::Eol => {
                     break;
                 }
-                Token::Eol => loop {
-                    consume_token!(self, Token::Eol);
-                    match &self.current {
-                        Token::Eol => {}
-                        _ => break 'outter,
-                    }
-                },
                 _ => {
                     let item = f(self)?;
                     results.push(item);

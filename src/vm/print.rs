@@ -62,7 +62,7 @@ impl<W: Write> Printer<W> {
     pub fn write_num(&mut self, n: f64) -> Result<(), PrintError> {
         let mut num = mem::replace(&mut self.num, Vec::new());
         num.clear();
-        write!(&mut num, "{}", n)?;
+        write!(&mut num, "{}", n as f32)?;
         let s = unsafe { from_utf8_unchecked(&num) };
         let r = self.write_str(s);
 
