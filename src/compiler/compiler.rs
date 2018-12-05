@@ -219,7 +219,7 @@ impl<'a> Visitor<Result> for Compiler<'a> {
             }
         }
 
-        self.chunk.write_opcode(OpCode::CondJump, self.state.line);
+        self.chunk.write_opcode(OpCode::JumpTrue, self.state.line);
         let jp_index = self.chunk.add_operand(JumpPoint(0), self.state.line);
         self.jumps.insert(jp_index, stmt.then);
 
@@ -284,8 +284,8 @@ impl<'a> Visitor<Result> for Compiler<'a> {
         // value stack: [<step sign>, current, to]
         self.chunk.write_opcode(OpCode::Sub, self.state.line);
         self.chunk.write_opcode(OpCode::Sign, self.state.line);
-        self.chunk.write_opcode(OpCode::Sub, self.state.line);
-        self.chunk.write_opcode(OpCode::CondJump, self.state.line);
+        self.chunk.write_opcode(OpCode::Equal, self.state.line);
+        self.chunk.write_opcode(OpCode::JumpFalse, self.state.line);
         self.chunk
             .add_operand(JumpPoint(loop_start), self.state.line);
 

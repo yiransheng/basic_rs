@@ -13,12 +13,14 @@ mod chunk;
 mod line_mapping;
 mod opcode;
 mod print;
+mod value;
 
 pub use self::chunk::*;
 pub use self::opcode::*;
 
 use self::array::{Array, Error as ArrayError, Subscript};
 use self::print::{PrintError, Printer};
+use self::value::*;
 
 pub const DEFAULT_ARRAY_SIZE: u8 = 11;
 
@@ -35,22 +37,40 @@ pub struct VM {
     globals: IntHashMap<Variable, Number>,
     global_lists: IntHashMap<Variable, Array<u8>>,
     global_tables: IntHashMap<Variable, Array<[u8; 2]>>,
-    stack: VecDeque<Number>,
+    stack: VecDeque<Value>,
     call_stack: VecDeque<CallFrame>,
 }
 
 #[derive(Debug)]
-pub struct RuntimeError;
+pub struct RuntimeError {
+    error: ExecError,
+    line_no: usize,
+}
 
-impl From<ArrayError> for RuntimeError {
-    fn from(err: ArrayError) -> RuntimeError {
-        RuntimeError
+#[derive(Debug)]
+pub enum ExecError {
+    NoData,
+    EmptyStack,
+    ListNotFound(Variable),
+    TableNotFound(Variable),
+    FunctionNotFound(Func),
+    IndexError(Variable, f64),
+    TypeError(&'static str),
+    ArrayError(ArrayError),
+    PrintError(PrintError),
+    DecodeError(u8),
+    RedefineDim(Variable),
+}
+
+impl From<ArrayError> for ExecError {
+    fn from(err: ArrayError) -> ExecError {
+        ExecError::ArrayError(err)
     }
 }
 
-impl From<PrintError> for RuntimeError {
-    fn from(err: PrintError) -> RuntimeError {
-        RuntimeError
+impl From<PrintError> for ExecError {
+    fn from(err: PrintError) -> ExecError {
+        ExecError::PrintError(err)
     }
 }
 
@@ -74,14 +94,32 @@ impl VM {
         }
     }
 
+    #[inline]
     pub fn run<W: io::Write>(&mut self, out: W) -> Result<(), RuntimeError> {
+        let ip = *self.get_ip();
+
+        match self.exec(out) {
+            Ok(_) => Ok(()),
+            Err(err) => match err {
+                // BASIC program exits normally when READ has no more data
+                ExecError::NoData => Ok(()),
+                _ => Err(RuntimeError {
+                    error: err,
+                    line_no: self.chunk.line_no(ip),
+                }),
+            },
+        }
+    }
+    fn exec<W: io::Write>(&mut self, out: W) -> Result<(), ExecError> {
         assert!(self.chunk.len() > 0, "Empty chunk");
 
         let mut printer = Printer::new_buffered(out);
 
         loop {
-            let instr = OpCode::from_u8(self.read_byte()?).ok_or(RuntimeError)?;
+            let byte = self.read_byte()?;
+            let instr = OpCode::from_u8(byte).ok_or(ExecError::DecodeError(byte))?;
             match instr {
+                OpCode::Stop => return Ok(()),
                 OpCode::PrintStart => {
                     printer.write_start();
                 }
@@ -89,7 +127,7 @@ impl VM {
                     printer.write_end();
                 }
                 OpCode::PrintExpr => {
-                    let value = self.pop_value().ok_or(RuntimeError)?;
+                    let value = self.pop_number()?;
                     printer.write_num(value)?;
                 }
                 OpCode::PrintLabel => {
@@ -105,53 +143,63 @@ impl VM {
                 OpCode::InitArray => {
                     let var: Variable = self.read_inline_operand()?;
                     let arr = Array::new(DEFAULT_ARRAY_SIZE);
-                    // redefine dimension, not allowed
-                    if let Some(_) = self.global_lists.insert(var, arr) {
-                        return Err(RuntimeError);
-                    }
+                    self.global_lists.insert(var, arr);
                 }
                 OpCode::InitArray2d => {
                     let var: Variable = self.read_inline_operand()?;
                     let arr = Array::new([DEFAULT_ARRAY_SIZE, DEFAULT_ARRAY_SIZE]);
-                    // redefine dimension, not allowed
-                    if let Some(_) = self.global_tables.insert(var, arr) {
-                        return Err(RuntimeError);
-                    }
+                    self.global_tables.insert(var, arr);
                 }
                 OpCode::Noop => continue,
-                OpCode::Stop => return Ok(()),
                 OpCode::Jump => {
                     let jump_point: JumpPoint = self.read_operand()?;
                     *self.get_ip() = jump_point.0;
                 }
-                OpCode::CondJump => {
-                    let value = self.pop_value().ok_or(RuntimeError)?;
+                OpCode::JumpTrue => {
+                    let value = self.pop_value()?;
                     let jump_point: JumpPoint = self.read_operand()?;
 
-                    if value != 0.0 {
-                        *self.get_ip() = jump_point.0;
+                    match value {
+                        Variant::True(_) => {
+                            *self.get_ip() = jump_point.0;
+                        }
+                        Variant::False(_) => {}
+                        _ => return Err(ExecError::TypeError("not a bool")),
+                    }
+                }
+                OpCode::JumpFalse => {
+                    let value = self.pop_value()?;
+                    let jump_point: JumpPoint = self.read_operand()?;
+
+                    match value {
+                        Variant::True(_) => {}
+                        Variant::False(_) => {
+                            *self.get_ip() = jump_point.0;
+                        }
+                        _ => return Err(ExecError::TypeError("not a bool")),
                     }
                 }
                 OpCode::Constant => {
-                    let value = self.read_operand()?;
+                    let value: f64 = self.read_operand()?;
                     self.push_value(value);
                 }
                 OpCode::Pop => {
-                    self.pop_value().ok_or(RuntimeError)?;
+                    let _ = self.pop_value();
                 }
                 OpCode::Dup => {
-                    let value = self.peek(0).ok_or(RuntimeError)?;
-                    self.push_value(value);
+                    if let Some(value) = self.peek(0) {
+                        self.push_value(value);
+                    }
                 }
                 OpCode::Swap => {
-                    let v1 = self.pop_value().ok_or(RuntimeError)?;
-                    let v2 = self.pop_value().ok_or(RuntimeError)?;
+                    let v1 = self.pop_value()?;
+                    let v2 = self.pop_value()?;
                     self.push_value(v1);
                     self.push_value(v2);
                 }
                 OpCode::CallNative => {
                     let func: Func = self.read_inline_operand()?;
-                    let x = self.pop_value().ok_or(RuntimeError)?;
+                    let x = self.pop_number()?;
                     let y = match func {
                         Func::Sin => x.sin(),
                         Func::Cos => x.cos(),
@@ -168,16 +216,19 @@ impl VM {
                     self.push_value(y);
                 }
                 OpCode::Return => {
-                    let v = self.pop_value();
+                    let v = self.pop_number();
+                    // TODO: check callframe to distinguish
+                    // func v. subroutine, instead of using Ok
+                    // match
                     self.call_stack.pop_back();
-                    if let Some(v) = v {
+                    if let Ok(v) = v {
                         self.push_value(v);
                     }
                 }
                 OpCode::Call => {
                     let current_depth = self.current_frame().depth;
                     let func: Func = self.read_inline_operand()?;
-                    let x = self.pop_value().ok_or(RuntimeError)?;
+                    let x = self.pop_number()?;
                     let new_frame = CallFrame {
                         depth: current_depth + 1,
                         func: Some(func),
@@ -199,7 +250,9 @@ impl VM {
                 }
                 OpCode::GetLocal => {
                     let frame = self.current_frame();
-                    let x = frame.local.ok_or(RuntimeError)?;
+                    let x = frame
+                        .local
+                        .ok_or(ExecError::TypeError("function argument not found"))?;
                     self.push_value(x);
                 }
                 OpCode::GetGlobal => {
@@ -209,138 +262,157 @@ impl VM {
                 }
                 OpCode::SetGlobal => {
                     let var: Variable = self.read_inline_operand()?;
-                    let value = self.pop_value().ok_or(RuntimeError)?;
+                    let value = self.pop_number()?;
                     self.globals.insert(var, value);
                 }
                 OpCode::GetGlobalArray => {
                     let var: Variable = self.read_inline_operand()?;
-                    let i: u8 = match self.pop_value() {
-                        Some(x) => x.to_u8().ok_or(RuntimeError)?,
-                        _ => return Err(RuntimeError),
+                    let i: u8 = match self.pop_number() {
+                        Ok(x) => x.to_u8().ok_or(ExecError::IndexError(var, x))?,
+                        Err(e) => return Err(e),
                     };
-                    let list = self.global_lists.get(&var).ok_or(RuntimeError)?;
+                    let list = self
+                        .global_lists
+                        .get(&var)
+                        .ok_or(ExecError::ListNotFound(var))?;
                     let v = list.get(i)?;
                     self.push_value(v);
                 }
                 OpCode::SetGlobalArray => {
                     let var: Variable = self.read_inline_operand()?;
-                    let i: u8 = match self.pop_value() {
-                        Some(x) => x.to_u8().ok_or(RuntimeError)?,
-                        _ => return Err(RuntimeError),
+                    let i: u8 = match self.pop_number() {
+                        Ok(x) => x.to_u8().ok_or(ExecError::IndexError(var, x))?,
+                        Err(e) => return Err(e),
                     };
-                    let v = self.pop_value().ok_or(RuntimeError)?;
-                    let list = self.global_lists.get_mut(&var).ok_or(RuntimeError)?;
+                    let v = self.pop_number()?;
+                    let list = self
+                        .global_lists
+                        .get_mut(&var)
+                        .ok_or(ExecError::ListNotFound(var))?;
                     list.set(i, v)?;
                 }
                 OpCode::GetGlobalArray2d => {
                     let var: Variable = self.read_inline_operand()?;
-                    let i: u8 = match self.pop_value() {
-                        Some(x) => x.to_u8().ok_or(RuntimeError)?,
-                        _ => return Err(RuntimeError),
+                    let i: u8 = match self.pop_number() {
+                        Ok(x) => x.to_u8().ok_or(ExecError::IndexError(var, x))?,
+                        Err(e) => return Err(e),
                     };
-                    let j: u8 = match self.pop_value() {
-                        Some(x) => x.to_u8().ok_or(RuntimeError)?,
-                        _ => return Err(RuntimeError),
+                    let j: u8 = match self.pop_number() {
+                        Ok(x) => x.to_u8().ok_or(ExecError::IndexError(var, x))?,
+                        Err(e) => return Err(e),
                     };
-                    let table = self.global_tables.get(&var).ok_or(RuntimeError)?;
+                    let table = self
+                        .global_tables
+                        .get(&var)
+                        .ok_or(ExecError::TableNotFound(var))?;
                     let v = table.get([i, j])?;
                     self.push_value(v);
                 }
                 OpCode::SetGlobalArray2d => {
                     let var: Variable = self.read_inline_operand()?;
-                    let i: u8 = match self.pop_value() {
-                        Some(x) => x.to_u8().ok_or(RuntimeError)?,
-                        _ => return Err(RuntimeError),
+                    let i: u8 = match self.pop_number() {
+                        Ok(x) => x.to_u8().ok_or(ExecError::IndexError(var, x))?,
+                        Err(e) => return Err(e),
                     };
-                    let j: u8 = match self.pop_value() {
-                        Some(x) => x.to_u8().ok_or(RuntimeError)?,
-                        _ => return Err(RuntimeError),
+                    let j: u8 = match self.pop_number() {
+                        Ok(x) => x.to_u8().ok_or(ExecError::IndexError(var, x))?,
+                        Err(e) => return Err(e),
                     };
-                    let v = self.pop_value().ok_or(RuntimeError)?;
-                    let table = self.global_tables.get_mut(&var).ok_or(RuntimeError)?;
+                    let v = self.pop_number()?;
+                    let table = self
+                        .global_tables
+                        .get_mut(&var)
+                        .ok_or(ExecError::TableNotFound(var))?;
                     table.set([i, j], v)?;
                 }
                 OpCode::SetArrayBound => {
                     let var: Variable = self.read_inline_operand()?;
-                    let value = self
-                        .pop_value()
-                        .and_then(|v| v.to_u8())
-                        .ok_or(RuntimeError)?;
-                    let list = self.global_lists.get_mut(&var).ok_or(RuntimeError)?;
+                    let value = self.pop_number()?;
+                    let value = value.to_u8().ok_or(ExecError::IndexError(var, value))?;
+                    let list = self
+                        .global_lists
+                        .get_mut(&var)
+                        .ok_or(ExecError::ListNotFound(var))?;
                     list.set_bound(value)?;
                 }
                 OpCode::SetArrayBound2d => {
                     let var: Variable = self.read_inline_operand()?;
-                    let n = self
-                        .pop_value()
-                        .and_then(|v| v.to_u8())
-                        .ok_or(RuntimeError)?;
-                    let m = self
-                        .pop_value()
-                        .and_then(|v| v.to_u8())
-                        .ok_or(RuntimeError)?;
-                    let table = self.global_tables.get_mut(&var).ok_or(RuntimeError)?;
+                    let n = self.pop_number()?;
+                    let n = n.to_u8().ok_or(ExecError::IndexError(var, n))?;
+                    let m = self.pop_number()?;
+                    let m = m.to_u8().ok_or(ExecError::IndexError(var, m))?;
+                    let table = self
+                        .global_tables
+                        .get_mut(&var)
+                        .ok_or(ExecError::TableNotFound(var))?;
                     table.set_bound([m, n])?;
                 }
                 OpCode::Negate => {
-                    let value = self.pop_value().ok_or(RuntimeError)?;
+                    let value = self.pop_number()?;
                     let neg_value = -value;
                     self.push_value(neg_value);
                 }
                 OpCode::Sign => {
-                    let value = self.pop_value().ok_or(RuntimeError)?;
+                    let value = self.pop_number()?;
                     self.push_value(value.signum() * ((value != 0.0) as u8) as f64);
                 }
                 OpCode::Not => {
-                    let value = self.pop_value().ok_or(RuntimeError)?;
-                    let not_value = if value == 0.0 { 1.0 } else { 0.0 };
+                    let value = self.pop_value()?;
+                    let not_value = match value {
+                        Variant::False(_) => Value::true_value(),
+                        Variant::True(_) => Value::false_value(),
+                        _ => return Err(ExecError::TypeError("not a bool")),
+                    };
                     self.push_value(not_value);
                 }
                 OpCode::Add => {
-                    let value = self.binary_op(|a, b| Some(a + b)).ok_or(RuntimeError)?;
+                    let value = self.binary_op(|a, b| Ok(a + b))?;
                     self.push_value(value);
                 }
                 OpCode::Sub => {
-                    let value = self.binary_op(|a, b| Some(a - b)).ok_or(RuntimeError)?;
+                    let value = self.binary_op(|a, b| Ok(a - b))?;
                     self.push_value(value);
                 }
                 OpCode::Mul => {
-                    let value = self.binary_op(|a, b| Some(a * b)).ok_or(RuntimeError)?;
+                    let value = self.binary_op(|a, b| Ok(a * b))?;
                     self.push_value(value);
                 }
                 OpCode::Pow => {
-                    let value = self.binary_op(|a, b| Some(a.powf(b))).ok_or(RuntimeError)?;
+                    let value = self.binary_op(|a, b| Ok(a.powf(b)))?;
                     self.push_value(value);
                 }
                 OpCode::Div => {
-                    let value = self
-                        .binary_op(|a, b| {
-                            let v = a / b;
-                            if !v.is_nan() {
-                                Some(v)
-                            } else {
-                                None
-                            }
-                        })
-                        .ok_or(RuntimeError)?;
+                    let value = self.binary_op(|a, b| Ok(a / b))?;
                     self.push_value(value);
                 }
                 OpCode::Equal => {
-                    let value = self
-                        .binary_op(|a, b| Some(if a == b { 1.0 } else { 0.0 }))
-                        .ok_or(RuntimeError)?;
+                    let value = self.binary_op(|a, b| {
+                        Ok(if a == b {
+                            Value::true_value()
+                        } else {
+                            Value::false_value()
+                        })
+                    })?;
                     self.push_value(value);
                 }
                 OpCode::Less => {
-                    let value = self
-                        .binary_op(|a, b| Some(if a < b { 1.0 } else { 0.0 }))
-                        .ok_or(RuntimeError)?;
+                    let value = self.binary_op(|a, b| {
+                        Ok(if a < b {
+                            Value::true_value()
+                        } else {
+                            Value::false_value()
+                        })
+                    })?;
                     self.push_value(value);
                 }
                 OpCode::Greater => {
-                    let value = self
-                        .binary_op(|a, b| Some(if a > b { 1.0 } else { 0.0 }))
-                        .ok_or(RuntimeError)?;
+                    let value = self.binary_op(|a, b| {
+                        Ok(if a > b {
+                            Value::true_value()
+                        } else {
+                            Value::false_value()
+                        })
+                    })?;
                     self.push_value(value);
                 }
             }
@@ -353,10 +425,13 @@ impl VM {
     }
 
     #[inline]
-    fn current_chunk(&mut self) -> Result<&mut Chunk, RuntimeError> {
+    fn current_chunk(&mut self) -> Result<&mut Chunk, ExecError> {
         let frame = self.call_stack.back_mut().unwrap();
         match frame.func {
-            Some(func) => self.chunk.get_function(&func).ok_or(RuntimeError),
+            Some(func) => self
+                .chunk
+                .get_function(&func)
+                .ok_or(ExecError::FunctionNotFound(func)),
             _ => Ok(&mut self.chunk),
         }
     }
@@ -367,7 +442,7 @@ impl VM {
         &mut frame.ip
     }
 
-    fn read_byte(&mut self) -> Result<u8, RuntimeError> {
+    fn read_byte(&mut self) -> Result<u8, ExecError> {
         let ip = *self.get_ip();
         let chunk = self.current_chunk()?;
         let byte = chunk.read_byte(ip);
@@ -376,7 +451,7 @@ impl VM {
 
         Ok(byte)
     }
-    fn read_operand<T: Operand>(&mut self) -> Result<T, RuntimeError> {
+    fn read_operand<T: Operand>(&mut self) -> Result<T, ExecError> {
         let ip = *self.get_ip();
         let chunk = self.current_chunk()?;
         let o = chunk.read_operand(ip);
@@ -384,7 +459,7 @@ impl VM {
 
         Ok(o)
     }
-    fn read_operand_ref<T: Operand>(&mut self) -> Result<&T, RuntimeError> {
+    fn read_operand_ref<T: Operand>(&mut self) -> Result<&T, ExecError> {
         let ip = *self.get_ip();
         *self.get_ip() += 2;
         let chunk = self.current_chunk()?;
@@ -392,7 +467,7 @@ impl VM {
 
         Ok(o)
     }
-    fn read_inline_operand<T: InlineOperand>(&mut self) -> Result<T, RuntimeError> {
+    fn read_inline_operand<T: InlineOperand>(&mut self) -> Result<T, ExecError> {
         let ip = *self.get_ip();
         let chunk = self.current_chunk()?;
         let o = chunk.read_inline_operand(ip);
@@ -401,27 +476,40 @@ impl VM {
         Ok(o)
     }
 
-    fn push_value(&mut self, v: Number) {
-        self.stack.push_back(v);
+    fn push_value<V: Into<Value>>(&mut self, v: V) {
+        self.stack.push_back(v.into());
     }
 
-    fn pop_value(&mut self) -> Option<Number> {
-        self.stack.pop_back()
+    fn pop_number(&mut self) -> Result<Number, ExecError> {
+        let v = self.pop_value()?;
+        match v {
+            Variant::Number(v) => Ok(v),
+            Variant::NoData(_) => Err(ExecError::NoData),
+            _ => Err(ExecError::TypeError("not a number")),
+        }
     }
 
-    fn peek(&self, distance: usize) -> Option<Number> {
+    #[inline(always)]
+    fn pop_value(&mut self) -> Result<Variant, ExecError> {
+        self.stack
+            .pop_back()
+            .map(Variant::from)
+            .ok_or(ExecError::EmptyStack)
+    }
+
+    fn peek(&self, distance: usize) -> Option<Value> {
         let n = self.stack.len();
         let index = n - 1 - distance;
 
         self.stack.get(index).cloned()
     }
 
-    fn binary_op<F>(&mut self, f: F) -> Option<Number>
+    fn binary_op<T, F>(&mut self, f: F) -> Result<T, ExecError>
     where
-        F: for<'b> Fn(Number, Number) -> Option<Number>,
+        F: Fn(Number, Number) -> Result<T, ExecError>,
     {
-        let a = self.pop_value()?;
-        let b = self.pop_value()?;
+        let a = self.pop_number()?;
+        let b = self.pop_number()?;
 
         f(b, a)
     }

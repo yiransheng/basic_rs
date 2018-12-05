@@ -131,7 +131,7 @@ impl Chunk {
     }
     pub fn write(&mut self, byte: u8, line: usize) {
         self.code.push(byte.into());
-        self.line_map.push_line(line);
+        self.line_map.add_mapping(line, self.len());
     }
     pub fn add_function(&mut self, func: Func, chunk: Chunk) {
         let p: [u8; 2] = func.into();
@@ -141,11 +141,13 @@ impl Chunk {
     pub fn get_function(&mut self, func: &Func) -> Option<&mut Chunk> {
         self.user_fns.get_mut(func)
     }
+    pub fn line_no(&self, offset: usize) -> usize {
+        self.line_map.find_line(offset)
+    }
 
-    //TODO: this should return Result
     pub fn add_operand<O: Operand>(&mut self, o: O, line: usize) -> u16 {
         let slot = o.add_to_chunk(self);
-        self.line_map.push_line(line);
+        self.line_map.add_mapping(line, self.len());
         slot
     }
 
@@ -158,7 +160,7 @@ impl Chunk {
         let bytes = o.into();
         self.write(bytes[0], line);
         self.write(bytes[1], line);
-        self.line_map.push_line(line);
+        self.line_map.add_mapping(line, self.len());
     }
 
     #[inline(always)]

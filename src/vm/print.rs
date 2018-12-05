@@ -10,6 +10,7 @@ enum PrintState {
     Idle,
 }
 
+#[derive(Debug)]
 pub enum PrintError {
     Io(Error),
     NotPrinting,
