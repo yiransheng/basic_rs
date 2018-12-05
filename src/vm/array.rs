@@ -33,6 +33,7 @@ pub enum Error {
     RedefineDim,
 }
 
+#[derive(Debug)]
 pub struct Array<I> {
     values: Vec<Option<f64>>,
     bound: I,
@@ -50,11 +51,9 @@ impl<I> Array<I> {
 impl<I: Subscript> Array<I> {
     pub fn get(&self, i: I) -> Result<f64, Error> {
         let index = i.to_usize(self).ok_or(Error::OutOfBound)?;
-        let v = self
-            .values
-            .get(index)
-            .and_then(|x| *x)
-            .ok_or(Error::UnInitialized)?;
+        // TODO: change this impl BASIC default values to 0.0
+        let v = self.values.get(index).and_then(|x| *x).unwrap_or(0.0);
+        // .ok_or(Error::UnInitialized)?;
         Ok(v)
     }
     pub fn set(&mut self, i: I, x: f64) -> Result<(), Error> {

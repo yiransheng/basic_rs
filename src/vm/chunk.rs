@@ -9,7 +9,7 @@ use super::opcode::OpCode;
 use crate::ast::function::Func;
 use crate::ast::variable::Variable;
 
-#[derive(Copy, Clone, Eq, PartialEq)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct JumpPoint(pub usize);
 
 pub trait InlineOperand: Into<[u8; 2]> {

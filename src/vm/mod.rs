@@ -20,7 +20,7 @@ pub use self::opcode::*;
 use self::array::{Array, Error as ArrayError, Subscript};
 use self::print::{PrintError, Printer};
 
-pub const DEFAULT_ARRAY_SIZE: u8 = 10;
+pub const DEFAULT_ARRAY_SIZE: u8 = 11;
 
 #[derive(Debug)]
 pub struct CallFrame {
@@ -204,8 +204,8 @@ impl VM {
                 }
                 OpCode::GetGlobal => {
                     let var: Variable = self.read_inline_operand()?;
-                    let v = self.globals.get(&var).ok_or(RuntimeError)?;
-                    self.push_value(*v);
+                    let v = self.globals.get(&var).map(|v| *v).unwrap_or(0.0);
+                    self.push_value(v);
                 }
                 OpCode::SetGlobal => {
                     let var: Variable = self.read_inline_operand()?;
