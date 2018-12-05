@@ -81,7 +81,6 @@ impl VM {
 
         loop {
             let instr = OpCode::from_u8(self.read_byte()?).ok_or(RuntimeError)?;
-            // println!("{:?} {:?}", instr, self.stack);
             match instr {
                 OpCode::PrintStart => {
                     printer.write_start();
@@ -309,6 +308,10 @@ impl VM {
                     let value = self.binary_op(|a, b| Some(a * b)).ok_or(RuntimeError)?;
                     self.push_value(value);
                 }
+                OpCode::Pow => {
+                    let value = self.binary_op(|a, b| Some(a.powf(b))).ok_or(RuntimeError)?;
+                    self.push_value(value);
+                }
                 OpCode::Div => {
                     let value = self
                         .binary_op(|a, b| {
@@ -340,11 +343,9 @@ impl VM {
                         .ok_or(RuntimeError)?;
                     self.push_value(value);
                 }
-                _ => break,
             }
+            // println!("{:?} {:?}", instr, self.stack);
         }
-
-        Ok(())
     }
 
     #[inline]

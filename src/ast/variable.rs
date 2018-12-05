@@ -78,10 +78,6 @@ impl Variable {
         self.0
     }
 
-    pub fn to_str(&self) -> &str {
-        ::std::str::from_utf8(&self.0).unwrap_or("<anonymous variable>")
-    }
-
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> Result<(), ::std::fmt::Error> {
         let b0 = self.0[0];
         let b1 = self.0[1];
@@ -89,7 +85,7 @@ impl Variable {
         match (b0, b1) {
             (b'A'...b'Z', 0) => write!(f, "{}", b0 as char),
             (b'A'...b'Z', b'0'...b'9') => write!(f, "{}{}", b0 as char, b1 as char),
-            _ => write!(f, "<anonymous variable>"),
+            _ => write!(f, "<anonymous variable {}{}>", b1, b0),
         }
     }
 }

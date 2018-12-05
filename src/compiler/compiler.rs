@@ -24,10 +24,6 @@ struct ForState {
     start_code_point: usize,
 }
 
-pub enum Error {
-    CompileError,
-}
-
 pub struct Compiler<'a> {
     state: CompileState,
     line_addr_map: IntHashMap<LineNo, usize>,
@@ -126,7 +122,7 @@ impl<'a> Visitor<Result> for Compiler<'a> {
     }
 
     fn visit_let(&mut self, stmt: &LetStmt) -> Result {
-        self.visit_expr(&stmt.expr)?;
+        self.evaluating(|this| this.visit_expr(&stmt.expr))?;
         self.assigning(|this| this.visit_lvalue(&stmt.var))
     }
 
@@ -168,7 +164,6 @@ impl<'a> Visitor<Result> for Compiler<'a> {
                     self.chunk.write_opcode(OpCode::PrintLabel, self.state.line);
                     self.chunk.add_operand(s.clone(), self.state.line);
                 }
-                _ => {}
             }
         }
 

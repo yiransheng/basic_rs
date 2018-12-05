@@ -6,7 +6,7 @@ use unicode_width::UnicodeWidthStr;
 
 #[derive(Debug, Copy, Clone)]
 enum PrintState {
-    Printing(usize),
+    Printing(usize, bool),
     Idle,
 }
 
@@ -44,15 +44,15 @@ impl<W: Write> Printer<W> {
     }
     pub fn write_start(&mut self) {
         match self.state {
-            PrintState::Printing(_) => {}
+            PrintState::Printing(..) => {}
             PrintState::Idle => {
-                self.state = PrintState::Printing(0);
+                self.state = PrintState::Printing(0, true);
             }
         }
     }
     pub fn write_end(&mut self) {
         match self.state {
-            PrintState::Printing(_) => {
+            PrintState::Printing(_, true) => {
                 write!(&mut self.out, "\n");
             }
             _ => {}
@@ -74,10 +74,11 @@ impl<W: Write> Printer<W> {
         debug_assert!(!s.contains('\n'));
 
         match self.state {
-            PrintState::Printing(ref mut written) => {
+            PrintState::Printing(ref mut written, ref mut end_line) => {
                 let w = UnicodeWidthStr::width(s);
                 write!(&mut self.out, "{}", s)?;
                 *written += w;
+                *end_line = true;
                 Ok(())
             }
             _ => Err(PrintError::NotPrinting),
@@ -89,12 +90,13 @@ impl<W: Write> Printer<W> {
         debug_assert!(k > 0);
 
         match self.state {
-            PrintState::Printing(ref mut written) => {
+            PrintState::Printing(ref mut written, ref mut end_line) => {
                 let n = k - *written % k;
                 *written += n;
                 for _ in 0..n {
                     write!(self.out, " ")?;
                 }
+                *end_line = false;
                 Ok(())
             }
             _ => Err(PrintError::NotPrinting),
