@@ -180,7 +180,7 @@ impl<'a> Parser<'a> {
     fn data_statement(&mut self) -> Result<DataStmt, Error> {
         consume_token!(self, Token::Keyword(Keyword::Data));
 
-        let vals = self.list_of(Self::number)?;
+        let vals = self.list_of(Self::number_expr)?;
         consume_token!(self, Token::Eol | Token::Eof);
 
         Ok(DataStmt { vals })
@@ -446,6 +446,24 @@ impl<'a> Parser<'a> {
         };
 
         self.advance()?;
+
+        Ok(n)
+    }
+
+    // parses negative number as well (only for data statement)
+    fn number_expr(&mut self) -> Result<f64, Error> {
+        let n = match &self.current {
+            Token::Minus => {
+                self.advance()?;
+                let n = self.number()?;
+                -n
+            }
+            Token::Number(_) => {
+                let n = self.number()?;
+                n
+            }
+            _ => return self.unexpected_token(),
+        };
 
         Ok(n)
     }
