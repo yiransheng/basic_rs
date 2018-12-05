@@ -289,7 +289,7 @@ impl VM {
                 }
                 OpCode::Sign => {
                     let value = self.pop_value().ok_or(RuntimeError)?;
-                    self.push_value(value.signum());
+                    self.push_value(value.signum() * ((value != 0.0) as u8) as f64);
                 }
                 OpCode::Not => {
                     let value = self.pop_value().ok_or(RuntimeError)?;
