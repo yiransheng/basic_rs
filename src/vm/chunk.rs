@@ -192,3 +192,114 @@ impl Chunk {
         (&self.code[offset..]).read_u16::<LittleEndian>().unwrap()
     }
 }
+
+pub mod disassembler {
+    use std::io;
+
+    use num_traits::{FromPrimitive, ToPrimitive};
+
+    use super::super::opcode::OpCode;
+    use super::*;
+    use crate::ast::function::Func;
+    use crate::ast::*;
+
+    use self::OpCode::*;
+
+    //TODO: update Operand trait to eliminate &mut Chunk
+    // requirement here
+    pub struct Disassembler<'a, W> {
+        chunk: &'a mut Chunk,
+        ip: usize,
+        line: usize,
+        out: W,
+    }
+
+    impl<'a, W: io::Write> Disassembler<'a, W> {
+        pub fn new(chunk: &'a mut Chunk, out: W) -> Self {
+            Disassembler {
+                chunk,
+                ip: 0,
+                line: usize::max_value(),
+                out,
+            }
+        }
+        pub fn disassemble(&mut self) {
+            while let Some(instr) = self.disassemble_instruction() {
+                match instr {
+                    Constant => self.disassemble_constant(),
+                    Subroutine | Jump | JumpTrue | JumpFalse => self.disassemble_address(),
+                    CallNative | Call => self.disassemble_function(),
+
+                    GetGlobal | SetGlobal | GetGlobalArray | SetGlobalArray | GetGlobalArray2d
+                    | SetGlobalArray2d | InitArray | InitArray2d | SetArrayBound
+                    | SetArrayBound2d => self.disassemble_variable(),
+
+                    PrintLabel => self.disassemble_label(),
+                    _ => {}
+                }
+                let _ = writeln!(&mut self.out, "");
+            }
+
+            let _ = writeln!(&mut self.out, "");
+        }
+
+        fn disassemble_constant(&mut self) {
+            let n: f64 = self.get_operand();
+            let _ = write!(&mut self.out, " {}", n);
+        }
+        fn disassemble_address(&mut self) {
+            let p: JumpPoint = self.get_operand();
+            let _ = write!(&mut self.out, " {}", p.0);
+        }
+
+        fn disassemble_label(&mut self) {
+            let label: String = self.get_operand();
+            let _ = write!(&mut self.out, " {}", label);
+        }
+
+        fn disassemble_variable(&mut self) {
+            let var: Variable = self.get_inline_operand();
+            let _ = write!(&mut self.out, " {}", var);
+        }
+
+        fn disassemble_function(&mut self) {
+            let func: Func = self.get_inline_operand();
+            let _ = write!(&mut self.out, " {}", func);
+        }
+
+        fn get_inline_operand<O: InlineOperand>(&mut self) -> O {
+            let o = self.chunk.read_inline_operand(self.ip);
+            self.ip += 2;
+            o
+        }
+
+        fn get_operand<O: Operand>(&mut self) -> O {
+            let o = self.chunk.read_operand(self.ip);
+            self.ip += 2;
+            o
+        }
+
+        fn disassemble_instruction(&mut self) -> Option<OpCode> {
+            if self.ip >= self.chunk.code.len() {
+                return None;
+            }
+
+            let line = self.chunk.line_no(self.ip);
+            let byte = self.chunk.code[self.ip];
+            self.ip += 1;
+
+            let _ = if self.line == line {
+                write!(&mut self.out, "{} {:04}", " |  ", self.ip);
+            } else {
+                self.line = line;
+                write!(&mut self.out, "{:<4} {:04}", line, self.ip);
+            };
+
+            OpCode::from_u8(byte).map(|instr| {
+                let _ = write!(&mut self.out, "    {:?}", instr);
+
+                instr
+            })
+        }
+    }
+}

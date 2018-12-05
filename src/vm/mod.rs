@@ -484,7 +484,6 @@ impl VM {
         let v = self.pop_value()?;
         match v {
             Variant::Number(v) => Ok(v),
-            Variant::NoData(_) => Err(ExecError::NoData),
             _ => Err(ExecError::TypeError("not a number")),
         }
     }
