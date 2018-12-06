@@ -68,9 +68,9 @@ impl NanBoxable for FuncId {
 make_nanbox!{
     #[derive(Copy, Clone)]
     pub unsafe enum Value, Variant {
-	Number(f64),
-	True(True),
-	False(False),
+        Number(f64),
+        True(True),
+        False(False),
         Function(FuncId)
     }
 }
