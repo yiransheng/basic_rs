@@ -35,7 +35,7 @@ pub struct Compiler<'a> {
     state: CompileState,
     line_addr_map: IntHashMap<LineNo, usize>,
     // TODO: this needs to be a Vec
-    jumps: IntHashMap<u16, LineNo>,
+    jumps: Vec<(u16, LineNo)>,
     for_states: IntHashMap<Variable, ForState>,
     chunk: &'a mut Chunk,
 }
@@ -45,7 +45,7 @@ impl<'a> Compiler<'a> {
         Compiler {
             chunk,
             line_addr_map: IntHashMap::default(),
-            jumps: IntHashMap::default(),
+            jumps: Vec::new(),
             for_states: IntHashMap::default(),
             state: CompileState {
                 assign: false,
@@ -193,7 +193,7 @@ impl<'a> Visitor<Result> for Compiler<'a> {
     fn visit_goto(&mut self, stmt: &GotoStmt) -> Result {
         self.chunk.write_opcode(OpCode::Jump, self.state.line);
         let jp_index = self.chunk.add_operand(JumpPoint(0), self.state.line);
-        self.jumps.insert(jp_index, stmt.goto);
+        self.jumps.push((jp_index, stmt.goto));
 
         Ok(())
     }
@@ -201,7 +201,7 @@ impl<'a> Visitor<Result> for Compiler<'a> {
     fn visit_gosub(&mut self, stmt: &GosubStmt) -> Result {
         self.chunk.write_opcode(OpCode::Subroutine, self.state.line);
         let jp_index = self.chunk.add_operand(JumpPoint(0), self.state.line);
-        self.jumps.insert(jp_index, stmt.goto);
+        self.jumps.push((jp_index, stmt.goto));
 
         Ok(())
     }
@@ -236,7 +236,7 @@ impl<'a> Visitor<Result> for Compiler<'a> {
 
         self.chunk.write_opcode(OpCode::JumpTrue, self.state.line);
         let jp_index = self.chunk.add_operand(JumpPoint(0), self.state.line);
-        self.jumps.insert(jp_index, stmt.then);
+        self.jumps.push((jp_index, stmt.then));
 
         Ok(())
     }
