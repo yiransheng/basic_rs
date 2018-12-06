@@ -411,10 +411,6 @@ impl VM {
                     let neg_value = -value;
                     self.push_value(neg_value);
                 }
-                OpCode::Sign => {
-                    let value = self.pop_number()?;
-                    self.push_value(value.signum() * ((value != 0.0) as u8) as f64);
-                }
                 OpCode::Not => {
                     let value = self.pop_value()?;
                     let not_value = match value {
@@ -473,6 +469,19 @@ impl VM {
                         })
                     })?;
                     self.push_value(value);
+                }
+                OpCode::LoopTest => {
+                    let target = self.pop_number()?;
+                    let current = self.pop_number()?;
+                    let step = self.pop_number()?;
+
+                    if step > 0.0 && current > target {
+                        self.push_value(Value::true_value());
+                    } else if step < 0.0 && current < target {
+                        self.push_value(Value::true_value());
+                    } else {
+                        self.push_value(Value::false_value());
+                    }
                 }
             }
         }

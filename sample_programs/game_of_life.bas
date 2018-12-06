@@ -1,3 +1,5 @@
+10  REM Source: http://nbviewer.jupyter.org/github/norvig/pytudes/blob/master/ipynb/BASIC.ipynb
+20  REM By: Peter Norvig
 100 REM CONWAY'S GAME OF LIFE
 
 102 REM G IS NUMBER OF GENERATIONS, 

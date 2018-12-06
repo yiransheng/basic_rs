@@ -39,7 +39,6 @@ pub enum OpCode {
 
     Dup,
     Swap,
-    Sign,
     Negate,
     Not,
     Add,
@@ -51,6 +50,8 @@ pub enum OpCode {
     Equal,
     Less,
     Greater,
+
+    LoopTest,
 
     Noop,
 }
@@ -97,7 +98,6 @@ impl OpCode {
 
             Dup => "dup",
             Swap => "swap",
-            Sign => "sign",
             Negate => "neg",
             Not => "not",
             Add => "add",
@@ -109,6 +109,8 @@ impl OpCode {
             Equal => "eq",
             Less => "lt",
             Greater => "gt",
+
+            LoopTest => "loop.test",
 
             Noop => "noop",
         }

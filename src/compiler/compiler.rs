@@ -29,6 +29,7 @@ struct ForState {
     step: Variable,
     to: Variable,
     start_code_point: usize,
+    next_cp_index: u16,
 }
 
 pub struct Compiler<'a> {
@@ -242,14 +243,8 @@ impl<'a> Visitor<Result> for Compiler<'a> {
     }
 
     fn visit_for(&mut self, stmt: &ForStmt) -> Result {
-        self.visit_expr(&stmt.from)?;
-        self.assigning(|this| this.visit_variable(&stmt.var))?;
-
         let step_var = self.state.var_gen.next_anonymous();
         let to_var = self.state.var_gen.next_anonymous();
-
-        self.visit_expr(&stmt.to)?;
-        self.assigning(|this| this.visit_variable(&to_var))?;
 
         match stmt.step {
             Some(ref step_expr) => {
@@ -260,13 +255,27 @@ impl<'a> Visitor<Result> for Compiler<'a> {
                 self.chunk.add_operand(1.0, self.state.line);
             }
         }
+        self.chunk.write_opcode(OpCode::Dup, self.state.line);
         self.assigning(|this| this.visit_variable(&step_var))?;
+
+        self.visit_expr(&stmt.from)?;
+        self.chunk.write_opcode(OpCode::Dup, self.state.line);
+        self.assigning(|this| this.visit_variable(&stmt.var))?;
+
+        self.visit_expr(&stmt.to)?;
+        self.chunk.write_opcode(OpCode::Dup, self.state.line);
+        self.assigning(|this| this.visit_variable(&to_var))?;
+        // value stack: [step, current, to]
+
+        self.chunk.write_opcode(OpCode::Jump, self.state.line);
+        let jp_index = self.chunk.add_operand(JumpPoint(0), self.state.line);
 
         let for_state = ForState {
             var: stmt.var,
             step: step_var,
             to: to_var,
             start_code_point: self.chunk.len(),
+            next_cp_index: jp_index,
         };
 
         self.for_states.insert(stmt.var, for_state);
@@ -288,18 +297,18 @@ impl<'a> Visitor<Result> for Compiler<'a> {
         self.visit_variable(&step_var)?;
 
         self.chunk.write_opcode(OpCode::Dup, self.state.line);
-        self.chunk.write_opcode(OpCode::Sign, self.state.line);
-        self.chunk.write_opcode(OpCode::Swap, self.state.line);
         self.visit_variable(&stmt.var)?;
         self.chunk.write_opcode(OpCode::Add, self.state.line);
         self.chunk.write_opcode(OpCode::Dup, self.state.line);
 
         self.assigning(|this| this.visit_variable(&stmt.var))?;
         self.visit_variable(&to_var)?;
-        // value stack: [<step sign>, current, to]
-        self.chunk.write_opcode(OpCode::Sub, self.state.line);
-        self.chunk.write_opcode(OpCode::Sign, self.state.line);
-        self.chunk.write_opcode(OpCode::Equal, self.state.line);
+
+        self.chunk
+            .set_operand(for_state.next_cp_index, JumpPoint(self.chunk.len()));
+
+        // value stack: [step, current, to]
+        self.chunk.write_opcode(OpCode::LoopTest, self.state.line);
         self.chunk.write_opcode(OpCode::JumpFalse, self.state.line);
         self.chunk
             .add_operand(JumpPoint(loop_start), self.state.line);

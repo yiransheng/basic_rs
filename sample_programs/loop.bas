@@ -1,0 +1,13 @@
+10 FOR I = 1 TO 10
+20 NEXT I
+30 PRINT "I = 11?", I
+
+40 FOR I = 10 TO 1 STEP -1
+50 NEXT I
+60 PRINT "I = 0?", I
+
+65 LET S = 3
+
+70 FOR I = 10 TO S STEP S
+80   PRINT "Error: shouldn't be here"
+90 NEXT I
