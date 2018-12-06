@@ -52,7 +52,7 @@ impl error::Error for Error {
 
 #[derive(Debug)]
 pub struct Array<I> {
-    values: Vec<Option<f64>>,
+    values: Vec<f64>,
     bound: I,
 }
 
@@ -68,19 +68,18 @@ impl<I> Array<I> {
 impl<I: Subscript> Array<I> {
     pub fn get(&self, i: I) -> Result<f64, Error> {
         let index = i.to_usize(self).ok_or(Error::OutOfBound)?;
-        // TODO: change this impl BASIC default values to 0.0
-        let v = self.values.get(index).and_then(|x| *x).unwrap_or(0.0);
+        let v = self.values.get(index).cloned().unwrap_or(0.0);
         Ok(v)
     }
     pub fn set(&mut self, i: I, x: f64) -> Result<(), Error> {
         let index = i.to_usize(self).ok_or(Error::OutOfBound)?;
         let v = self.values.get_mut(index);
         if let Some(v) = v {
-            *v = Some(x);
+            *v = x;
             Ok(())
         } else {
             self.grow_to(index);
-            self.values[index] = Some(x);
+            self.values[index] = x;
             Ok(())
         }
     }
@@ -97,7 +96,7 @@ impl<I: Subscript> Array<I> {
     #[inline]
     fn grow_to(&mut self, index: usize) {
         while self.values.len() <= index + 1 {
-            self.values.push(None);
+            self.values.push(0.0);
         }
     }
 }
