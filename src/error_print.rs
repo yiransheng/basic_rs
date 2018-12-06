@@ -66,7 +66,7 @@ impl Error for InterpreterError {
         match self {
             InterpreterError::IoFail(e) => e.description(),
             InterpreterError::ParseFail(e) => e.description(),
-            InterpreterError::CompileFail(_) => "Compile error",
+            InterpreterError::CompileFail(e) => e.inner.description(),
             InterpreterError::Runtime(e) => e.error.description(),
         }
     }
