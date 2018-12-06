@@ -242,7 +242,9 @@ pub mod disassembler {
                 match instr {
                     Constant => self.disassemble_constant(),
                     Subroutine | Jump | JumpTrue | JumpFalse => self.disassemble_address(),
-                    CallNative | Call => self.disassemble_function(),
+                    CallNative | GetFunc | SetFunc => self.disassemble_function(),
+
+                    FnConstant => self.disassemble_function_id(),
 
                     GetGlobal | SetGlobal | GetGlobalArray | SetGlobalArray | GetGlobalArray2d
                     | SetGlobalArray2d | InitArray | InitArray2d | SetArrayBound
@@ -278,6 +280,11 @@ pub mod disassembler {
 
         fn disassemble_function(&mut self) {
             let func: Func = self.get_inline_operand();
+            let _ = write!(&mut self.out, " {}", func);
+        }
+
+        fn disassemble_function_id(&mut self) {
+            let func: FuncId = self.get_inline_operand();
             let _ = write!(&mut self.out, " {}", func);
         }
 
