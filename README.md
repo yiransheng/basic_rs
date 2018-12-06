@@ -84,3 +84,5 @@ Some sample disassembler output.
  |    0584    const      1
  |    0587    set.var    <anonymous variable 010>
 ```
+
+(`<anonymous variable>`s are used by compiler to implement `FOR` loops.. based on a particularly chosen `FOR` / `NEXT` semantics).
