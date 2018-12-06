@@ -1,3 +1,5 @@
+use std::fmt;
+
 use nanbox::*;
 use num_derive::{FromPrimitive, ToPrimitive};
 
@@ -14,6 +16,12 @@ impl FuncId {
     #[inline(always)]
     pub fn raw(self) -> u8 {
         self.0
+    }
+}
+
+impl fmt::Display for FuncId {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(f, "<compiled function {}>", self.0)
     }
 }
 

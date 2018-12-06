@@ -1,3 +1,6 @@
+use std::error;
+use std::fmt;
+
 pub trait Subscript {
     fn to_usize(self, arr: &Array<Self>) -> Option<usize>
     where
@@ -29,8 +32,22 @@ impl Subscript for [u8; 2] {
 #[derive(Debug, Copy, Clone)]
 pub enum Error {
     OutOfBound,
-    UnInitialized,
     RedefineDim,
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str(std::error::Error::description(self))
+    }
+}
+
+impl error::Error for Error {
+    fn description(&self) -> &str {
+        match self {
+            Error::OutOfBound => "Index out of bound",
+            Error::RedefineDim => "Redefind list/table dimension",
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -53,7 +70,6 @@ impl<I: Subscript> Array<I> {
         let index = i.to_usize(self).ok_or(Error::OutOfBound)?;
         // TODO: change this impl BASIC default values to 0.0
         let v = self.values.get(index).and_then(|x| *x).unwrap_or(0.0);
-        // .ok_or(Error::UnInitialized)?;
         Ok(v)
     }
     pub fn set(&mut self, i: I, x: f64) -> Result<(), Error> {

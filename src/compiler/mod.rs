@@ -6,5 +6,4 @@ mod error;
 mod func_compiler;
 mod line_order;
 
-pub use self::compiler::Compiler;
-pub use self::error::CompileError;
+pub use self::compiler::{CompileError, Compiler};

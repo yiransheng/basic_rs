@@ -1,6 +1,5 @@
 use std::error;
 use std::fmt;
-use std::hash::{Hash, Hasher};
 use std::str;
 
 #[derive(Copy, Clone, Eq, PartialEq, Hash)]

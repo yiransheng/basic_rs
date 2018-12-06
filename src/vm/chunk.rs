@@ -226,6 +226,7 @@ pub mod disassembler {
         ip: usize,
         line: usize,
         out: W,
+        printing: bool,
     }
 
     impl<'a, W: io::Write> Disassembler<'a, W> {
@@ -235,6 +236,7 @@ pub mod disassembler {
                 ip: 0,
                 line: usize::max_value(),
                 out,
+                printing: false,
             }
         }
         pub fn disassemble(&mut self) {
@@ -242,7 +244,9 @@ pub mod disassembler {
                 match instr {
                     Constant => self.disassemble_constant(),
                     Subroutine | Jump | JumpTrue | JumpFalse => self.disassemble_address(),
-                    CallNative | Call => self.disassemble_function(),
+                    CallNative | GetFunc | SetFunc => self.disassemble_function(),
+
+                    FnConstant => self.disassemble_function_id(),
 
                     GetGlobal | SetGlobal | GetGlobalArray | SetGlobalArray | GetGlobalArray2d
                     | SetGlobalArray2d | InitArray | InitArray2d | SetArrayBound
@@ -268,7 +272,7 @@ pub mod disassembler {
 
         fn disassemble_label(&mut self) {
             let label: String = self.get_operand();
-            let _ = write!(&mut self.out, " {}", label);
+            let _ = write!(&mut self.out, " \"{}\"", label);
         }
 
         fn disassemble_variable(&mut self) {
@@ -278,6 +282,11 @@ pub mod disassembler {
 
         fn disassemble_function(&mut self) {
             let func: Func = self.get_inline_operand();
+            let _ = write!(&mut self.out, " {}", func);
+        }
+
+        fn disassemble_function_id(&mut self) {
+            let func: FuncId = self.get_inline_operand();
             let _ = write!(&mut self.out, " {}", func);
         }
 
@@ -300,17 +309,36 @@ pub mod disassembler {
 
             let line = self.chunk.line_no(self.ip);
             let byte = self.chunk.code[self.ip];
-            self.ip += 1;
 
             let _ = if self.line == line {
-                write!(&mut self.out, "{} {:04}", " |  ", self.ip);
+                write!(&mut self.out, "{} {:04}", " |   ", self.ip);
             } else {
                 self.line = line;
-                write!(&mut self.out, "{:<4} {:04}", line, self.ip);
+                write!(&mut self.out, "{:<5} {:04}", line, self.ip);
             };
 
+            self.ip += 1;
+
             OpCode::from_u8(byte).map(|instr| {
-                let _ = write!(&mut self.out, "    {:?}", instr);
+                match instr {
+                    OpCode::PrintEnd => {
+                        self.printing = false;
+                    }
+                    _ => {}
+                }
+
+                if self.printing {
+                    let _ = write!(&mut self.out, "      {:8}", instr.short());
+                } else {
+                    let _ = write!(&mut self.out, "    {:10}", instr.short());
+                }
+
+                match instr {
+                    OpCode::PrintStart => {
+                        self.printing = true;
+                    }
+                    _ => {}
+                }
 
                 instr
             })

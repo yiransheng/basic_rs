@@ -1,5 +1,7 @@
 use std::collections::VecDeque;
+use std::error;
 use std::f64;
+use std::fmt;
 use std::io;
 
 use int_hash::IntHashMap;
@@ -44,8 +46,8 @@ pub struct VM {
 
 #[derive(Debug)]
 pub struct RuntimeError {
-    error: ExecError,
-    line_no: usize,
+    pub error: ExecError,
+    pub line_no: usize,
 }
 
 #[derive(Debug)]
@@ -58,8 +60,41 @@ pub enum ExecError {
     ArrayError(ArrayError),
     PrintError(PrintError),
     DecodeError(u8),
-    RedefineDim(Variable),
     FunctionNotFound,
+}
+
+impl fmt::Display for ExecError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use self::error::Error;
+
+        let desc = self.description();
+        match self {
+            ExecError::ListNotFound(var) => write!(f, "{}: {}", desc, var),
+            ExecError::TableNotFound(var) => write!(f, "{}: {}", desc, var),
+            ExecError::IndexError(var, v) => write!(f, "{}, variable: {}, index: {}", desc, var, v),
+            ExecError::TypeError(s) => write!(f, "TypeError: {}", s),
+            ExecError::ArrayError(err) => err.fmt(f),
+            ExecError::PrintError(err) => err.fmt(f),
+            ExecError::DecodeError(b) => write!(f, "Failed to decode instruction: {}", b),
+            ExecError::NoData | ExecError::FunctionNotFound => write!(f, "{}", desc),
+        }
+    }
+}
+
+impl error::Error for ExecError {
+    fn description(&self) -> &str {
+        match self {
+            ExecError::NoData => "No data",
+            ExecError::ListNotFound(_) => "Use uninitialized list",
+            ExecError::TableNotFound(_) => "Use uninitialized table",
+            ExecError::IndexError(..) => "Index error",
+            ExecError::TypeError(_) => "Type error",
+            ExecError::ArrayError(err) => err.description(),
+            ExecError::PrintError(err) => err.description(),
+            ExecError::DecodeError(_) => "Decode error",
+            ExecError::FunctionNotFound => "Function not found",
+        }
+    }
 }
 
 impl From<ArrayError> for ExecError {
@@ -96,18 +131,19 @@ impl VM {
 
     #[inline]
     pub fn run<W: io::Write>(&mut self, out: W) -> Result<(), RuntimeError> {
-        let ip = *self.get_ip();
-
         match self.exec(out) {
             Ok(_) => Ok(()),
-            Err(err) => match err {
-                // BASIC program exits normally when READ has no more data
-                ExecError::NoData => Ok(()),
-                _ => Err(RuntimeError {
-                    error: err,
-                    line_no: self.chunk.line_no(ip),
-                }),
-            },
+            Err(err) => {
+                let ip = *self.get_ip() - 1;
+                match err {
+                    // BASIC program exits normally when READ has no more data
+                    ExecError::NoData => Ok(()),
+                    _ => Err(RuntimeError {
+                        error: err,
+                        line_no: self.chunk.line_no(ip),
+                    }),
+                }
+            }
         }
     }
     fn exec<W: io::Write>(&mut self, out: W) -> Result<(), ExecError> {

@@ -7,9 +7,15 @@ use crate::vm::*;
 use super::anon_var::AnonVarGen;
 use super::array_dims::ArrayDims;
 use super::data::PrepareData;
-use super::error::CompileError;
+use super::error::CompileError as CompileErrorInner;
 use super::func_compiler::FuncCompiler;
 use super::line_order::LineOrder;
+
+#[derive(Debug)]
+pub struct CompileError {
+    pub inner: CompileErrorInner,
+    pub line_no: usize,
+}
 
 struct CompileState {
     assign: bool,
@@ -49,6 +55,13 @@ impl<'a> Compiler<'a> {
             },
         }
     }
+    pub fn compile(&mut self, prog: &Program) -> ::std::result::Result<(), CompileError> {
+        self.visit_program(prog).map_err(|err| CompileError {
+            inner: err,
+            line_no: self.state.line,
+        })
+    }
+
     fn assigning<T, F>(&mut self, mut f: F) -> T
     where
         F: FnMut(&mut Self) -> T,
@@ -71,7 +84,7 @@ impl<'a> Compiler<'a> {
     }
 }
 
-type Result = ::std::result::Result<(), CompileError>;
+type Result = ::std::result::Result<(), CompileErrorInner>;
 
 impl<'a> Visitor<Result> for Compiler<'a> {
     fn visit_program(&mut self, prog: &Program) -> Result {
@@ -92,7 +105,7 @@ impl<'a> Visitor<Result> for Compiler<'a> {
             let jp = self
                 .line_addr_map
                 .get(line_no)
-                .ok_or(CompileError::Custom("Don't know where to jump"))?;
+                .ok_or(CompileErrorInner::Custom("Don't know where to jump"))?;
             self.chunk.set_operand(*index, JumpPoint(*jp));
         }
 
@@ -267,7 +280,7 @@ impl<'a> Visitor<Result> for Compiler<'a> {
         let for_state = self
             .for_states
             .remove(&stmt.var)
-            .ok_or(CompileError::NextWithoutFor)?;
+            .ok_or(CompileErrorInner::NextWithoutFor)?;
         let step_var = for_state.step;
         let to_var = for_state.to;
         let loop_start = for_state.start_code_point;
@@ -401,7 +414,7 @@ impl<'a> Visitor<Result> for Compiler<'a> {
         if self.state.assign {
             // this in theory should not happen... parser should've taken
             // care of it, if observed, probably a compiler bug
-            return Err(CompileError::CannotAssignTo(expr.to_string()));
+            return Err(CompileErrorInner::CannotAssignTo(expr.to_string()));
         }
         match expr {
             Expression::Lit(n) => {
