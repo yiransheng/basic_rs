@@ -1,6 +1,34 @@
 use std::fmt;
 
+use super::keyword::Keyword;
 use super::*;
+
+impl fmt::Display for Keyword {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        use self::Keyword::*;
+
+        match self {
+            Let => write!(f, "LET"),
+            Read => write!(f, "READ"),
+            Data => write!(f, "DATA"),
+            Print => write!(f, "PRINT"),
+            Goto => write!(f, "GOTO"),
+            If => write!(f, "IF"),
+            For => write!(f, "FOR"),
+            Next => write!(f, "NEXT"),
+            End => write!(f, "END"),
+            Def => write!(f, "DEF"),
+            Gosub => write!(f, "GOSUB"),
+            Return => write!(f, "RETURN"),
+            Dim => write!(f, "DIM"),
+            Rem => write!(f, "REM"),
+            To => write!(f, "TO"),
+            Then => write!(f, "THEN"),
+            Step => write!(f, "STEP"),
+            Stop => write!(f, "STOP"),
+        }
+    }
+}
 
 impl fmt::Display for Func {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {

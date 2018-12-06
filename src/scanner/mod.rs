@@ -13,12 +13,17 @@ use crate::ast::{NameError, Token, Variable};
 use self::dfa::Dfa;
 use self::function::FuncDFA;
 use self::keyword::KeywordDFA;
-use self::number::MatchFloat;
+use self::number::MatchNum;
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct SourceMapped<T> {
     pub value: T,
     pub loc: SourceLoc,
+}
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub struct SourceLoc {
+    pub line: usize,
+    pub col: usize,
 }
 
 impl<T> SourceMapped<T> {
@@ -101,16 +106,7 @@ fn match_ident(s: &str) -> Result<(Token, usize), Error> {
 }
 
 fn match_number(s: &str) -> Result<(Token, usize), Error> {
-    MatchFloat
-        .map(|n| Token::Number(n))
-        .match_str(s)
-        .ok_or(Error::BadNumber)
-}
-
-#[derive(Debug, Copy, Clone)]
-pub struct SourceLoc {
-    pub line: usize,
-    pub col: usize,
+    MatchNum.match_str(s).ok_or(Error::BadNumber)
 }
 
 pub struct Scanner<'a> {
@@ -395,9 +391,19 @@ mod test_keyword {
 mod test_scanner {
     use super::*;
     use indoc::*;
+    use std::str::FromStr;
+
+    fn make_token(line: usize, col: usize, t: Token) -> SourceMapped<Token> {
+        SourceMapped {
+            value: t,
+            loc: SourceLoc { line, col },
+        }
+    }
 
     #[test]
     fn test_program() {
+        use super::Keyword::*;
+
         let program = indoc!(
             "
             10 REM POWER TABLE
@@ -425,24 +431,113 @@ mod test_scanner {
         let tokens = scanner
             .into_iter()
             .filter_map(|r| r.ok())
-            .map(|t| t.value.ty())
             .collect::<Vec<_>>();
 
-        let expected_types = [
-            "Number", "Keyword", "Eol", "Number", "Keyword", "Number", "Comma", "Number", "Eol",
-            "Number", "Keyword", "Varname", "Comma", "Varname", "Eol", "Number", "Keyword",
-            "Label", "Comma", "Eol", "Number", "Keyword", "Varname", "Equal", "Number", "Keyword",
-            "Varname", "Eol", "Number", "Keyword", "Label", "Varname", "Comma", "Eol", "Eol",
-            "Number", "Keyword", "Varname", "Eol", "Number", "Keyword", "Label", "Eol", "Number",
-            "Keyword", "Varname", "Equal", "Number", "Eol", "Number", "Keyword", "Varname",
-            "Equal", "Number", "Keyword", "Varname", "Eol", "Number", "Keyword", "Varname",
-            "Comma", "Eol", "Number", "Keyword", "Varname", "Equal", "Number", "Keyword",
-            "Varname", "Eol", "Number", "Keyword", "Varname", "Equal", "Varname", "Plus",
-            "Varname", "CaretUp", "Varname", "Eol", "Number", "Keyword", "Varname", "CaretUp",
-            "Varname", "Comma", "Eol", "Number", "Keyword", "Varname", "Eol", "Number", "Keyword",
-            "Varname", "Eol", "Number", "Keyword", "Varname", "Eol", "Number", "Keyword", "Eof",
+        let expected = vec![
+            make_token(0, 0, Token::Natural(10)),
+            make_token(0, 3, Token::Keyword(Keyword::Rem)),
+            make_token(0, 18, Token::Eol),
+            make_token(1, 0, Token::Natural(11)),
+            make_token(1, 3, Token::Keyword(Keyword::Data)),
+            make_token(1, 8, Token::Natural(8)),
+            make_token(1, 9, Token::Comma),
+            make_token(1, 11, Token::Natural(4)),
+            make_token(1, 12, Token::Eol),
+            make_token(2, 0, Token::Natural(15)),
+            make_token(2, 3, Token::Keyword(Keyword::Read)),
+            make_token(2, 8, Token::Varname("N0".parse().unwrap())),
+            make_token(2, 10, Token::Comma),
+            make_token(2, 11, Token::Varname("P0".parse().unwrap())),
+            make_token(2, 13, Token::Eol),
+            make_token(3, 0, Token::Natural(20)),
+            make_token(3, 3, Token::Keyword(Keyword::Print)),
+            make_token(3, 9, Token::Label("N".to_string())),
+            make_token(3, 12, Token::Comma),
+            make_token(3, 13, Token::Eol),
+            make_token(4, 0, Token::Natural(25)),
+            make_token(4, 3, Token::Keyword(Keyword::For)),
+            make_token(4, 7, Token::Varname("P".parse().unwrap())),
+            make_token(4, 9, Token::Equal),
+            make_token(4, 11, Token::Natural(2)),
+            make_token(4, 13, Token::Keyword(Keyword::To)),
+            make_token(4, 16, Token::Varname("P0".parse().unwrap())),
+            make_token(4, 18, Token::Eol),
+            make_token(5, 0, Token::Natural(30)),
+            make_token(5, 5, Token::Keyword(Keyword::Print)),
+            make_token(5, 11, Token::Label("N ^".to_string())),
+            make_token(5, 17, Token::Varname("P".parse().unwrap())),
+            make_token(5, 18, Token::Comma),
+            make_token(5, 19, Token::Eol),
+            make_token(6, 0, Token::Eol),
+            make_token(7, 0, Token::Natural(35)),
+            make_token(7, 3, Token::Keyword(Keyword::Next)),
+            make_token(7, 8, Token::Varname("P".parse().unwrap())),
+            make_token(7, 9, Token::Eol),
+            make_token(8, 0, Token::Natural(40)),
+            make_token(8, 3, Token::Keyword(Keyword::Print)),
+            make_token(8, 10, Token::Label("SUM".to_string())),
+            make_token(8, 15, Token::Eol),
+            make_token(9, 0, Token::Natural(45)),
+            make_token(9, 3, Token::Keyword(Keyword::Let)),
+            make_token(9, 7, Token::Varname("S".parse().unwrap())),
+            make_token(9, 9, Token::Equal),
+            make_token(9, 11, Token::Natural(0)),
+            make_token(9, 12, Token::Eol),
+            make_token(10, 0, Token::Natural(50)),
+            make_token(10, 3, Token::Keyword(Keyword::For)),
+            make_token(10, 7, Token::Varname("N".parse().unwrap())),
+            make_token(10, 9, Token::Equal),
+            make_token(10, 11, Token::Natural(2)),
+            make_token(10, 13, Token::Keyword(Keyword::To)),
+            make_token(10, 16, Token::Varname("N0".parse().unwrap())),
+            make_token(10, 18, Token::Eol),
+            make_token(11, 0, Token::Natural(55)),
+            make_token(11, 5, Token::Keyword(Keyword::Print)),
+            make_token(11, 11, Token::Varname("N".parse().unwrap())),
+            make_token(11, 12, Token::Comma),
+            make_token(11, 13, Token::Eol),
+            make_token(12, 0, Token::Natural(60)),
+            make_token(12, 5, Token::Keyword(Keyword::For)),
+            make_token(12, 9, Token::Varname("P".parse().unwrap())),
+            make_token(12, 11, Token::Equal),
+            make_token(12, 13, Token::Natural(2)),
+            make_token(12, 15, Token::Keyword(Keyword::To)),
+            make_token(12, 18, Token::Varname("P0".parse().unwrap())),
+            make_token(12, 20, Token::Eol),
+            make_token(13, 0, Token::Natural(65)),
+            make_token(13, 7, Token::Keyword(Keyword::Let)),
+            make_token(13, 11, Token::Varname("S".parse().unwrap())),
+            make_token(13, 13, Token::Equal),
+            make_token(13, 15, Token::Varname("S".parse().unwrap())),
+            make_token(13, 17, Token::Plus),
+            make_token(13, 19, Token::Varname("N".parse().unwrap())),
+            make_token(13, 21, Token::CaretUp),
+            make_token(13, 23, Token::Varname("P".parse().unwrap())),
+            make_token(13, 24, Token::Eol),
+            make_token(14, 0, Token::Natural(70)),
+            make_token(14, 7, Token::Keyword(Keyword::Print)),
+            make_token(14, 13, Token::Varname("N".parse().unwrap())),
+            make_token(14, 15, Token::CaretUp),
+            make_token(14, 17, Token::Varname("P".parse().unwrap())),
+            make_token(14, 18, Token::Comma),
+            make_token(14, 19, Token::Eol),
+            make_token(15, 0, Token::Natural(75)),
+            make_token(15, 5, Token::Keyword(Keyword::Next)),
+            make_token(15, 10, Token::Varname("P".parse().unwrap())),
+            make_token(15, 11, Token::Eol),
+            make_token(16, 0, Token::Natural(80)),
+            make_token(16, 5, Token::Keyword(Keyword::Print)),
+            make_token(16, 11, Token::Varname("S".parse().unwrap())),
+            make_token(16, 12, Token::Eol),
+            make_token(17, 0, Token::Natural(85)),
+            make_token(17, 3, Token::Keyword(Keyword::Next)),
+            make_token(17, 8, Token::Varname("N".parse().unwrap())),
+            make_token(17, 9, Token::Eol),
+            make_token(18, 0, Token::Natural(99)),
+            make_token(18, 3, Token::Keyword(Keyword::End)),
+            make_token(18, 6, Token::Eof),
         ];
 
-        assert_eq!(&tokens[..], &expected_types[..]);
+        assert_eq!(&expected, &tokens);
     }
 }

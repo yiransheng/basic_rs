@@ -14,10 +14,10 @@ pub type Error = SourceMapped<ErrorInner>;
 pub enum ErrorInner {
     ScanError(ScanError),
     UnexpectedToken(Token),
-    BadLineNo(f64),
     BadListOrTableName(Variable),
     BadSubscript(String),
     BadArgument(String),
+    BadLineNo,
 }
 impl fmt::Display for ErrorInner {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -28,7 +28,7 @@ impl fmt::Display for ErrorInner {
             ErrorInner::BadListOrTableName(var) => write!(f, "{}: {}", desc, var),
             ErrorInner::BadArgument(arg) => write!(f, "{}: {}", desc, arg),
             ErrorInner::BadSubscript(sub) => write!(f, "{}: {}", desc, sub),
-            ErrorInner::BadLineNo(n) => write!(f, "{}: {}", desc, n),
+            ErrorInner::BadLineNo => write!(f, "{}", desc),
         }
     }
 }
@@ -38,10 +38,10 @@ impl error::Error for ErrorInner {
         match self {
             ErrorInner::ScanError(err) => err.description(),
             ErrorInner::UnexpectedToken(_) => "Unexpected Token",
-            ErrorInner::BadLineNo(_) => "Line number is not a positive integer",
             ErrorInner::BadListOrTableName(_) => "Invalid list/table name",
             ErrorInner::BadSubscript(_) => "Invalid list/table subscripts",
             ErrorInner::BadArgument(_) => "Invalid function argument",
+            ErrorInner::BadLineNo => "Expected line number",
         }
     }
 }
@@ -187,7 +187,7 @@ impl<'a> Parser<'a> {
     fn data_statement(&mut self) -> Result<DataStmt, Error> {
         consume_token!(self, Token::Keyword(Keyword::Data));
 
-        let vals = self.list_of(Self::number_expr)?;
+        let vals = self.list_of(Self::number_signed)?;
         consume_token!(self, Token::Eol | Token::Eof);
 
         Ok(DataStmt { vals })
@@ -436,7 +436,7 @@ impl<'a> Parser<'a> {
 
                 Ok(expr)
             }
-            Token::Number(_) => {
+            Token::Natural(_) | Token::Real(_) => {
                 let n = self.number()?;
                 Ok(Expression::Lit(n))
             }
@@ -452,7 +452,8 @@ impl<'a> Parser<'a> {
 
     fn number(&mut self) -> Result<f64, Error> {
         let n = match &self.current {
-            Token::Number(n) => *n,
+            Token::Natural(n) => *n as f64,
+            Token::Real(n) => *n,
             _ => return self.unexpected_token(),
         };
 
@@ -462,21 +463,17 @@ impl<'a> Parser<'a> {
     }
 
     // parses negative number as well (only for data statement)
-    fn number_expr(&mut self) -> Result<f64, Error> {
-        let n = match &self.current {
+    fn number_signed(&mut self) -> Result<f64, Error> {
+        match &self.current {
             Token::Minus => {
                 self.advance()?;
+                // allows -12, but not --12
                 let n = self.number()?;
-                -n
+                Ok(-n)
             }
-            Token::Number(_) => {
-                let n = self.number()?;
-                n
-            }
+            Token::Natural(_) | Token::Real(_) => self.number(),
             _ => return self.unexpected_token(),
-        };
-
-        Ok(n)
+        }
     }
 
     fn variable(&mut self) -> Result<LValue, Error> {
@@ -546,13 +543,14 @@ impl<'a> Parser<'a> {
     }
 
     fn line_no(&mut self) -> Result<LineNo, Error> {
-        let n = self.number()?;
+        let n = match &self.current {
+            Token::Natural(n) => *n,
+            _ => return self.error_current(ErrorInner::BadLineNo),
+        };
 
-        if n >= 0.0 && n == n.trunc() {
-            Ok(n as usize)
-        } else {
-            self.error_current(ErrorInner::BadLineNo(n))
-        }
+        self.advance()?;
+
+        Ok(n as usize)
     }
 
     fn list_of<T, F>(&mut self, f: F) -> Result<Vec<T>, Error>

@@ -221,19 +221,13 @@ function codegen(rsEnum, words) {
   return rsDfa.toString();
 }
 
-function typegen(rsEnum, words, derive = true) {
+function typegen(rsEnum, words) {
   const enumBlock = new RsBlock(
     `pub enum ${rsEnum}`,
     words.map(w => new EnumVariant(rsEnum, w))
   );
 
-  if (derive) {
-    return (
-      "#[derive(Debug, Copy, Clone, Eq, PartialEq)]\n" + enumBlock.toString(0)
-    );
-  } else {
-    return enumBlock.toString(0);
-  }
+  return enumBlock.toString(0);
 }
 
 module.exports = {

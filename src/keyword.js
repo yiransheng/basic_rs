@@ -35,7 +35,15 @@ const keywords = [
 
 const Type = "Keyword";
 
-fs.writeFileSync(toFilePath(typePath), typegen(Type, keywords));
+const typecode =`use num_derive::{FromPrimitive, ToPrimitive};
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, FromPrimitive, ToPrimitive)]
+${typegen(Type, keywords, false)}`;
+
+fs.writeFileSync(toFilePath(typePath), typecode);
+
+
+// Scanner compiler time DFA
 
 const scanner = `use crate::${toModPath(typePath)}::${Type};
 use super::dfa::{Dfa, State};

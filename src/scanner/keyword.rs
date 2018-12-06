@@ -1,5 +1,5 @@
-use super::dfa::{Dfa, State};
 use crate::ast::keyword::Keyword;
+use super::dfa::{Dfa, State};
 
 pub struct KeywordDFA {
     state: State<Keyword>,
@@ -17,6 +17,7 @@ impl Dfa for KeywordDFA {
     type Output = Keyword;
 
     fn match_str(&mut self, s: &str) -> Option<(Keyword, usize)> {
+      
         let mut consumed: usize = 0;
         let iter = s.chars();
 
@@ -83,7 +84,7 @@ fn _dfa(state: State<Keyword>, t: char) -> State<Keyword> {
 }
 
 #[inline(always)]
-fn _state_0(t: char) -> State<Keyword> {
+fn _state_0 (t: char) -> State<Keyword> {
     match t {
         'L' | 'l' => State::Intermediate(19),
         'R' | 'r' => State::Intermediate(21),
@@ -102,7 +103,7 @@ fn _state_0(t: char) -> State<Keyword> {
 }
 
 #[inline(always)]
-fn _state_19(t: char) -> State<Keyword> {
+fn _state_19 (t: char) -> State<Keyword> {
     match t {
         'E' | 'e' => State::Intermediate(20),
         a if a.is_whitespace() && a != '\n' => State::Intermediate(19),
@@ -111,7 +112,7 @@ fn _state_19(t: char) -> State<Keyword> {
 }
 
 #[inline(always)]
-fn _state_20(t: char) -> State<Keyword> {
+fn _state_20 (t: char) -> State<Keyword> {
     match t {
         'T' | 't' => State::Matched(Keyword::Let),
         a if a.is_whitespace() && a != '\n' => State::Intermediate(20),
@@ -120,7 +121,7 @@ fn _state_20(t: char) -> State<Keyword> {
 }
 
 #[inline(always)]
-fn _state_21(t: char) -> State<Keyword> {
+fn _state_21 (t: char) -> State<Keyword> {
     match t {
         'E' | 'e' => State::Intermediate(22),
         a if a.is_whitespace() && a != '\n' => State::Intermediate(21),
@@ -129,7 +130,7 @@ fn _state_21(t: char) -> State<Keyword> {
 }
 
 #[inline(always)]
-fn _state_22(t: char) -> State<Keyword> {
+fn _state_22 (t: char) -> State<Keyword> {
     match t {
         'A' | 'a' => State::Intermediate(23),
         'T' | 't' => State::Intermediate(45),
@@ -140,7 +141,7 @@ fn _state_22(t: char) -> State<Keyword> {
 }
 
 #[inline(always)]
-fn _state_23(t: char) -> State<Keyword> {
+fn _state_23 (t: char) -> State<Keyword> {
     match t {
         'D' | 'd' => State::Matched(Keyword::Read),
         a if a.is_whitespace() && a != '\n' => State::Intermediate(23),
@@ -149,7 +150,7 @@ fn _state_23(t: char) -> State<Keyword> {
 }
 
 #[inline(always)]
-fn _state_24(t: char) -> State<Keyword> {
+fn _state_24 (t: char) -> State<Keyword> {
     match t {
         'A' | 'a' => State::Intermediate(25),
         'E' | 'e' => State::Intermediate(42),
@@ -160,7 +161,7 @@ fn _state_24(t: char) -> State<Keyword> {
 }
 
 #[inline(always)]
-fn _state_25(t: char) -> State<Keyword> {
+fn _state_25 (t: char) -> State<Keyword> {
     match t {
         'T' | 't' => State::Intermediate(26),
         a if a.is_whitespace() && a != '\n' => State::Intermediate(25),
@@ -169,7 +170,7 @@ fn _state_25(t: char) -> State<Keyword> {
 }
 
 #[inline(always)]
-fn _state_26(t: char) -> State<Keyword> {
+fn _state_26 (t: char) -> State<Keyword> {
     match t {
         'A' | 'a' => State::Matched(Keyword::Data),
         a if a.is_whitespace() && a != '\n' => State::Intermediate(26),
@@ -178,7 +179,7 @@ fn _state_26(t: char) -> State<Keyword> {
 }
 
 #[inline(always)]
-fn _state_27(t: char) -> State<Keyword> {
+fn _state_27 (t: char) -> State<Keyword> {
     match t {
         'R' | 'r' => State::Intermediate(28),
         a if a.is_whitespace() && a != '\n' => State::Intermediate(27),
@@ -187,7 +188,7 @@ fn _state_27(t: char) -> State<Keyword> {
 }
 
 #[inline(always)]
-fn _state_28(t: char) -> State<Keyword> {
+fn _state_28 (t: char) -> State<Keyword> {
     match t {
         'I' | 'i' => State::Intermediate(29),
         a if a.is_whitespace() && a != '\n' => State::Intermediate(28),
@@ -196,7 +197,7 @@ fn _state_28(t: char) -> State<Keyword> {
 }
 
 #[inline(always)]
-fn _state_29(t: char) -> State<Keyword> {
+fn _state_29 (t: char) -> State<Keyword> {
     match t {
         'N' | 'n' => State::Intermediate(30),
         a if a.is_whitespace() && a != '\n' => State::Intermediate(29),
@@ -205,7 +206,7 @@ fn _state_29(t: char) -> State<Keyword> {
 }
 
 #[inline(always)]
-fn _state_30(t: char) -> State<Keyword> {
+fn _state_30 (t: char) -> State<Keyword> {
     match t {
         'T' | 't' => State::Matched(Keyword::Print),
         a if a.is_whitespace() && a != '\n' => State::Intermediate(30),
@@ -214,7 +215,7 @@ fn _state_30(t: char) -> State<Keyword> {
 }
 
 #[inline(always)]
-fn _state_31(t: char) -> State<Keyword> {
+fn _state_31 (t: char) -> State<Keyword> {
     match t {
         'O' | 'o' => State::Intermediate(32),
         a if a.is_whitespace() && a != '\n' => State::Intermediate(31),
@@ -223,7 +224,7 @@ fn _state_31(t: char) -> State<Keyword> {
 }
 
 #[inline(always)]
-fn _state_32(t: char) -> State<Keyword> {
+fn _state_32 (t: char) -> State<Keyword> {
     match t {
         'T' | 't' => State::Intermediate(33),
         'S' | 's' => State::Intermediate(43),
@@ -233,7 +234,7 @@ fn _state_32(t: char) -> State<Keyword> {
 }
 
 #[inline(always)]
-fn _state_33(t: char) -> State<Keyword> {
+fn _state_33 (t: char) -> State<Keyword> {
     match t {
         'O' | 'o' => State::Matched(Keyword::Goto),
         a if a.is_whitespace() && a != '\n' => State::Intermediate(33),
@@ -242,7 +243,7 @@ fn _state_33(t: char) -> State<Keyword> {
 }
 
 #[inline(always)]
-fn _state_34(t: char) -> State<Keyword> {
+fn _state_34 (t: char) -> State<Keyword> {
     match t {
         'F' | 'f' => State::Matched(Keyword::If),
         a if a.is_whitespace() && a != '\n' => State::Intermediate(34),
@@ -251,7 +252,7 @@ fn _state_34(t: char) -> State<Keyword> {
 }
 
 #[inline(always)]
-fn _state_35(t: char) -> State<Keyword> {
+fn _state_35 (t: char) -> State<Keyword> {
     match t {
         'O' | 'o' => State::Intermediate(36),
         a if a.is_whitespace() && a != '\n' => State::Intermediate(35),
@@ -260,7 +261,7 @@ fn _state_35(t: char) -> State<Keyword> {
 }
 
 #[inline(always)]
-fn _state_36(t: char) -> State<Keyword> {
+fn _state_36 (t: char) -> State<Keyword> {
     match t {
         'R' | 'r' => State::Matched(Keyword::For),
         a if a.is_whitespace() && a != '\n' => State::Intermediate(36),
@@ -269,7 +270,7 @@ fn _state_36(t: char) -> State<Keyword> {
 }
 
 #[inline(always)]
-fn _state_37(t: char) -> State<Keyword> {
+fn _state_37 (t: char) -> State<Keyword> {
     match t {
         'E' | 'e' => State::Intermediate(38),
         a if a.is_whitespace() && a != '\n' => State::Intermediate(37),
@@ -278,7 +279,7 @@ fn _state_37(t: char) -> State<Keyword> {
 }
 
 #[inline(always)]
-fn _state_38(t: char) -> State<Keyword> {
+fn _state_38 (t: char) -> State<Keyword> {
     match t {
         'X' | 'x' => State::Intermediate(39),
         a if a.is_whitespace() && a != '\n' => State::Intermediate(38),
@@ -287,7 +288,7 @@ fn _state_38(t: char) -> State<Keyword> {
 }
 
 #[inline(always)]
-fn _state_39(t: char) -> State<Keyword> {
+fn _state_39 (t: char) -> State<Keyword> {
     match t {
         'T' | 't' => State::Matched(Keyword::Next),
         a if a.is_whitespace() && a != '\n' => State::Intermediate(39),
@@ -296,7 +297,7 @@ fn _state_39(t: char) -> State<Keyword> {
 }
 
 #[inline(always)]
-fn _state_40(t: char) -> State<Keyword> {
+fn _state_40 (t: char) -> State<Keyword> {
     match t {
         'N' | 'n' => State::Intermediate(41),
         a if a.is_whitespace() && a != '\n' => State::Intermediate(40),
@@ -305,7 +306,7 @@ fn _state_40(t: char) -> State<Keyword> {
 }
 
 #[inline(always)]
-fn _state_41(t: char) -> State<Keyword> {
+fn _state_41 (t: char) -> State<Keyword> {
     match t {
         'D' | 'd' => State::Matched(Keyword::End),
         a if a.is_whitespace() && a != '\n' => State::Intermediate(41),
@@ -314,7 +315,7 @@ fn _state_41(t: char) -> State<Keyword> {
 }
 
 #[inline(always)]
-fn _state_42(t: char) -> State<Keyword> {
+fn _state_42 (t: char) -> State<Keyword> {
     match t {
         'F' | 'f' => State::Matched(Keyword::Def),
         a if a.is_whitespace() && a != '\n' => State::Intermediate(42),
@@ -323,7 +324,7 @@ fn _state_42(t: char) -> State<Keyword> {
 }
 
 #[inline(always)]
-fn _state_43(t: char) -> State<Keyword> {
+fn _state_43 (t: char) -> State<Keyword> {
     match t {
         'U' | 'u' => State::Intermediate(44),
         a if a.is_whitespace() && a != '\n' => State::Intermediate(43),
@@ -332,7 +333,7 @@ fn _state_43(t: char) -> State<Keyword> {
 }
 
 #[inline(always)]
-fn _state_44(t: char) -> State<Keyword> {
+fn _state_44 (t: char) -> State<Keyword> {
     match t {
         'B' | 'b' => State::Matched(Keyword::Gosub),
         a if a.is_whitespace() && a != '\n' => State::Intermediate(44),
@@ -341,7 +342,7 @@ fn _state_44(t: char) -> State<Keyword> {
 }
 
 #[inline(always)]
-fn _state_45(t: char) -> State<Keyword> {
+fn _state_45 (t: char) -> State<Keyword> {
     match t {
         'U' | 'u' => State::Intermediate(46),
         a if a.is_whitespace() && a != '\n' => State::Intermediate(45),
@@ -350,7 +351,7 @@ fn _state_45(t: char) -> State<Keyword> {
 }
 
 #[inline(always)]
-fn _state_46(t: char) -> State<Keyword> {
+fn _state_46 (t: char) -> State<Keyword> {
     match t {
         'R' | 'r' => State::Intermediate(47),
         a if a.is_whitespace() && a != '\n' => State::Intermediate(46),
@@ -359,7 +360,7 @@ fn _state_46(t: char) -> State<Keyword> {
 }
 
 #[inline(always)]
-fn _state_47(t: char) -> State<Keyword> {
+fn _state_47 (t: char) -> State<Keyword> {
     match t {
         'N' | 'n' => State::Matched(Keyword::Return),
         a if a.is_whitespace() && a != '\n' => State::Intermediate(47),
@@ -368,7 +369,7 @@ fn _state_47(t: char) -> State<Keyword> {
 }
 
 #[inline(always)]
-fn _state_48(t: char) -> State<Keyword> {
+fn _state_48 (t: char) -> State<Keyword> {
     match t {
         'M' | 'm' => State::Matched(Keyword::Dim),
         a if a.is_whitespace() && a != '\n' => State::Intermediate(48),
@@ -377,7 +378,7 @@ fn _state_48(t: char) -> State<Keyword> {
 }
 
 #[inline(always)]
-fn _state_49(t: char) -> State<Keyword> {
+fn _state_49 (t: char) -> State<Keyword> {
     match t {
         'O' | 'o' => State::Matched(Keyword::To),
         'H' | 'h' => State::Intermediate(50),
@@ -387,7 +388,7 @@ fn _state_49(t: char) -> State<Keyword> {
 }
 
 #[inline(always)]
-fn _state_50(t: char) -> State<Keyword> {
+fn _state_50 (t: char) -> State<Keyword> {
     match t {
         'E' | 'e' => State::Intermediate(51),
         a if a.is_whitespace() && a != '\n' => State::Intermediate(50),
@@ -396,7 +397,7 @@ fn _state_50(t: char) -> State<Keyword> {
 }
 
 #[inline(always)]
-fn _state_51(t: char) -> State<Keyword> {
+fn _state_51 (t: char) -> State<Keyword> {
     match t {
         'N' | 'n' => State::Matched(Keyword::Then),
         a if a.is_whitespace() && a != '\n' => State::Intermediate(51),
@@ -405,7 +406,7 @@ fn _state_51(t: char) -> State<Keyword> {
 }
 
 #[inline(always)]
-fn _state_52(t: char) -> State<Keyword> {
+fn _state_52 (t: char) -> State<Keyword> {
     match t {
         'T' | 't' => State::Intermediate(53),
         a if a.is_whitespace() && a != '\n' => State::Intermediate(52),
@@ -414,7 +415,7 @@ fn _state_52(t: char) -> State<Keyword> {
 }
 
 #[inline(always)]
-fn _state_53(t: char) -> State<Keyword> {
+fn _state_53 (t: char) -> State<Keyword> {
     match t {
         'E' | 'e' => State::Intermediate(54),
         'O' | 'o' => State::Intermediate(55),
@@ -424,7 +425,7 @@ fn _state_53(t: char) -> State<Keyword> {
 }
 
 #[inline(always)]
-fn _state_54(t: char) -> State<Keyword> {
+fn _state_54 (t: char) -> State<Keyword> {
     match t {
         'P' | 'p' => State::Matched(Keyword::Step),
         a if a.is_whitespace() && a != '\n' => State::Intermediate(54),
@@ -433,7 +434,7 @@ fn _state_54(t: char) -> State<Keyword> {
 }
 
 #[inline(always)]
-fn _state_55(t: char) -> State<Keyword> {
+fn _state_55 (t: char) -> State<Keyword> {
     match t {
         'P' | 'p' => State::Matched(Keyword::Stop),
         a if a.is_whitespace() && a != '\n' => State::Intermediate(55),

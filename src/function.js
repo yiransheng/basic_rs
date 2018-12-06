@@ -78,6 +78,8 @@ impl ${Type} {
 
 fs.writeFileSync(toFilePath(typePath), typecode);
 
+// Scanner compiler time DFA
+
 const scanner = `use crate::${toModPath(typePath)}::${Type};
 use super::dfa::{Dfa, State};
 

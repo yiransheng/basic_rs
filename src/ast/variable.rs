@@ -1,6 +1,7 @@
 use std::error;
 use std::fmt;
 use std::hash::{Hash, Hasher};
+use std::str;
 
 #[derive(Copy, Clone, Eq, PartialEq, Hash)]
 pub struct Variable([u8; 2]);
@@ -10,6 +11,8 @@ pub enum NameError {
     NotLetter,
     NotDigit,
     LowerCase,
+    TooLong,
+    TooShort,
 }
 
 impl fmt::Display for NameError {
@@ -24,6 +27,8 @@ impl error::Error for NameError {
             NameError::NotLetter => "Variable name must start with an alphabet.",
             NameError::NotDigit => "Second character in variable name must be a digit (0-9).",
             NameError::LowerCase => "Variable name must use upper case alphabets.",
+            NameError::TooLong => "Variable name too long",
+            NameError::TooShort => "Variable name too short",
         }
     }
 }
@@ -93,6 +98,23 @@ impl Variable {
 impl Into<[u8; 2]> for Variable {
     fn into(self) -> [u8; 2] {
         self.0
+    }
+}
+impl str::FromStr for Variable {
+    type Err = NameError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.len() {
+            0 => Err(NameError::TooShort),
+            1 => Variable::from_byte(s.bytes().next().unwrap()),
+            2 => {
+                let mut bytes = s.bytes();
+                let b1 = bytes.next().unwrap();
+                let b2 = bytes.next().unwrap();
+                Variable::from_bytes(b1, b2)
+            }
+            _ => Err(NameError::TooLong),
+        }
     }
 }
 
