@@ -1,3 +1,5 @@
+use std::error;
+use std::fmt;
 use std::io::{BufWriter, Error, Write};
 use std::mem;
 use std::str::from_utf8_unchecked;
@@ -19,6 +21,24 @@ pub enum PrintError {
 impl From<Error> for PrintError {
     fn from(err: Error) -> Self {
         PrintError::Io(err)
+    }
+}
+
+impl fmt::Display for PrintError {
+    fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            PrintError::Io(err) => err.fmt(formatter),
+            PrintError::NotPrinting => formatter.write_str(error::Error::description(self)),
+        }
+    }
+}
+
+impl error::Error for PrintError {
+    fn description(&self) -> &str {
+        match self {
+            PrintError::Io(err) => err.description(),
+            PrintError::NotPrinting => "Print without proper initialization",
+        }
     }
 }
 
