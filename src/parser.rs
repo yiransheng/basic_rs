@@ -662,6 +662,11 @@ mod tests {
         let ast = parser.parse();
         let ast = ast.unwrap();
 
+        // This test is fragile. It relies on ast
+        // nodes' fmt::Display implementation to match
+        // expected output string - any minor changes there
+        // will break this test even if parser itself
+        // is not broken
         assert_eq!(parsed, &ast.to_string());
     }
 }

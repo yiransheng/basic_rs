@@ -15,6 +15,7 @@ struct CompileState {
     assign: bool,
     line: LineNo,
     var_gen: AnonVarGen,
+    func_id_gen: FuncIdGen,
 }
 
 struct ForState {
@@ -44,6 +45,7 @@ impl<'a> Compiler<'a> {
                 assign: false,
                 line: 0,
                 var_gen: AnonVarGen::new(),
+                func_id_gen: FuncIdGen::new(),
             },
         }
     }
@@ -298,7 +300,13 @@ impl<'a> Visitor<Result> for Compiler<'a> {
         fc.visit_expr(&stmt.expr)?;
         fchunk.write_opcode(OpCode::Return, self.state.line);
 
-        self.chunk.add_function(stmt.func, fchunk);
+        let func_id = self.state.func_id_gen.next_id();
+
+        self.chunk.add_function(func_id, fchunk);
+        self.chunk.write_opcode(OpCode::FnConstant, self.state.line);
+        self.chunk.add_inline_operand(func_id, self.state.line);
+        self.chunk.write_opcode(OpCode::SetFunc, self.state.line);
+        self.chunk.add_inline_operand(stmt.func, self.state.line);
 
         Ok(())
     }
@@ -407,10 +415,12 @@ impl<'a> Visitor<Result> for Compiler<'a> {
                 self.visit_expr(arg)?;
                 if func.is_native() {
                     self.chunk.write_opcode(OpCode::CallNative, self.state.line);
+                    self.chunk.add_inline_operand(*func, self.state.line);
                 } else {
+                    self.chunk.write_opcode(OpCode::GetFunc, self.state.line);
+                    self.chunk.add_inline_operand(*func, self.state.line);
                     self.chunk.write_opcode(OpCode::Call, self.state.line);
                 }
-                self.chunk.add_inline_operand(*func, self.state.line);
             }
             Expression::Neg(expr) => {
                 self.visit_expr(expr)?;

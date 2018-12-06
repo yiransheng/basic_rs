@@ -132,10 +132,12 @@ impl<'a> Visitor<Result<(), CompileError>> for FuncCompiler<'a> {
                 self.visit_expr(expr);
                 if func.is_native() {
                     self.chunk.write_opcode(OpCode::CallNative, self.line);
+                    self.chunk.add_inline_operand(*func, self.line);
                 } else {
+                    self.chunk.write_opcode(OpCode::GetFunc, self.line);
+                    self.chunk.add_inline_operand(*func, self.line);
                     self.chunk.write_opcode(OpCode::Call, self.line);
                 }
-                self.chunk.add_inline_operand(*func, self.line);
             }
             Expression::Neg(expr) => {
                 self.visit_expr(expr);

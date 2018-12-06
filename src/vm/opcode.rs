@@ -3,6 +3,7 @@ use num_derive::{FromPrimitive, ToPrimitive};
 #[derive(Debug, Copy, Clone, Eq, PartialEq, FromPrimitive, ToPrimitive)]
 pub enum OpCode {
     Constant = 0x00,
+    FnConstant,
     Return,
     Jump,
     JumpTrue,
@@ -13,6 +14,8 @@ pub enum OpCode {
     Stop,
 
     Pop,
+    SetFunc,
+    GetFunc,
     GetGlobal,
     SetGlobal,
     GetGlobalArray,
