@@ -24,17 +24,20 @@ struct Opt {
     /// Input file
     #[structopt(parse(from_os_str))]
     input: PathBuf,
+
+    #[structopt(short = "d", long = "disassemble")]
+    disassemble: bool,
 }
 
-fn read_source(opt: Opt) -> Result<String, InterpreterError> {
-    let mut file = File::open(opt.input)?;
+fn read_source(opt: &Opt) -> Result<String, InterpreterError> {
+    let mut file = File::open(&opt.input)?;
     let mut source = String::new();
     file.read_to_string(&mut source)?;
 
     Ok(source)
 }
 
-fn run(source: &str) -> Result<(), InterpreterError> {
+fn run(source: &str, opt: &Opt) -> Result<(), InterpreterError> {
     let scanner = Scanner::new(source);
     let ast = Parser::new(scanner).parse()?;
 
@@ -45,8 +48,8 @@ fn run(source: &str) -> Result<(), InterpreterError> {
 
     let stdout = io::stdout();
 
-    use crate::vm::disassembler::Disassembler;
-    {
+    if opt.disassemble {
+        use crate::vm::disassembler::Disassembler;
         let mut disassembler = Disassembler::new(&mut chunk, stdout.lock());
         disassembler.disassemble();
     }
@@ -60,12 +63,12 @@ fn run(source: &str) -> Result<(), InterpreterError> {
 
 fn main() {
     let opt = Opt::from_args();
-    let source = match read_source(opt) {
+    let source = match read_source(&opt) {
         Ok(s) => s,
         Err(err) => return eprintln!("{}", err),
     };
 
-    match run(&source) {
+    match run(&source, &opt) {
         Ok(_) => {}
         Err(e) => match e {
             InterpreterError::ParseFail(e) => print_source_error(e, &source),
