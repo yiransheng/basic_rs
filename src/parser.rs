@@ -102,6 +102,7 @@ impl<'a> Parser<'a> {
     }
 
     fn statement(&mut self) -> Result<Statement, Error> {
+        // skip empty lines
         match &self.current {
             Token::Eol => {
                 self.advance()?;
@@ -116,26 +117,10 @@ impl<'a> Parser<'a> {
         };
 
         let stmt = match keyword {
-            Keyword::End => {
-                self.advance()?;
-                consume_token!(self, Token::Eol | Token::Eof);
-                Stmt::End
-            }
-            Keyword::Stop => {
-                self.advance()?;
-                consume_token!(self, Token::Eol | Token::Eof);
-                Stmt::Stop
-            }
-            Keyword::Return => {
-                self.advance()?;
-                consume_token!(self, Token::Eol | Token::Eof);
-                Stmt::Return
-            }
-            Keyword::Rem => {
-                self.advance()?;
-                consume_token!(self, Token::Eol | Token::Eof);
-                Stmt::Rem
-            }
+            Keyword::End => parse_statement!(self, End, { Stmt::End }),
+            Keyword::Stop => parse_statement!(self, Stop, { Stmt::Stop }),
+            Keyword::Return => parse_statement!(self, Return, { Stmt::Return }),
+            Keyword::Rem => parse_statement!(self, Rem, { Stmt::Rem }),
             Keyword::Let => Stmt::Let(self.let_statement()?),
             Keyword::Read => Stmt::Read(self.read_statement()?),
             Keyword::Data => Stmt::Data(self.data_statement()?),
@@ -150,6 +135,7 @@ impl<'a> Parser<'a> {
             Keyword::To | Keyword::Step | Keyword::Then => return self.unexpected_token(),
         };
 
+        // skip empty lines
         match &self.current {
             Token::Eol => {
                 self.advance()?;
@@ -164,31 +150,26 @@ impl<'a> Parser<'a> {
     }
 
     fn let_statement(&mut self) -> Result<LetStmt, Error> {
-        consume_token!(self, Token::Keyword(Keyword::Let));
+        let (var, expr) = parse_statement!(self, Let, {
+            let var = self.variable()?;
+            consume_token!(self, Token::Equal);
 
-        let var = self.variable()?;
-        consume_token!(self, Token::Equal);
+            let expr = self.expression()?;
 
-        let expr = self.expression()?;
-        consume_token!(self, Token::Eol | Token::Eof);
+            (var, expr)
+        });
 
         Ok(LetStmt { var, expr })
     }
 
     fn read_statement(&mut self) -> Result<ReadStmt, Error> {
-        consume_token!(self, Token::Keyword(Keyword::Read));
-
-        let vars = self.list_of(Self::variable)?;
-        consume_token!(self, Token::Eol | Token::Eof);
+        let vars = parse_statement!(self, Read, { self.list_of(Self::variable)? });
 
         Ok(ReadStmt { vars })
     }
 
     fn data_statement(&mut self) -> Result<DataStmt, Error> {
-        consume_token!(self, Token::Keyword(Keyword::Data));
-
-        let vals = self.list_of(Self::number_signed)?;
-        consume_token!(self, Token::Eol | Token::Eof);
+        let vals = parse_statement!(self, Data, { self.list_of(Self::number_signed)? });
 
         Ok(DataStmt { vals })
     }
@@ -206,61 +187,54 @@ impl<'a> Parser<'a> {
     }
 
     fn goto_statement(&mut self) -> Result<GotoStmt, Error> {
-        consume_token!(self, Token::Keyword(Keyword::Goto));
-        let n = self.line_no()?;
+        let n = parse_statement!(self, Goto, { self.line_no()? });
 
-        consume_token!(self, Token::Eol | Token::Eof);
         Ok(GotoStmt { goto: n })
     }
 
     fn gosub_statement(&mut self) -> Result<GosubStmt, Error> {
-        consume_token!(self, Token::Keyword(Keyword::Gosub));
-        let n = self.line_no()?;
+        let n = parse_statement!(self, Gosub, { self.line_no()? });
 
-        consume_token!(self, Token::Eol | Token::Eof);
         Ok(GosubStmt { goto: n })
     }
 
     fn if_statement(&mut self) -> Result<IfStmt, Error> {
-        consume_token!(self, Token::Keyword(Keyword::If));
-        let lhs = self.expression()?;
-        let op = self.relop()?;
-        let rhs = self.expression()?;
-        consume_token!(self, Token::Keyword(Keyword::Then));
-        let then = self.line_no()?;
+        parse_statement!(self, If, {
+            let lhs = self.expression()?;
+            let op = self.relop()?;
+            let rhs = self.expression()?;
+            consume_token!(self, Token::Keyword(Keyword::Then));
+            let then = self.line_no()?;
 
-        consume_token!(self, Token::Eol | Token::Eof);
-
-        Ok(IfStmt { op, lhs, rhs, then })
+            Ok(IfStmt { op, lhs, rhs, then })
+        })
     }
 
     fn for_statement(&mut self) -> Result<ForStmt, Error> {
-        consume_token!(self, Token::Keyword(Keyword::For));
-        let var = self.variable()?;
-        let var = match var {
-            LValue::Variable(var) => var,
-            _ => return self.unexpected_token(),
-        };
-        consume_token!(self, Token::Equal);
-        let from = self.expression()?;
-        consume_token!(self, Token::Keyword(Keyword::To));
-        let to = self.expression()?;
+        parse_statement!(self, For, {
+            let var = self.variable()?;
+            let var = match var {
+                LValue::Variable(var) => var,
+                _ => return self.unexpected_token(),
+            };
+            consume_token!(self, Token::Equal);
+            let from = self.expression()?;
+            consume_token!(self, Token::Keyword(Keyword::To));
+            let to = self.expression()?;
 
-        let step = match &self.current {
-            Token::Keyword(Keyword::Step) => {
-                self.advance()?;
-                Some(self.expression()?)
-            }
-            _ => None,
-        };
-
-        consume_token!(self, Token::Eol | Token::Eof);
-
-        Ok(ForStmt {
-            var,
-            from,
-            to,
-            step,
+            let step = match &self.current {
+                Token::Keyword(Keyword::Step) => {
+                    self.advance()?;
+                    Some(self.expression()?)
+                }
+                _ => None,
+            };
+            Ok(ForStmt {
+                var,
+                from,
+                to,
+                step,
+            })
         })
     }
 
