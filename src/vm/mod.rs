@@ -46,8 +46,8 @@ pub struct VM {
 
 #[derive(Debug)]
 pub struct RuntimeError {
-    error: ExecError,
-    line_no: usize,
+    pub error: ExecError,
+    pub line_no: usize,
 }
 
 #[derive(Debug)]
@@ -131,18 +131,19 @@ impl VM {
 
     #[inline]
     pub fn run<W: io::Write>(&mut self, out: W) -> Result<(), RuntimeError> {
-        let ip = *self.get_ip();
-
         match self.exec(out) {
             Ok(_) => Ok(()),
-            Err(err) => match err {
-                // BASIC program exits normally when READ has no more data
-                ExecError::NoData => Ok(()),
-                _ => Err(RuntimeError {
-                    error: err,
-                    line_no: self.chunk.line_no(ip),
-                }),
-            },
+            Err(err) => {
+                let ip = *self.get_ip() - 1;
+                match err {
+                    // BASIC program exits normally when READ has no more data
+                    ExecError::NoData => Ok(()),
+                    _ => Err(RuntimeError {
+                        error: err,
+                        line_no: self.chunk.line_no(ip),
+                    }),
+                }
+            }
         }
     }
     fn exec<W: io::Write>(&mut self, out: W) -> Result<(), ExecError> {

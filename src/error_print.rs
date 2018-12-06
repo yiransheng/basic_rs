@@ -40,7 +40,24 @@ impl From<RuntimeError> for InterpreterError {
 
 impl fmt::Display for InterpreterError {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        formatter.write_str(std::error::Error::description(self))
+        match self {
+            InterpreterError::IoFail(e) => {
+                writeln!(formatter, "IO error")?;
+                e.fmt(formatter)
+            }
+            InterpreterError::ParseFail(e) => {
+                writeln!(formatter, "Parse error")?;
+                e.fmt(formatter)
+            }
+            InterpreterError::CompileFail(e) => {
+                writeln!(formatter, "Compile error")
+                // e.fmt(formatter)
+            }
+            InterpreterError::Runtime(e) => {
+                writeln!(formatter, "Runtime error in Line: {}\n", e.line_no)?;
+                e.error.fmt(formatter)
+            }
+        }
     }
 }
 
@@ -50,7 +67,7 @@ impl Error for InterpreterError {
             InterpreterError::IoFail(e) => e.description(),
             InterpreterError::ParseFail(e) => e.description(),
             InterpreterError::CompileFail(_) => "Compile error",
-            InterpreterError::Runtime(_) => "Runtime error",
+            InterpreterError::Runtime(e) => e.error.description(),
         }
     }
 }

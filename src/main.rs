@@ -70,7 +70,7 @@ fn main() {
         Ok(_) => {}
         Err(e) => match e {
             InterpreterError::ParseFail(e) => print_source_error(e, &source),
-            _ => eprintln!("{:?}", e),
+            _ => eprintln!("{}", e),
         },
     }
 }
