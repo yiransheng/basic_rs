@@ -50,8 +50,8 @@ impl fmt::Display for InterpreterError {
                 e.fmt(formatter)
             }
             InterpreterError::CompileFail(e) => {
-                writeln!(formatter, "Compile error")
-                // e.fmt(formatter)
+                writeln!(formatter, "Compile error at Line: {}\n", e.line_no)?;
+                e.inner.fmt(formatter)
             }
             InterpreterError::Runtime(e) => {
                 writeln!(formatter, "Runtime error in Line: {}\n", e.line_no)?;

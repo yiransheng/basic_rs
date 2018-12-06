@@ -12,7 +12,6 @@ mod parser;
 mod scanner;
 mod vm;
 
-use crate::ast::Visitor;
 use crate::compiler::Compiler;
 use crate::error_print::{print_source_error, InterpreterError};
 use crate::parser::Parser;
@@ -42,7 +41,7 @@ fn run(source: &str) -> Result<(), InterpreterError> {
     let mut chunk = Chunk::new();
     let mut compiler = Compiler::new(&mut chunk);
 
-    compiler.visit_program(&ast)?;
+    compiler.compile(&ast)?;
 
     let stdout = io::stdout();
 
