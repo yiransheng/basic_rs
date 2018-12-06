@@ -226,6 +226,7 @@ pub mod disassembler {
         ip: usize,
         line: usize,
         out: W,
+        printing: bool,
     }
 
     impl<'a, W: io::Write> Disassembler<'a, W> {
@@ -235,6 +236,7 @@ pub mod disassembler {
                 ip: 0,
                 line: usize::max_value(),
                 out,
+                printing: false,
             }
         }
         pub fn disassemble(&mut self) {
@@ -318,7 +320,25 @@ pub mod disassembler {
             self.ip += 1;
 
             OpCode::from_u8(byte).map(|instr| {
-                let _ = write!(&mut self.out, "    {:10}", instr.short());
+                match instr {
+                    OpCode::PrintEnd => {
+                        self.printing = false;
+                    }
+                    _ => {}
+                }
+
+                if self.printing {
+                    let _ = write!(&mut self.out, "      {:8}", instr.short());
+                } else {
+                    let _ = write!(&mut self.out, "    {:10}", instr.short());
+                }
+
+                match instr {
+                    OpCode::PrintStart => {
+                        self.printing = true;
+                    }
+                    _ => {}
+                }
 
                 instr
             })
