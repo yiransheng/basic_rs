@@ -1,4 +1,5 @@
 use nanbox::*;
+use num_derive::{FromPrimitive, ToPrimitive};
 
 #[derive(Copy, Clone)]
 pub struct True;
@@ -6,8 +7,15 @@ pub struct True;
 #[derive(Copy, Clone)]
 pub struct False;
 
-#[derive(Copy, Clone, Hash)]
+#[derive(Copy, Clone, Hash, Eq, PartialEq, FromPrimitive, ToPrimitive)]
 pub struct FuncId(u8);
+
+impl FuncId {
+    #[inline(always)]
+    pub fn raw(self) -> u8 {
+        self.0
+    }
+}
 
 pub struct FuncIdGen {
     id: u8,

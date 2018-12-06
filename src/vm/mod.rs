@@ -17,6 +17,7 @@ mod value;
 
 pub use self::chunk::*;
 pub use self::opcode::*;
+pub use self::value::{FuncId, FuncIdGen};
 
 use self::array::{Array, Error as ArrayError, Subscript};
 use self::print::{PrintError, Printer};

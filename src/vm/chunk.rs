@@ -6,6 +6,7 @@ use num_traits::{FromPrimitive, ToPrimitive};
 
 use super::line_mapping::LineMapping;
 use super::opcode::OpCode;
+use super::value::FuncId;
 use crate::ast::function::Func;
 use crate::ast::variable::Variable;
 
@@ -34,6 +35,20 @@ impl InlineOperand for Func {
     #[inline(always)]
     fn from_bytes_unchecked(bytes: [u8; 2]) -> Self {
         Func::from_u8(bytes[0]).unwrap()
+    }
+}
+
+impl Into<[u8; 2]> for FuncId {
+    fn into(self) -> [u8; 2] {
+        let b = self.raw();
+        [b, 0]
+    }
+}
+
+impl InlineOperand for FuncId {
+    #[inline(always)]
+    fn from_bytes_unchecked(bytes: [u8; 2]) -> Self {
+        FuncId::from_u8(bytes[0]).unwrap()
     }
 }
 
@@ -105,7 +120,7 @@ pub struct Chunk {
     strings: Vec<String>,
     line_map: LineMapping,
 
-    user_fns: IntHashMap<Func, Chunk>,
+    user_fns: IntHashMap<FuncId, Chunk>,
 }
 
 impl Chunk {
@@ -133,12 +148,11 @@ impl Chunk {
         self.code.push(byte.into());
         self.line_map.add_mapping(line, self.len());
     }
-    pub fn add_function(&mut self, func: Func, chunk: Chunk) {
-        let p: [u8; 2] = func.into();
+    pub fn add_function(&mut self, func: FuncId, chunk: Chunk) {
         self.user_fns.insert(func, chunk);
     }
     #[inline(always)]
-    pub fn get_function(&mut self, func: &Func) -> Option<&mut Chunk> {
+    pub fn get_function(&mut self, func: &FuncId) -> Option<&mut Chunk> {
         self.user_fns.get_mut(func)
     }
     pub fn line_no(&self, offset: usize) -> usize {
