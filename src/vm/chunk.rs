@@ -270,7 +270,7 @@ pub mod disassembler {
 
         fn disassemble_label(&mut self) {
             let label: String = self.get_operand();
-            let _ = write!(&mut self.out, " {}", label);
+            let _ = write!(&mut self.out, " \"{}\"", label);
         }
 
         fn disassemble_variable(&mut self) {
@@ -309,16 +309,16 @@ pub mod disassembler {
             let byte = self.chunk.code[self.ip];
 
             let _ = if self.line == line {
-                write!(&mut self.out, "{} {:04}", " |  ", self.ip);
+                write!(&mut self.out, "{} {:04}", " |   ", self.ip);
             } else {
                 self.line = line;
-                write!(&mut self.out, "{:<4} {:04}", line, self.ip);
+                write!(&mut self.out, "{:<5} {:04}", line, self.ip);
             };
 
             self.ip += 1;
 
             OpCode::from_u8(byte).map(|instr| {
-                let _ = write!(&mut self.out, "    {:?}", instr);
+                let _ = write!(&mut self.out, "    {:10}", instr.short());
 
                 instr
             })

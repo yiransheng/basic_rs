@@ -54,3 +54,63 @@ pub enum OpCode {
 
     Noop,
 }
+
+impl OpCode {
+    pub fn short(self) -> &'static str {
+        use self::OpCode::*;
+
+        match self {
+            Constant => "const",
+            FnConstant => "fn",
+            Return => "ret",
+            Jump => "jmp",
+            JumpTrue => "jmp.t",
+            JumpFalse => "jmp.f",
+            Subroutine => "sub",
+            CallNative => "call.na",
+            Call => "call",
+            Stop => "stop",
+
+            Pop => "pop",
+            SetFunc => "set.fn",
+            GetFunc => "get.fn",
+            GetGlobal => "get.var",
+            SetGlobal => "set.var",
+            GetGlobalArray => "get.arr",
+            SetGlobalArray => "set.arr",
+            GetGlobalArray2d => "get.mat",
+            SetGlobalArray2d => "set.mat",
+
+            GetLocal => "get.loc",
+
+            InitArray => "init.arr",
+            InitArray2d => "init.mat",
+            SetArrayBound => "set.len",
+            SetArrayBound2d => "set.dim",
+
+            PrintStart => "prt",
+            PrintExpr => "prt.expr",
+            PrintLabel => "prt.lab",
+            PrintAdvance3 => "prt;",
+            PrintAdvance15 => "prt,",
+            PrintEnd => "prt.end",
+
+            Dup => "dup",
+            Swap => "swap",
+            Sign => "sign",
+            Negate => "neg",
+            Not => "not",
+            Add => "add",
+            Sub => "sub",
+            Mul => "mul",
+            Div => "div",
+            Pow => "pow",
+
+            Equal => "eq",
+            Less => "lt",
+            Greater => "gt",
+
+            Noop => "noop",
+        }
+    }
+}

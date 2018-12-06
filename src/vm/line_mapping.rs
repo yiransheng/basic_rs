@@ -1,6 +1,7 @@
 use std::cmp::Ordering;
 use std::ops::Range;
 
+#[derive(Debug)]
 pub struct LineMapping {
     lines: Vec<(usize, Range<usize>)>,
 }
@@ -10,25 +11,23 @@ impl LineMapping {
         LineMapping { lines: Vec::new() }
     }
     pub fn add_mapping(&mut self, line: usize, code_point: usize) {
-        match self.lines.last_mut() {
-            Some((last_line, ref mut rng)) => {
-                if line == *last_line {
-                    *(&mut rng.end) = code_point;
-                } else {
-                    self.lines.push((line, code_point - 1..code_point));
-                }
+        let start = match self.lines.last_mut() {
+            Some((last_line, ref mut rng)) if *last_line == line => {
+                *(&mut rng.end) = code_point;
+                return;
             }
-            None => {
-                self.lines.push((line, code_point - 1..code_point));
-            }
-        }
+            Some((_, rng)) => rng.end,
+            None => 0,
+        };
+
+        self.lines.push((line, start..code_point))
     }
     pub fn find_line(&self, code_point: usize) -> usize {
         let idx = match self.lines.binary_search_by(|(_, rng)| {
             if code_point < rng.start {
-                Ordering::Less
-            } else if code_point >= rng.end {
                 Ordering::Greater
+            } else if code_point >= rng.end {
+                Ordering::Less
             } else {
                 Ordering::Equal
             }
