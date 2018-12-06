@@ -50,7 +50,6 @@ pub struct RuntimeError {
 #[derive(Debug)]
 pub enum ExecError {
     NoData,
-    EmptyStack,
     ListNotFound(Variable),
     TableNotFound(Variable),
     FunctionNotFound(Func),
@@ -493,7 +492,7 @@ impl VM {
         self.stack
             .pop_back()
             .map(Variant::from)
-            .ok_or(ExecError::EmptyStack)
+            .ok_or(ExecError::NoData)
     }
 
     fn peek(&self, distance: usize) -> Option<Value> {
