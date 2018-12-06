@@ -28,14 +28,14 @@ pub const DEFAULT_ARRAY_SIZE: u8 = 11;
 #[derive(Debug)]
 pub struct CallFrame {
     depth: usize,
-    local: Option<Number>,
     ip: usize,
-    func: Option<Func>,
+    context: Option<(FuncId, Number)>,
 }
 
 pub struct VM {
     chunk: Chunk,
     globals: IntHashMap<Variable, Number>,
+    functions: IntHashMap<Func, FuncId>,
     global_lists: IntHashMap<Variable, Array<u8>>,
     global_tables: IntHashMap<Variable, Array<[u8; 2]>>,
     stack: VecDeque<Value>,
@@ -53,13 +53,13 @@ pub enum ExecError {
     NoData,
     ListNotFound(Variable),
     TableNotFound(Variable),
-    FunctionNotFound(Func),
     IndexError(Variable, f64),
     TypeError(&'static str),
     ArrayError(ArrayError),
     PrintError(PrintError),
     DecodeError(u8),
     RedefineDim(Variable),
+    FunctionNotFound,
 }
 
 impl From<ArrayError> for ExecError {
@@ -79,14 +79,14 @@ impl VM {
         let mut call_stack = VecDeque::new();
         let call_frame = CallFrame {
             depth: 0,
-            local: None,
             ip: 0,
-            func: None,
+            context: None,
         };
         call_stack.push_back(call_frame);
         VM {
             chunk,
             globals: IntHashMap::default(),
+            functions: IntHashMap::default(),
             global_lists: IntHashMap::default(),
             global_tables: IntHashMap::default(),
             stack: VecDeque::new(),
@@ -183,6 +183,10 @@ impl VM {
                     let value: f64 = self.read_operand()?;
                     self.push_value(value);
                 }
+                OpCode::FnConstant => {
+                    let func_id: FuncId = self.read_inline_operand()?;
+                    self.push_value(func_id);
+                }
                 OpCode::Pop => {
                     let _ = self.pop_value();
                 }
@@ -227,12 +231,14 @@ impl VM {
                 }
                 OpCode::Call => {
                     let current_depth = self.current_frame().depth;
-                    let func: Func = self.read_inline_operand()?;
+                    let func = match self.pop_value()? {
+                        Variant::Function(func_id) => func_id,
+                        _ => return Err(ExecError::TypeError("not a function")),
+                    };
                     let x = self.pop_number()?;
                     let new_frame = CallFrame {
                         depth: current_depth + 1,
-                        func: Some(func),
-                        local: Some(x),
+                        context: Some((func, x)),
                         ip: 0,
                     };
                     self.call_stack.push_back(new_frame);
@@ -242,8 +248,7 @@ impl VM {
                     let jp: JumpPoint = self.read_operand()?;
                     let new_frame = CallFrame {
                         depth: current_depth + 1,
-                        func: None,
-                        local: None,
+                        context: None,
                         ip: jp.0,
                     };
                     self.call_stack.push_back(new_frame);
@@ -251,9 +256,27 @@ impl VM {
                 OpCode::GetLocal => {
                     let frame = self.current_frame();
                     let x = frame
-                        .local
+                        .context
+                        .map(|(_, x)| x)
                         .ok_or(ExecError::TypeError("function argument not found"))?;
                     self.push_value(x);
+                }
+                OpCode::GetFunc => {
+                    let fname: Func = self.read_inline_operand()?;
+                    // TODO: error handling
+                    let func_id = self.functions.get(&fname).map(|v| *v).unwrap();
+                    self.push_value(func_id);
+                }
+                OpCode::SetFunc => {
+                    let fname: Func = self.read_inline_operand()?;
+                    // TODO: error handling
+                    let value = self.pop_value()?;
+                    match value {
+                        Variant::Function(func_id) => {
+                            self.functions.insert(fname, func_id);
+                        }
+                        _ => return Err(ExecError::TypeError("not a function")),
+                    }
                 }
                 OpCode::GetGlobal => {
                     let var: Variable = self.read_inline_operand()?;
@@ -427,11 +450,11 @@ impl VM {
     #[inline]
     fn current_chunk(&mut self) -> Result<&mut Chunk, ExecError> {
         let frame = self.call_stack.back_mut().unwrap();
-        match frame.func {
-            Some(func) => self
+        match frame.context {
+            Some((func_id, _)) => self
                 .chunk
-                .get_function(&func)
-                .ok_or(ExecError::FunctionNotFound(func)),
+                .get_function(&func_id)
+                .ok_or(ExecError::FunctionNotFound),
             _ => Ok(&mut self.chunk),
         }
     }
