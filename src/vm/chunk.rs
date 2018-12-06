@@ -307,7 +307,6 @@ pub mod disassembler {
 
             let line = self.chunk.line_no(self.ip);
             let byte = self.chunk.code[self.ip];
-            self.ip += 1;
 
             let _ = if self.line == line {
                 write!(&mut self.out, "{} {:04}", " |  ", self.ip);
@@ -315,6 +314,8 @@ pub mod disassembler {
                 self.line = line;
                 write!(&mut self.out, "{:<4} {:04}", line, self.ip);
             };
+
+            self.ip += 1;
 
             OpCode::from_u8(byte).map(|instr| {
                 let _ = write!(&mut self.out, "    {:?}", instr);
