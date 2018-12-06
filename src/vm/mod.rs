@@ -255,16 +255,16 @@ impl VM {
                     };
                     self.push_value(y);
                 }
-                OpCode::Return => {
-                    let v = self.pop_number();
-                    // TODO: check callframe to distinguish
-                    // func v. subroutine, instead of using Ok
-                    // match
-                    self.call_stack.pop_back();
-                    if let Ok(v) = v {
+                OpCode::Return => match self.current_frame().context {
+                    Some(_) => {
+                        let v = self.pop_number()?;
+                        self.call_stack.pop_back();
                         self.push_value(v);
                     }
-                }
+                    _ => {
+                        self.call_stack.pop_back();
+                    }
+                },
                 OpCode::Call => {
                     let current_depth = self.current_frame().depth;
                     let func = match self.pop_value()? {
