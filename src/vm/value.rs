@@ -9,7 +9,9 @@ pub struct True;
 #[derive(Copy, Clone)]
 pub struct False;
 
-#[derive(Debug, Copy, Clone, Hash, Eq, PartialEq, FromPrimitive, ToPrimitive)]
+#[derive(
+    Debug, Copy, Clone, Hash, Eq, PartialEq, FromPrimitive, ToPrimitive,
+)]
 pub struct FuncId(u8);
 
 impl FuncId {

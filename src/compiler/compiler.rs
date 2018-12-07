@@ -2,7 +2,9 @@ use either::Either;
 use int_hash::IntHashMap;
 
 use crate::ast::*;
-use crate::ir::{Instruction, InstructionKind, Label, LabelIdGen, Visitor as IRVisitor};
+use crate::ir::{
+    Instruction, InstructionKind, Label, LabelIdGen, Visitor as IRVisitor,
+};
 use crate::vm::*;
 
 use super::anon_var::AnonVarGen;
@@ -10,6 +12,7 @@ use super::array_dims::ArrayDims;
 use super::data::PrepareData;
 use super::error::CompileError as CompileErrorInner;
 use super::func_compiler::FuncCompiler;
+use super::ir_labels::IrLabels;
 use super::line_order::LineOrder;
 
 #[derive(Debug)]
@@ -65,7 +68,10 @@ where
          */
         unimplemented!()
     }
-    pub fn compile(&mut self, prog: &Program) -> ::std::result::Result<(), CompileError> {
+    pub fn compile(
+        &mut self,
+        prog: &Program,
+    ) -> ::std::result::Result<(), CompileError> {
         self.visit_program(prog).map_err(|err| CompileError {
             inner: err,
             line_no: self.state.line,
@@ -87,7 +93,11 @@ where
             .map_err(|e| e.into())
     }
 
-    fn emit_labeled_instruction(&self, label: Label, instr_kind: InstructionKind) -> Result {
+    fn emit_labeled_instruction(
+        &self,
+        label: Label,
+        instr_kind: InstructionKind,
+    ) -> Result {
         let line_no = self.state.line;
 
         let instr = Instruction {
@@ -130,30 +140,34 @@ where
     V::Error: Into<CompileErrorInner>,
 {
     fn visit_program(&mut self, prog: &Program) -> Result {
-        let mut line_order = LineOrder::new(self.chunk);
+        // check input line numbers are in order and unique
+        let mut line_order = LineOrder::new();
         line_order.visit_program(prog)?;
 
-        let mut array_dims = ArrayDims::new(self.chunk);
+        // preprocess: generate labels for certain line numbers
+        let mut ir_labels = IrLabels::new(
+            &mut self.state.label_id_gen,
+            &mut self.label_mapping,
+        );
+        ir_labels.visit_program(prog)?;
+
+        // preprocess: collect array dimension info for variables
+        // and ensure the same symbol is not used as both 1d and 2d
+        let mut array_dims = ArrayDims::new(&mut self.ir_visitor);
         array_dims.visit_program(prog)?;
 
-        let mut prep_data = PrepareData::new(self.chunk);
+        // preprocess: collect data statements
+        let mut prep_data = PrepareData::new(&mut self.ir_visitor);
         prep_data.visit_program(prog)?;
 
         for s in &prog.statements {
             self.visit_statement(s)?;
         }
 
-        for (index, line_no) in self.jumps.iter() {
-            let jp = self
-                .line_addr_map
-                .get(line_no)
-                .ok_or(CompileErrorInner::Custom("Don't know where to jump"))?;
-            self.chunk.set_operand(*index, JumpPoint(*jp));
-        }
+        // self.chunk.write_opcode(OpCode::Stop, self.state.line + 1);
 
-        self.chunk.write_opcode(OpCode::Stop, self.state.line + 1);
-
-        Ok(())
+        // adds a stop instruction to last line (implicit END)
+        self.emit_instruction(InstructionKind::Stop)
     }
 
     fn visit_statement(&mut self, stmt: &Statement) -> Result {
@@ -226,7 +240,9 @@ where
                 Printable::Label(s) => {
                     // self.chunk.write_opcode(OpCode::PrintLabel, self.state.line);
                     // self.chunk.add_operand(s.clone(), self.state.line);
-                    self.emit_instruction(InstructionKind::PrintLabel(s.clone()))?;
+                    self.emit_instruction(InstructionKind::PrintLabel(
+                        s.clone(),
+                    ))?;
                 }
             }
         }
@@ -382,7 +398,10 @@ where
         // self.chunk.write_opcode(OpCode::JumpFalse, self.state.line);
         // self.chunk
         // .add_operand(JumpPoint(loop_start), self.state.line);
-        self.emit_labeled_instruction(for_state.next_label, InstructionKind::LoopTest)?;
+        self.emit_labeled_instruction(
+            for_state.next_label,
+            InstructionKind::LoopTest,
+        )?;
         self.emit_instruction(InstructionKind::JumpFalse(loop_start))?;
 
         Ok(())
@@ -513,7 +532,8 @@ where
             Expression::Call(func, arg) => {
                 self.visit_expr(arg)?;
                 if func.is_native() {
-                    self.chunk.write_opcode(OpCode::CallNative, self.state.line);
+                    self.chunk
+                        .write_opcode(OpCode::CallNative, self.state.line);
                     self.chunk.add_inline_operand(*func, self.state.line);
                 } else {
                     self.chunk.write_opcode(OpCode::GetFunc, self.state.line);

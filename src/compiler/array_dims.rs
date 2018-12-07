@@ -4,42 +4,66 @@ use int_hash::IntHashMap;
 use super::error::CompileError;
 use crate::ast::variable::Variable;
 use crate::ast::*;
-use crate::vm::*;
+use crate::ir::{Instruction, InstructionKind, Visitor as IRVisitor};
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 enum ArrayType {
-    List,
-    Table,
+    List(LineNo),
+    Table(LineNo),
 }
 
-pub struct ArrayDims<'a> {
-    chunk: &'a mut Chunk,
+pub struct ArrayDims<V> {
+    ir_visitor: V,
     types: IntHashMap<Variable, ArrayType>,
+    line: LineNo,
 }
 
-impl<'a> ArrayDims<'a> {
-    pub fn new(chunk: &'a mut Chunk) -> Self {
+impl<V: IRVisitor> ArrayDims<V> {
+    pub fn new(ir_visitor: V) -> Self {
         ArrayDims {
             types: IntHashMap::default(),
-            chunk,
+            ir_visitor,
+            line: 0,
         }
     }
 }
 
-impl<'a> Visitor<Result<(), CompileError>> for ArrayDims<'a> {
+impl<V: IRVisitor> Visitor<Result<(), CompileError>> for ArrayDims<V>
+where
+    V::Error: Into<CompileError>,
+{
     fn visit_program(&mut self, prog: &Program) -> Result<(), CompileError> {
         for s in &prog.statements {
+            self.line = s.line_no;
             self.visit_statement(s)?;
         }
         for (var, ty) in self.types.iter() {
             match ty {
-                ArrayType::List => {
-                    self.chunk.write_opcode(OpCode::InitArray, 0);
-                    self.chunk.add_inline_operand(*var, 0);
+                ArrayType::List(line_no) => {
+                    // self.chunk.write_opcode(OpCode::InitArray, 0);
+                    // self.chunk.add_inline_operand(*var, 0);
+                    let kind = InstructionKind::InitArray(*var);
+
+                    self.ir_visitor
+                        .visit_instruction(Instruction {
+                            label: None,
+                            line_no: *line_no,
+                            kind,
+                        })
+                        .map_err(V::Error::into)?;
                 }
-                ArrayType::Table => {
-                    self.chunk.write_opcode(OpCode::InitArray2d, 0);
-                    self.chunk.add_inline_operand(*var, 0);
+                ArrayType::Table(line_no) => {
+                    // self.chunk.write_opcode(OpCode::InitArray2d, 0);
+                    // self.chunk.add_inline_operand(*var, 0);
+                    let kind = InstructionKind::InitArray2d(*var);
+
+                    self.ir_visitor
+                        .visit_instruction(Instruction {
+                            label: None,
+                            line_no: *line_no,
+                            kind,
+                        })
+                        .map_err(V::Error::into)?;
                 }
             }
         }
@@ -143,10 +167,10 @@ impl<'a> Visitor<Result<(), CompileError>> for ArrayDims<'a> {
     fn visit_list(&mut self, list: &List) -> Result<(), CompileError> {
         let ty = self.types.get(&list.var);
         match ty {
-            Some(ArrayType::Table) => Err(CompileError::TableUsedAsList),
-            Some(ArrayType::List) => Ok(()),
+            Some(ArrayType::Table(_)) => Err(CompileError::TableUsedAsList),
+            Some(ArrayType::List(_)) => Ok(()),
             None => {
-                self.types.insert(list.var, ArrayType::List);
+                self.types.insert(list.var, ArrayType::List(self.line));
                 Ok(())
             }
         }
@@ -155,10 +179,10 @@ impl<'a> Visitor<Result<(), CompileError>> for ArrayDims<'a> {
     fn visit_table(&mut self, table: &Table) -> Result<(), CompileError> {
         let ty = self.types.get(&table.var);
         match ty {
-            Some(ArrayType::List) => Err(CompileError::ListUsedAsTable),
-            Some(ArrayType::Table) => Ok(()),
+            Some(ArrayType::List(_)) => Err(CompileError::ListUsedAsTable),
+            Some(ArrayType::Table(_)) => Ok(()),
             None => {
-                self.types.insert(table.var, ArrayType::Table);
+                self.types.insert(table.var, ArrayType::Table(self.line));
                 Ok(())
             }
         }

@@ -191,7 +191,10 @@ impl Chunk {
     }
 
     #[inline(always)]
-    pub fn read_inline_operand<O: InlineOperand>(&mut self, offset: usize) -> O {
+    pub fn read_inline_operand<O: InlineOperand>(
+        &mut self,
+        offset: usize,
+    ) -> O {
         let bytes = [self.read_byte(offset), self.read_byte(offset + 1)];
         O::from_bytes_unchecked(bytes)
     }
@@ -241,14 +244,20 @@ pub mod disassembler {
             while let Some(instr) = self.disassemble_instruction() {
                 match instr {
                     Constant => self.disassemble_constant(),
-                    Subroutine | Jump | JumpTrue | JumpFalse => self.disassemble_address(),
-                    CallNative | GetFunc | SetFunc => self.disassemble_function(),
+                    Subroutine | Jump | JumpTrue | JumpFalse => {
+                        self.disassemble_address()
+                    }
+                    CallNative | GetFunc | SetFunc => {
+                        self.disassemble_function()
+                    }
 
                     FnConstant => self.disassemble_function_id(),
 
-                    GetGlobal | SetGlobal | GetGlobalArray | SetGlobalArray | GetGlobalArray2d
-                    | SetGlobalArray2d | InitArray | InitArray2d | SetArrayBound
-                    | SetArrayBound2d => self.disassemble_variable(),
+                    GetGlobal | SetGlobal | GetGlobalArray | SetGlobalArray
+                    | GetGlobalArray2d | SetGlobalArray2d | InitArray
+                    | InitArray2d | SetArrayBound | SetArrayBound2d => {
+                        self.disassemble_variable()
+                    }
 
                     PrintLabel => self.disassemble_label(),
                     _ => {}

@@ -72,12 +72,18 @@ impl fmt::Display for ExecError {
         match self {
             ExecError::ListNotFound(var) => write!(f, "{}: {}", desc, var),
             ExecError::TableNotFound(var) => write!(f, "{}: {}", desc, var),
-            ExecError::IndexError(var, v) => write!(f, "{}, variable: {}, index: {}", desc, var, v),
+            ExecError::IndexError(var, v) => {
+                write!(f, "{}, variable: {}, index: {}", desc, var, v)
+            }
             ExecError::TypeError(s) => write!(f, "TypeError: {}", s),
             ExecError::ArrayError(err) => err.fmt(f),
             ExecError::PrintError(err) => err.fmt(f),
-            ExecError::DecodeError(b) => write!(f, "Failed to decode instruction: {}", b),
-            ExecError::NoData | ExecError::FunctionNotFound => write!(f, "{}", desc),
+            ExecError::DecodeError(b) => {
+                write!(f, "Failed to decode instruction: {}", b)
+            }
+            ExecError::NoData | ExecError::FunctionNotFound => {
+                write!(f, "{}", desc)
+            }
         }
     }
 }
@@ -154,7 +160,8 @@ impl VM {
 
         loop {
             let byte = self.read_byte()?;
-            let instr = OpCode::from_u8(byte).ok_or(ExecError::DecodeError(byte))?;
+            let instr =
+                OpCode::from_u8(byte).ok_or(ExecError::DecodeError(byte))?;
             match instr {
                 OpCode::Stop => return Ok(()),
                 OpCode::PrintStart => {
@@ -184,7 +191,8 @@ impl VM {
                 }
                 OpCode::InitArray2d => {
                     let var: Variable = self.read_inline_operand()?;
-                    let arr = Array::new([DEFAULT_ARRAY_SIZE, DEFAULT_ARRAY_SIZE]);
+                    let arr =
+                        Array::new([DEFAULT_ARRAY_SIZE, DEFAULT_ARRAY_SIZE]);
                     self.global_tables.insert(var, arr);
                 }
                 OpCode::Noop => continue,
@@ -286,16 +294,16 @@ impl VM {
                 }
                 OpCode::GetLocal => {
                     let frame = self.current_frame();
-                    let x = frame
-                        .context
-                        .map(|(_, x)| x)
-                        .ok_or(ExecError::TypeError("function argument not found"))?;
+                    let x = frame.context.map(|(_, x)| x).ok_or(
+                        ExecError::TypeError("function argument not found"),
+                    )?;
                     self.push_value(x);
                 }
                 OpCode::GetFunc => {
                     let fname: Func = self.read_inline_operand()?;
                     // TODO: error handling
-                    let func_id = self.functions.get(&fname).map(|v| *v).unwrap();
+                    let func_id =
+                        self.functions.get(&fname).map(|v| *v).unwrap();
                     self.push_value(func_id);
                 }
                 OpCode::SetFunc => {
@@ -322,7 +330,9 @@ impl VM {
                 OpCode::GetGlobalArray => {
                     let var: Variable = self.read_inline_operand()?;
                     let i: u8 = match self.pop_number() {
-                        Ok(x) => x.to_u8().ok_or(ExecError::IndexError(var, x))?,
+                        Ok(x) => {
+                            x.to_u8().ok_or(ExecError::IndexError(var, x))?
+                        }
                         Err(e) => return Err(e),
                     };
                     let list = self
@@ -335,7 +345,9 @@ impl VM {
                 OpCode::SetGlobalArray => {
                     let var: Variable = self.read_inline_operand()?;
                     let i: u8 = match self.pop_number() {
-                        Ok(x) => x.to_u8().ok_or(ExecError::IndexError(var, x))?,
+                        Ok(x) => {
+                            x.to_u8().ok_or(ExecError::IndexError(var, x))?
+                        }
                         Err(e) => return Err(e),
                     };
                     let v = self.pop_number()?;
@@ -348,11 +360,15 @@ impl VM {
                 OpCode::GetGlobalArray2d => {
                     let var: Variable = self.read_inline_operand()?;
                     let i: u8 = match self.pop_number() {
-                        Ok(x) => x.to_u8().ok_or(ExecError::IndexError(var, x))?,
+                        Ok(x) => {
+                            x.to_u8().ok_or(ExecError::IndexError(var, x))?
+                        }
                         Err(e) => return Err(e),
                     };
                     let j: u8 = match self.pop_number() {
-                        Ok(x) => x.to_u8().ok_or(ExecError::IndexError(var, x))?,
+                        Ok(x) => {
+                            x.to_u8().ok_or(ExecError::IndexError(var, x))?
+                        }
                         Err(e) => return Err(e),
                     };
                     let table = self
@@ -365,11 +381,15 @@ impl VM {
                 OpCode::SetGlobalArray2d => {
                     let var: Variable = self.read_inline_operand()?;
                     let i: u8 = match self.pop_number() {
-                        Ok(x) => x.to_u8().ok_or(ExecError::IndexError(var, x))?,
+                        Ok(x) => {
+                            x.to_u8().ok_or(ExecError::IndexError(var, x))?
+                        }
                         Err(e) => return Err(e),
                     };
                     let j: u8 = match self.pop_number() {
-                        Ok(x) => x.to_u8().ok_or(ExecError::IndexError(var, x))?,
+                        Ok(x) => {
+                            x.to_u8().ok_or(ExecError::IndexError(var, x))?
+                        }
                         Err(e) => return Err(e),
                     };
                     let v = self.pop_number()?;
@@ -382,7 +402,9 @@ impl VM {
                 OpCode::SetArrayBound => {
                     let var: Variable = self.read_inline_operand()?;
                     let value = self.pop_number()?;
-                    let value = value.to_u8().ok_or(ExecError::IndexError(var, value))?;
+                    let value = value
+                        .to_u8()
+                        .ok_or(ExecError::IndexError(var, value))?;
                     let list = self
                         .global_lists
                         .get_mut(&var)
@@ -530,7 +552,9 @@ impl VM {
 
         Ok(o)
     }
-    fn read_inline_operand<T: InlineOperand>(&mut self) -> Result<T, ExecError> {
+    fn read_inline_operand<T: InlineOperand>(
+        &mut self,
+    ) -> Result<T, ExecError> {
         let ip = *self.get_ip();
         let chunk = self.current_chunk()?;
         let o = chunk.read_inline_operand(ip);

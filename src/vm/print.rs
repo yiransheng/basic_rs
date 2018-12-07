@@ -28,7 +28,9 @@ impl fmt::Display for PrintError {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         match self {
             PrintError::Io(err) => err.fmt(formatter),
-            PrintError::NotPrinting => formatter.write_str(error::Error::description(self)),
+            PrintError::NotPrinting => {
+                formatter.write_str(error::Error::description(self))
+            }
         }
     }
 }

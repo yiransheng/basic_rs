@@ -25,7 +25,9 @@ impl fmt::Display for ErrorInner {
         match self {
             ErrorInner::ScanError(e) => e.fmt(f),
             ErrorInner::UnexpectedToken(t) => write!(f, "{}: {}", desc, t.ty()),
-            ErrorInner::BadListOrTableName(var) => write!(f, "{}: {}", desc, var),
+            ErrorInner::BadListOrTableName(var) => {
+                write!(f, "{}: {}", desc, var)
+            }
             ErrorInner::BadArgument(arg) => write!(f, "{}: {}", desc, arg),
             ErrorInner::BadSubscript(sub) => write!(f, "{}: {}", desc, sub),
             ErrorInner::BadLineNo => write!(f, "{}", desc),
@@ -132,7 +134,9 @@ impl<'a> Parser<'a> {
             Keyword::Next => Stmt::Next(self.next_statement()?),
             Keyword::Def => Stmt::Def(self.def_statement()?),
             Keyword::Dim => Stmt::Dim(self.dim_statement()?),
-            Keyword::To | Keyword::Step | Keyword::Then => return self.unexpected_token(),
+            Keyword::To | Keyword::Step | Keyword::Then => {
+                return self.unexpected_token()
+            }
         };
 
         // skip empty lines
@@ -163,13 +167,16 @@ impl<'a> Parser<'a> {
     }
 
     fn read_statement(&mut self) -> Result<ReadStmt, Error> {
-        let vars = parse_statement!(self, Read, { self.list_of(Self::variable)? });
+        let vars =
+            parse_statement!(self, Read, { self.list_of(Self::variable)? });
 
         Ok(ReadStmt { vars })
     }
 
     fn data_statement(&mut self) -> Result<DataStmt, Error> {
-        let vals = parse_statement!(self, Data, { self.list_of(Self::number_signed)? });
+        let vals = parse_statement!(self, Data, {
+            self.list_of(Self::number_signed)?
+        });
 
         Ok(DataStmt { vals })
     }
@@ -272,7 +279,8 @@ impl<'a> Parser<'a> {
     }
 
     fn dim_statement(&mut self) -> Result<DimStmt, Error> {
-        let mut lvals = parse_statement!(self, Dim, { self.list_of(Self::variable)? });
+        let mut lvals =
+            parse_statement!(self, Dim, { self.list_of(Self::variable)? });
 
         let mut dim_var: Option<Variable> = None;
         let dims = lvals
@@ -459,7 +467,8 @@ impl<'a> Parser<'a> {
         let value = match &self.current {
             Token::OpenParen => {
                 if !var.can_name_list_or_table() {
-                    return self.error_current(ErrorInner::BadListOrTableName(var));
+                    return self
+                        .error_current(ErrorInner::BadListOrTableName(var));
                 }
                 self.advance()?;
                 let mut subscripts = self.list_of(Self::expression)?;
@@ -468,10 +477,9 @@ impl<'a> Parser<'a> {
                 match subscripts.len() {
                     1 | 2 => {}
                     _ => {
-                        return self.error_current(ErrorInner::BadSubscript(format!(
-                            "Wrong number of subscripts for {}",
-                            var
-                        )))
+                        return self.error_current(ErrorInner::BadSubscript(
+                            format!("Wrong number of subscripts for {}", var),
+                        ))
                     }
                 }
 

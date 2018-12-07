@@ -1,30 +1,30 @@
+use int_hash::IntHashMap;
+
 use super::error::CompileError;
 use crate::ast::*;
+use crate::ir::{Label, LabelIdGen};
 
-pub struct LineOrder {
-    prev_line: usize,
+pub struct IrLabels<'a> {
+    label_mapping: &'a mut IntHashMap<LineNo, Label>,
+    id_gen: &'a mut LabelIdGen,
 }
 
-impl LineOrder {
-    pub fn new() -> Self {
-        LineOrder { prev_line: 0 }
+impl<'a> IrLabels<'a> {
+    pub fn new(
+        id_gen: &'a mut LabelIdGen,
+        label_mapping: &'a mut IntHashMap<LineNo, Label>,
+    ) -> Self {
+        IrLabels {
+            id_gen,
+            label_mapping,
+        }
     }
 }
 
-impl Visitor<Result<(), CompileError>> for LineOrder {
+impl<'a> Visitor<Result<(), CompileError>> for IrLabels<'a> {
     fn visit_program(&mut self, prog: &Program) -> Result<(), CompileError> {
         for s in prog.statements.iter() {
-            if s.line_no == self.prev_line {
-                return Err(CompileError::DuplicatedLines(s.line_no));
-            }
-            if s.line_no < self.prev_line {
-                return Err(CompileError::LinesNotInOrder(
-                    self.prev_line,
-                    s.line_no,
-                ));
-            }
-
-            self.prev_line = s.line_no;
+            self.visit_statement(s)?;
         }
 
         Ok(())
@@ -46,15 +46,30 @@ impl Visitor<Result<(), CompileError>> for LineOrder {
         Ok(())
     }
 
-    fn visit_goto(&mut self, _stmt: &GotoStmt) -> Result<(), CompileError> {
+    fn visit_goto(&mut self, stmt: &GotoStmt) -> Result<(), CompileError> {
+        if !self.label_mapping.contains_key(&stmt.goto) {
+            let label = self.id_gen.next_id();
+            self.label_mapping.insert(stmt.goto, label);
+        }
+
         Ok(())
     }
 
-    fn visit_gosub(&mut self, _stmt: &GosubStmt) -> Result<(), CompileError> {
+    fn visit_gosub(&mut self, stmt: &GosubStmt) -> Result<(), CompileError> {
+        if !self.label_mapping.contains_key(&stmt.goto) {
+            let label = self.id_gen.next_id();
+            self.label_mapping.insert(stmt.goto, label);
+        }
+
         Ok(())
     }
 
-    fn visit_if(&mut self, _stmt: &IfStmt) -> Result<(), CompileError> {
+    fn visit_if(&mut self, stmt: &IfStmt) -> Result<(), CompileError> {
+        if !self.label_mapping.contains_key(&stmt.then) {
+            let label = self.id_gen.next_id();
+            self.label_mapping.insert(stmt.then, label);
+        }
+
         Ok(())
     }
 

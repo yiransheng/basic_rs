@@ -20,7 +20,10 @@ impl<'a> Visitor<Result<(), CompileError>> for FuncCompiler<'a> {
         Err(CompileError::IllegalFuncDef)
     }
 
-    fn visit_statement(&mut self, _stmt: &Statement) -> Result<(), CompileError> {
+    fn visit_statement(
+        &mut self,
+        _stmt: &Statement,
+    ) -> Result<(), CompileError> {
         Err(CompileError::IllegalFuncDef)
     }
 

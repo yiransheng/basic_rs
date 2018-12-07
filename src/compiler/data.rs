@@ -1,18 +1,19 @@
 use super::error::CompileError;
 use crate::ast::*;
+use crate::ir::{Instruction, InstructionKind, Visitor as IRVisitor};
 use crate::vm::*;
 
-pub struct PrepareData<'a> {
-    chunk: &'a mut Chunk,
+pub struct PrepareData<V> {
+    ir_visitor: V,
     read_count: usize,
     data_count: usize,
     line: usize,
 }
 
-impl<'a> PrepareData<'a> {
-    pub fn new(chunk: &'a mut Chunk) -> Self {
+impl<V: IRVisitor> PrepareData<V> {
+    pub fn new(ir_visitor: V) -> Self {
         PrepareData {
-            chunk,
+            ir_visitor,
             read_count: 0,
             data_count: 0,
             line: 0,
@@ -20,10 +21,12 @@ impl<'a> PrepareData<'a> {
     }
 }
 
-impl<'a> Visitor<Result<(), CompileError>> for PrepareData<'a> {
+impl<V: IRVisitor> Visitor<Result<(), CompileError>> for PrepareData<V>
+where
+    V::Error: Into<CompileError>,
+{
     fn visit_program(&mut self, prog: &Program) -> Result<(), CompileError> {
-        // must be reverse order
-        for s in prog.statements.iter().rev() {
+        for s in prog.statements.iter() {
             self.line = s.line_no;
             self.visit_statement(s)?;
         }
@@ -42,10 +45,17 @@ impl<'a> Visitor<Result<(), CompileError>> for PrepareData<'a> {
 
     fn visit_data(&mut self, stmt: &DataStmt) -> Result<(), CompileError> {
         self.data_count += stmt.vals.len();
-        // must be reverse order
-        for val in stmt.vals.iter().rev() {
-            self.chunk.write_opcode(OpCode::Constant, self.line);
-            self.chunk.add_operand(*val, self.line);
+        for val in stmt.vals.iter() {
+            // self.chunk.write_opcode(OpCode::Constant, self.line);
+            // self.chunk.add_operand(*val, self.line);
+            let kind = InstructionKind::Data(*val);
+            self.ir_visitor
+                .visit_instruction(Instruction {
+                    label: None,
+                    line_no: self.line,
+                    kind,
+                })
+                .map_err(V::Error::into)?;
         }
 
         Ok(())
