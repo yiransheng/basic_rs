@@ -10,8 +10,6 @@ pub use self::token::*;
 pub use self::variable::*;
 pub use self::visitor::Visitor;
 
-use std::fmt;
-
 use either::Either;
 
 use self::function::Func;

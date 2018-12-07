@@ -35,7 +35,6 @@ struct ForState {
 pub struct Compiler<'a> {
     state: CompileState,
     line_addr_map: IntHashMap<LineNo, usize>,
-    // TODO: this needs to be a Vec
     jumps: Vec<(u16, LineNo)>,
     for_states: IntHashMap<Variable, ForState>,
     chunk: &'a mut Chunk,
@@ -318,7 +317,7 @@ impl<'a> Visitor<Result> for Compiler<'a> {
 
     fn visit_def(&mut self, stmt: &DefStmt) -> Result {
         let mut fchunk = Chunk::new();
-        let mut fc = FuncCompiler::new(stmt.func, stmt.var, self.state.line, &mut fchunk);
+        let mut fc = FuncCompiler::new(stmt.var, self.state.line, &mut fchunk);
         fc.visit_expr(&stmt.expr)?;
         fchunk.write_opcode(OpCode::Return, self.state.line);
 
@@ -539,7 +538,7 @@ mod tests {
         let mut chunk = Chunk::new();
         let mut compiler = Compiler::new(&mut chunk);
 
-        let result = compiler.visit_program(&ast);
+        let _result = compiler.visit_program(&ast);
 
         let mut vm = VM::new(chunk);
         let mut output = Vec::new();

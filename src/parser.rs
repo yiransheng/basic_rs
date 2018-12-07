@@ -274,7 +274,6 @@ impl<'a> Parser<'a> {
     fn dim_statement(&mut self) -> Result<DimStmt, Error> {
         let mut lvals = parse_statement!(self, Dim, { self.list_of(Self::variable)? });
 
-        let n = lvals.len();
         let mut dim_var: Option<Variable> = None;
         let dims = lvals
             .drain(..)

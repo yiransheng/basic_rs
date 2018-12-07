@@ -3,6 +3,7 @@ use crate::ast::*;
 use crate::vm::*;
 
 pub struct LineOrder<'a> {
+    //TODO: not used remove?
     chunk: &'a mut Chunk,
     prev_line: usize,
 }
@@ -32,47 +33,47 @@ impl<'a> Visitor<Result<(), CompileError>> for LineOrder<'a> {
         Ok(())
     }
 
-    fn visit_let(&mut self, stmt: &LetStmt) -> Result<(), CompileError> {
+    fn visit_let(&mut self, _stmt: &LetStmt) -> Result<(), CompileError> {
         Ok(())
     }
 
-    fn visit_read(&mut self, stmt: &ReadStmt) -> Result<(), CompileError> {
+    fn visit_read(&mut self, _stmt: &ReadStmt) -> Result<(), CompileError> {
         Ok(())
     }
 
-    fn visit_data(&mut self, stmt: &DataStmt) -> Result<(), CompileError> {
+    fn visit_data(&mut self, _stmt: &DataStmt) -> Result<(), CompileError> {
         Ok(())
     }
 
-    fn visit_print(&mut self, stmt: &PrintStmt) -> Result<(), CompileError> {
+    fn visit_print(&mut self, _stmt: &PrintStmt) -> Result<(), CompileError> {
         Ok(())
     }
 
-    fn visit_goto(&mut self, stmt: &GotoStmt) -> Result<(), CompileError> {
+    fn visit_goto(&mut self, _stmt: &GotoStmt) -> Result<(), CompileError> {
         Ok(())
     }
 
-    fn visit_gosub(&mut self, stmt: &GosubStmt) -> Result<(), CompileError> {
+    fn visit_gosub(&mut self, _stmt: &GosubStmt) -> Result<(), CompileError> {
         Ok(())
     }
 
-    fn visit_if(&mut self, stmt: &IfStmt) -> Result<(), CompileError> {
+    fn visit_if(&mut self, _stmt: &IfStmt) -> Result<(), CompileError> {
         Ok(())
     }
 
-    fn visit_for(&mut self, stmt: &ForStmt) -> Result<(), CompileError> {
+    fn visit_for(&mut self, _stmt: &ForStmt) -> Result<(), CompileError> {
         Ok(())
     }
 
-    fn visit_next(&mut self, stmt: &NextStmt) -> Result<(), CompileError> {
+    fn visit_next(&mut self, _stmt: &NextStmt) -> Result<(), CompileError> {
         Ok(())
     }
 
-    fn visit_def(&mut self, stmt: &DefStmt) -> Result<(), CompileError> {
+    fn visit_def(&mut self, _stmt: &DefStmt) -> Result<(), CompileError> {
         Ok(())
     }
 
-    fn visit_dim(&mut self, stmt: &DimStmt) -> Result<(), CompileError> {
+    fn visit_dim(&mut self, _stmt: &DimStmt) -> Result<(), CompileError> {
         Ok(())
     }
 
@@ -92,19 +93,19 @@ impl<'a> Visitor<Result<(), CompileError>> for LineOrder<'a> {
         Ok(())
     }
 
-    fn visit_variable(&mut self, lval: &Variable) -> Result<(), CompileError> {
+    fn visit_variable(&mut self, _lval: &Variable) -> Result<(), CompileError> {
         Ok(())
     }
 
-    fn visit_list(&mut self, list: &List) -> Result<(), CompileError> {
+    fn visit_list(&mut self, _list: &List) -> Result<(), CompileError> {
         Ok(())
     }
 
-    fn visit_table(&mut self, table: &Table) -> Result<(), CompileError> {
+    fn visit_table(&mut self, _table: &Table) -> Result<(), CompileError> {
         Ok(())
     }
 
-    fn visit_expr(&mut self, expr: &Expression) -> Result<(), CompileError> {
+    fn visit_expr(&mut self, _expr: &Expression) -> Result<(), CompileError> {
         Ok(())
     }
 }

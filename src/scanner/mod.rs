@@ -391,7 +391,6 @@ mod test_keyword {
 mod test_scanner {
     use super::*;
     use indoc::*;
-    use std::str::FromStr;
 
     fn make_token(line: usize, col: usize, t: Token) -> SourceMapped<Token> {
         SourceMapped {
@@ -402,8 +401,6 @@ mod test_scanner {
 
     #[test]
     fn test_program() {
-        use super::Keyword::*;
-
         let program = indoc!(
             "
             10 REM POWER TABLE
@@ -427,7 +424,7 @@ mod test_scanner {
             99 END"
         );
 
-        let mut scanner = Scanner::new(program);
+        let scanner = Scanner::new(program);
         let tokens = scanner
             .into_iter()
             .filter_map(|r| r.ok())

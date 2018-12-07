@@ -1,5 +1,3 @@
-use std::io::{Read, Write};
-
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use int_hash::IntHashMap;
 use num_traits::{FromPrimitive, ToPrimitive};
@@ -210,7 +208,7 @@ impl Chunk {
 pub mod disassembler {
     use std::io;
 
-    use num_traits::{FromPrimitive, ToPrimitive};
+    use num_traits::FromPrimitive;
 
     use super::super::opcode::OpCode;
     use super::*;

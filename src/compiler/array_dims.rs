@@ -2,7 +2,6 @@ use either::Either;
 use int_hash::IntHashMap;
 
 use super::error::CompileError;
-use crate::ast::function::Func;
 use crate::ast::variable::Variable;
 use crate::ast::*;
 use crate::vm::*;
@@ -59,7 +58,7 @@ impl<'a> Visitor<Result<(), CompileError>> for ArrayDims<'a> {
         Ok(())
     }
 
-    fn visit_data(&mut self, stmt: &DataStmt) -> Result<(), CompileError> {
+    fn visit_data(&mut self, _stmt: &DataStmt) -> Result<(), CompileError> {
         Ok(())
     }
 
@@ -75,11 +74,11 @@ impl<'a> Visitor<Result<(), CompileError>> for ArrayDims<'a> {
         Ok(())
     }
 
-    fn visit_goto(&mut self, stmt: &GotoStmt) -> Result<(), CompileError> {
+    fn visit_goto(&mut self, _stmt: &GotoStmt) -> Result<(), CompileError> {
         Ok(())
     }
 
-    fn visit_gosub(&mut self, stmt: &GosubStmt) -> Result<(), CompileError> {
+    fn visit_gosub(&mut self, _stmt: &GosubStmt) -> Result<(), CompileError> {
         Ok(())
     }
 
@@ -98,7 +97,7 @@ impl<'a> Visitor<Result<(), CompileError>> for ArrayDims<'a> {
         Ok(())
     }
 
-    fn visit_next(&mut self, stmt: &NextStmt) -> Result<(), CompileError> {
+    fn visit_next(&mut self, _stmt: &NextStmt) -> Result<(), CompileError> {
         Ok(())
     }
 
@@ -137,7 +136,7 @@ impl<'a> Visitor<Result<(), CompileError>> for ArrayDims<'a> {
         Ok(())
     }
 
-    fn visit_variable(&mut self, lval: &Variable) -> Result<(), CompileError> {
+    fn visit_variable(&mut self, _lval: &Variable) -> Result<(), CompileError> {
         Ok(())
     }
 
@@ -167,9 +166,9 @@ impl<'a> Visitor<Result<(), CompileError>> for ArrayDims<'a> {
 
     fn visit_expr(&mut self, expr: &Expression) -> Result<(), CompileError> {
         match expr {
-            Expression::Lit(n) => Ok(()),
+            Expression::Lit(_n) => Ok(()),
             Expression::Var(v) => self.visit_lvalue(v),
-            Expression::Call(func, arg) => self.visit_expr(arg),
+            Expression::Call(_func, arg) => self.visit_expr(arg),
             Expression::Neg(expr) => self.visit_expr(expr),
             Expression::Add(lhs, rhs) => {
                 self.visit_expr(lhs)?;

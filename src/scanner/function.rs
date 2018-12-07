@@ -1,5 +1,5 @@
-use crate::ast::function::Func;
 use super::dfa::{Dfa, State};
+use crate::ast::function::Func;
 
 pub struct FuncDFA {
     state: State<Func>,
@@ -17,7 +17,6 @@ impl Dfa for FuncDFA {
     type Output = Func;
 
     fn match_str(&mut self, s: &str) -> Option<(Func, usize)> {
-      
         let mut consumed: usize = 0;
         let iter = s.chars();
 
@@ -67,7 +66,7 @@ fn _dfa(state: State<Func>, t: char) -> State<Func> {
 }
 
 #[inline(always)]
-fn _state_0 (t: char) -> State<Func> {
+fn _state_0(t: char) -> State<Func> {
     match t {
         'S' | 's' => State::Intermediate(37),
         'C' | 'c' => State::Intermediate(39),
@@ -84,7 +83,7 @@ fn _state_0 (t: char) -> State<Func> {
 }
 
 #[inline(always)]
-fn _state_37 (t: char) -> State<Func> {
+fn _state_37(t: char) -> State<Func> {
     match t {
         'I' | 'i' => State::Intermediate(38),
         'Q' | 'q' => State::Intermediate(50),
@@ -94,7 +93,7 @@ fn _state_37 (t: char) -> State<Func> {
 }
 
 #[inline(always)]
-fn _state_38 (t: char) -> State<Func> {
+fn _state_38(t: char) -> State<Func> {
     match t {
         'N' | 'n' => State::Matched(Func::Sin),
         a if a.is_whitespace() && a != '\n' => State::Intermediate(38),
@@ -103,7 +102,7 @@ fn _state_38 (t: char) -> State<Func> {
 }
 
 #[inline(always)]
-fn _state_39 (t: char) -> State<Func> {
+fn _state_39(t: char) -> State<Func> {
     match t {
         'O' | 'o' => State::Intermediate(40),
         a if a.is_whitespace() && a != '\n' => State::Intermediate(39),
@@ -112,7 +111,7 @@ fn _state_39 (t: char) -> State<Func> {
 }
 
 #[inline(always)]
-fn _state_40 (t: char) -> State<Func> {
+fn _state_40(t: char) -> State<Func> {
     match t {
         'S' | 's' => State::Matched(Func::Cos),
         a if a.is_whitespace() && a != '\n' => State::Intermediate(40),
@@ -121,7 +120,7 @@ fn _state_40 (t: char) -> State<Func> {
 }
 
 #[inline(always)]
-fn _state_41 (t: char) -> State<Func> {
+fn _state_41(t: char) -> State<Func> {
     match t {
         'A' | 'a' => State::Intermediate(42),
         a if a.is_whitespace() && a != '\n' => State::Intermediate(41),
@@ -130,7 +129,7 @@ fn _state_41 (t: char) -> State<Func> {
 }
 
 #[inline(always)]
-fn _state_42 (t: char) -> State<Func> {
+fn _state_42(t: char) -> State<Func> {
     match t {
         'N' | 'n' => State::Matched(Func::Tan),
         a if a.is_whitespace() && a != '\n' => State::Intermediate(42),
@@ -139,7 +138,7 @@ fn _state_42 (t: char) -> State<Func> {
 }
 
 #[inline(always)]
-fn _state_43 (t: char) -> State<Func> {
+fn _state_43(t: char) -> State<Func> {
     match t {
         'T' | 't' => State::Intermediate(44),
         'B' | 'b' => State::Intermediate(47),
@@ -149,7 +148,7 @@ fn _state_43 (t: char) -> State<Func> {
 }
 
 #[inline(always)]
-fn _state_44 (t: char) -> State<Func> {
+fn _state_44(t: char) -> State<Func> {
     match t {
         'N' | 'n' => State::Matched(Func::Atn),
         a if a.is_whitespace() && a != '\n' => State::Intermediate(44),
@@ -158,7 +157,7 @@ fn _state_44 (t: char) -> State<Func> {
 }
 
 #[inline(always)]
-fn _state_45 (t: char) -> State<Func> {
+fn _state_45(t: char) -> State<Func> {
     match t {
         'X' | 'x' => State::Intermediate(46),
         a if a.is_whitespace() && a != '\n' => State::Intermediate(45),
@@ -167,7 +166,7 @@ fn _state_45 (t: char) -> State<Func> {
 }
 
 #[inline(always)]
-fn _state_46 (t: char) -> State<Func> {
+fn _state_46(t: char) -> State<Func> {
     match t {
         'P' | 'p' => State::Matched(Func::Exp),
         a if a.is_whitespace() && a != '\n' => State::Intermediate(46),
@@ -176,7 +175,7 @@ fn _state_46 (t: char) -> State<Func> {
 }
 
 #[inline(always)]
-fn _state_47 (t: char) -> State<Func> {
+fn _state_47(t: char) -> State<Func> {
     match t {
         'S' | 's' => State::Matched(Func::Abs),
         a if a.is_whitespace() && a != '\n' => State::Intermediate(47),
@@ -185,7 +184,7 @@ fn _state_47 (t: char) -> State<Func> {
 }
 
 #[inline(always)]
-fn _state_48 (t: char) -> State<Func> {
+fn _state_48(t: char) -> State<Func> {
     match t {
         'O' | 'o' => State::Intermediate(49),
         a if a.is_whitespace() && a != '\n' => State::Intermediate(48),
@@ -194,7 +193,7 @@ fn _state_48 (t: char) -> State<Func> {
 }
 
 #[inline(always)]
-fn _state_49 (t: char) -> State<Func> {
+fn _state_49(t: char) -> State<Func> {
     match t {
         'G' | 'g' => State::Matched(Func::Log),
         a if a.is_whitespace() && a != '\n' => State::Intermediate(49),
@@ -203,7 +202,7 @@ fn _state_49 (t: char) -> State<Func> {
 }
 
 #[inline(always)]
-fn _state_50 (t: char) -> State<Func> {
+fn _state_50(t: char) -> State<Func> {
     match t {
         'R' | 'r' => State::Matched(Func::Sqr),
         a if a.is_whitespace() && a != '\n' => State::Intermediate(50),
@@ -212,7 +211,7 @@ fn _state_50 (t: char) -> State<Func> {
 }
 
 #[inline(always)]
-fn _state_51 (t: char) -> State<Func> {
+fn _state_51(t: char) -> State<Func> {
     match t {
         'N' | 'n' => State::Intermediate(52),
         a if a.is_whitespace() && a != '\n' => State::Intermediate(51),
@@ -221,7 +220,7 @@ fn _state_51 (t: char) -> State<Func> {
 }
 
 #[inline(always)]
-fn _state_52 (t: char) -> State<Func> {
+fn _state_52(t: char) -> State<Func> {
     match t {
         'D' | 'd' => State::Matched(Func::Rnd),
         a if a.is_whitespace() && a != '\n' => State::Intermediate(52),
@@ -230,7 +229,7 @@ fn _state_52 (t: char) -> State<Func> {
 }
 
 #[inline(always)]
-fn _state_53 (t: char) -> State<Func> {
+fn _state_53(t: char) -> State<Func> {
     match t {
         'N' | 'n' => State::Intermediate(54),
         a if a.is_whitespace() && a != '\n' => State::Intermediate(53),
@@ -239,7 +238,7 @@ fn _state_53 (t: char) -> State<Func> {
 }
 
 #[inline(always)]
-fn _state_54 (t: char) -> State<Func> {
+fn _state_54(t: char) -> State<Func> {
     match t {
         'T' | 't' => State::Matched(Func::Int),
         a if a.is_whitespace() && a != '\n' => State::Intermediate(54),
@@ -248,7 +247,7 @@ fn _state_54 (t: char) -> State<Func> {
 }
 
 #[inline(always)]
-fn _state_55 (t: char) -> State<Func> {
+fn _state_55(t: char) -> State<Func> {
     match t {
         'N' | 'n' => State::Intermediate(56),
         a if a.is_whitespace() && a != '\n' => State::Intermediate(55),
@@ -257,7 +256,7 @@ fn _state_55 (t: char) -> State<Func> {
 }
 
 #[inline(always)]
-fn _state_56 (t: char) -> State<Func> {
+fn _state_56(t: char) -> State<Func> {
     match t {
         'A' | 'a' => State::Matched(Func::Fna),
         'B' | 'b' => State::Matched(Func::Fnb),
