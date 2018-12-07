@@ -38,7 +38,6 @@ pub enum OpCode {
     PrintEnd,
 
     Dup,
-    Swap,
     Negate,
     Not,
     Add,
@@ -97,7 +96,6 @@ impl OpCode {
             PrintEnd => "prt.end",
 
             Dup => "dup",
-            Swap => "swap",
             Negate => "neg",
             Not => "not",
             Add => "add",

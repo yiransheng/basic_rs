@@ -12,7 +12,7 @@ pub use self::visitor::Visitor;
 
 use either::Either;
 
-use self::function::Func;
+pub use self::function::Func;
 
 pub type Number = f64;
 pub type LineNo = usize;

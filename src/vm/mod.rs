@@ -10,18 +10,19 @@ use num_traits::{FromPrimitive, ToPrimitive};
 use crate::ast::function::Func;
 use crate::ast::*;
 
+pub mod value;
+
 mod array;
 mod chunk;
 mod line_mapping;
 mod opcode;
 mod print;
-mod value;
 
 pub use self::chunk::*;
 pub use self::opcode::*;
 pub use self::value::{FuncId, FuncIdGen};
 
-use self::array::{Array, Error as ArrayError, Subscript};
+use self::array::{Array, Error as ArrayError};
 use self::print::{PrintError, Printer};
 use self::value::*;
 
@@ -230,12 +231,6 @@ impl VM {
                     if let Some(value) = self.peek(0) {
                         self.push_value(value);
                     }
-                }
-                OpCode::Swap => {
-                    let v1 = self.pop_value()?;
-                    let v2 = self.pop_value()?;
-                    self.push_value(v1);
-                    self.push_value(v2);
                 }
                 OpCode::CallNative => {
                     let func: Func = self.read_inline_operand()?;

@@ -2,6 +2,7 @@ use either::Either;
 use int_hash::IntHashMap;
 
 use crate::ast::*;
+use crate::ir::{Instruction, InstructionKind, Label, LabelIdGen, Visitor as IRVisitor};
 use crate::vm::*;
 
 use super::anon_var::AnonVarGen;
@@ -22,44 +23,82 @@ struct CompileState {
     line: LineNo,
     var_gen: AnonVarGen,
     func_id_gen: FuncIdGen,
+    label_id_gen: LabelIdGen,
 }
 
 struct ForState {
     var: Variable,
     step: Variable,
     to: Variable,
-    start_code_point: usize,
-    next_cp_index: u16,
+    loop_start: Label,
+    next_label: Label,
 }
 
-pub struct Compiler<'a> {
+pub struct Compiler<'a, V> {
     state: CompileState,
     line_addr_map: IntHashMap<LineNo, usize>,
     jumps: Vec<(u16, LineNo)>,
     for_states: IntHashMap<Variable, ForState>,
+    label_mapping: IntHashMap<LineNo, Label>,
     chunk: &'a mut Chunk,
+    ir_visitor: V,
 }
 
-impl<'a> Compiler<'a> {
+impl<'a, V: IRVisitor> Compiler<'a, V>
+where
+    V::Error: Into<CompileErrorInner>,
+{
     pub fn new(chunk: &'a mut Chunk) -> Self {
-        Compiler {
-            chunk,
-            line_addr_map: IntHashMap::default(),
-            jumps: Vec::new(),
-            for_states: IntHashMap::default(),
-            state: CompileState {
-                assign: false,
-                line: 0,
-                var_gen: AnonVarGen::new(),
-                func_id_gen: FuncIdGen::new(),
-            },
-        }
+        /*
+         * Compiler {
+         *     chunk,
+         *     line_addr_map: IntHashMap::default(),
+         *     jumps: Vec::new(),
+         *     for_states: IntHashMap::default(),
+         *     state: CompileState {
+         *         assign: false,
+         *         line: 0,
+         *         var_gen: AnonVarGen::new(),
+         *         func_id_gen: FuncIdGen::new(),
+         *     },
+         * }
+         */
+        unimplemented!()
     }
     pub fn compile(&mut self, prog: &Program) -> ::std::result::Result<(), CompileError> {
         self.visit_program(prog).map_err(|err| CompileError {
             inner: err,
             line_no: self.state.line,
         })
+    }
+
+    fn emit_instruction(&self, instr_kind: InstructionKind) -> Result {
+        let line_no = self.state.line;
+        let label = self.label_mapping.get(&line_no).cloned();
+
+        let instr = Instruction {
+            label,
+            line_no,
+            kind: instr_kind,
+        };
+
+        self.ir_visitor
+            .visit_instruction(instr)
+            .map_err(|e| e.into())
+    }
+
+    fn emit_labeled_instruction(&self, label: Label, instr_kind: InstructionKind) -> Result {
+        let line_no = self.state.line;
+
+        let instr = Instruction {
+            label: Some(label),
+            line_no,
+            kind: instr_kind,
+        };
+
+        self.ir_visitor
+            .visit_instruction(instr)
+            .map_err(|e| e.into())
     }
 
     fn assigning<T, F>(&mut self, mut f: F) -> T
@@ -86,7 +125,10 @@ impl<'a> Compiler<'a> {
 
 type Result = ::std::result::Result<(), CompileErrorInner>;
 
-impl<'a> Visitor<Result> for Compiler<'a> {
+impl<'a, V: IRVisitor> Visitor<Result> for Compiler<'a, V>
+where
+    V::Error: Into<CompileErrorInner>,
+{
     fn visit_program(&mut self, prog: &Program) -> Result {
         let mut line_order = LineOrder::new(self.chunk);
         line_order.visit_program(prog)?;
@@ -158,8 +200,8 @@ impl<'a> Visitor<Result> for Compiler<'a> {
     }
 
     fn visit_data(&mut self, _stmt: &DataStmt) -> Result {
-        self.chunk.write_opcode(OpCode::Noop, self.state.line);
-        Ok(())
+        // self.chunk.write_opcode(OpCode::Noop, self.state.line);
+        self.emit_instruction(InstructionKind::Noop)
     }
 
     fn visit_print(&mut self, stmt: &PrintStmt) -> Result {
@@ -168,42 +210,48 @@ impl<'a> Visitor<Result> for Compiler<'a> {
             match part {
                 Printable::Expr(expr) => {
                     self.visit_expr(expr)?;
-                    self.chunk.write_opcode(OpCode::PrintExpr, self.state.line);
+                    // self.chunk.write_opcode(OpCode::PrintExpr, self.state.line);
+                    self.emit_instruction(InstructionKind::PrintExpr)?;
                 }
                 Printable::Advance3 => {
-                    self.chunk
-                        .write_opcode(OpCode::PrintAdvance3, self.state.line);
+                    // self.chunk
+                    // .write_opcode(OpCode::PrintAdvance3, self.state.line);
+                    self.emit_instruction(InstructionKind::PrintAdvance3)?;
                 }
                 Printable::Advance15 => {
-                    self.chunk
-                        .write_opcode(OpCode::PrintAdvance15, self.state.line);
+                    // self.chunk
+                    // .write_opcode(OpCode::PrintAdvance15, self.state.line);
+                    self.emit_instruction(InstructionKind::PrintAdvance15)?;
                 }
                 Printable::Label(s) => {
-                    self.chunk.write_opcode(OpCode::PrintLabel, self.state.line);
-                    self.chunk.add_operand(s.clone(), self.state.line);
+                    // self.chunk.write_opcode(OpCode::PrintLabel, self.state.line);
+                    // self.chunk.add_operand(s.clone(), self.state.line);
+                    self.emit_instruction(InstructionKind::PrintLabel(s.clone()))?;
                 }
             }
         }
 
-        self.chunk.write_opcode(OpCode::PrintEnd, self.state.line);
-
-        Ok(())
+        // self.chunk.write_opcode(OpCode::PrintEnd, self.state.line);
+        self.emit_instruction(InstructionKind::PrintEnd)
     }
 
     fn visit_goto(&mut self, stmt: &GotoStmt) -> Result {
-        self.chunk.write_opcode(OpCode::Jump, self.state.line);
-        let jp_index = self.chunk.add_operand(JumpPoint(0), self.state.line);
-        self.jumps.push((jp_index, stmt.goto));
-
-        Ok(())
+        // self.chunk.write_opcode(OpCode::Jump, self.state.line);
+        // let jp_index = self.chunk.add_operand(JumpPoint(0), self.state.line);
+        // self.jumps.push((jp_index, stmt.goto));
+        // TODO: error?
+        let label = self.label_mapping.get(&stmt.goto).cloned().unwrap();
+        self.emit_instruction(InstructionKind::Jump(label))
     }
 
     fn visit_gosub(&mut self, stmt: &GosubStmt) -> Result {
-        self.chunk.write_opcode(OpCode::Subroutine, self.state.line);
-        let jp_index = self.chunk.add_operand(JumpPoint(0), self.state.line);
-        self.jumps.push((jp_index, stmt.goto));
+        // self.chunk.write_opcode(OpCode::Subroutine, self.state.line);
+        // let jp_index = self.chunk.add_operand(JumpPoint(0), self.state.line);
+        // self.jumps.push((jp_index, stmt.goto));
 
-        Ok(())
+        //TODO: error
+        let label = self.label_mapping.get(&stmt.goto).cloned().unwrap();
+        self.emit_instruction(InstructionKind::Subroutine(label))
     }
 
     fn visit_if(&mut self, stmt: &IfStmt) -> Result {
@@ -212,33 +260,44 @@ impl<'a> Visitor<Result> for Compiler<'a> {
 
         match stmt.op {
             Relop::Equal => {
-                self.chunk.write_opcode(OpCode::Equal, self.state.line);
+                // self.chunk.write_opcode(OpCode::Equal, self.state.line);
+                self.emit_instruction(InstructionKind::Equal)?;
             }
             Relop::NotEqual => {
-                self.chunk.write_opcode(OpCode::Equal, self.state.line);
-                self.chunk.write_opcode(OpCode::Not, self.state.line);
+                // self.chunk.write_opcode(OpCode::Equal, self.state.line);
+                // self.chunk.write_opcode(OpCode::Not, self.state.line);
+                self.emit_instruction(InstructionKind::Equal)?;
+                self.emit_instruction(InstructionKind::Not)?;
             }
             Relop::Less => {
-                self.chunk.write_opcode(OpCode::Less, self.state.line);
+                // self.chunk.write_opcode(OpCode::Less, self.state.line);
+                self.emit_instruction(InstructionKind::Less)?;
             }
             Relop::Greater => {
-                self.chunk.write_opcode(OpCode::Greater, self.state.line);
+                // self.chunk.write_opcode(OpCode::Greater, self.state.line);
+                self.emit_instruction(InstructionKind::Greater)?;
             }
             Relop::LessEqual => {
-                self.chunk.write_opcode(OpCode::Greater, self.state.line);
-                self.chunk.write_opcode(OpCode::Not, self.state.line);
+                // self.chunk.write_opcode(OpCode::Greater, self.state.line);
+                // self.chunk.write_opcode(OpCode::Not, self.state.line);
+                self.emit_instruction(InstructionKind::Greater)?;
+                self.emit_instruction(InstructionKind::Not)?;
             }
             Relop::GreaterEqual => {
-                self.chunk.write_opcode(OpCode::Less, self.state.line);
-                self.chunk.write_opcode(OpCode::Not, self.state.line);
+                // self.chunk.write_opcode(OpCode::Less, self.state.line);
+                // self.chunk.write_opcode(OpCode::Not, self.state.line);
+                self.emit_instruction(InstructionKind::Less)?;
+                self.emit_instruction(InstructionKind::Not)?;
             }
         }
 
-        self.chunk.write_opcode(OpCode::JumpTrue, self.state.line);
-        let jp_index = self.chunk.add_operand(JumpPoint(0), self.state.line);
-        self.jumps.push((jp_index, stmt.then));
+        // self.chunk.write_opcode(OpCode::JumpTrue, self.state.line);
+        // let jp_index = self.chunk.add_operand(JumpPoint(0), self.state.line);
+        // self.jumps.push((jp_index, stmt.then));
 
-        Ok(())
+        // TODO: error
+        let label = self.label_mapping.get(&stmt.then).cloned().unwrap();
+        self.emit_instruction(InstructionKind::JumpTrue(label))
     }
 
     fn visit_for(&mut self, stmt: &ForStmt) -> Result {
@@ -250,32 +309,41 @@ impl<'a> Visitor<Result> for Compiler<'a> {
                 self.visit_expr(step_expr)?;
             }
             None => {
-                self.chunk.write_opcode(OpCode::Constant, self.state.line);
-                self.chunk.add_operand(1.0, self.state.line);
+                // self.chunk.write_opcode(OpCode::Constant, self.state.line);
+                // self.chunk.add_operand(1.0, self.state.line);
+                self.emit_instruction(InstructionKind::Constant(1.0))?;
             }
         }
-        self.chunk.write_opcode(OpCode::Dup, self.state.line);
+        // self.chunk.write_opcode(OpCode::Dup, self.state.line);
+        self.emit_instruction(InstructionKind::Dup)?;
         self.assigning(|this| this.visit_variable(&step_var))?;
 
         self.visit_expr(&stmt.from)?;
-        self.chunk.write_opcode(OpCode::Dup, self.state.line);
+        // self.chunk.write_opcode(OpCode::Dup, self.state.line);
+        self.emit_instruction(InstructionKind::Dup)?;
         self.assigning(|this| this.visit_variable(&stmt.var))?;
 
         self.visit_expr(&stmt.to)?;
-        self.chunk.write_opcode(OpCode::Dup, self.state.line);
+        // self.chunk.write_opcode(OpCode::Dup, self.state.line);
+        self.emit_instruction(InstructionKind::Dup)?;
         self.assigning(|this| this.visit_variable(&to_var))?;
         // value stack: [step, current, to]
 
-        self.chunk.write_opcode(OpCode::Jump, self.state.line);
-        let jp_index = self.chunk.add_operand(JumpPoint(0), self.state.line);
+        let start_label = self.state.label_id_gen.next_id();
+        let next_label = self.state.label_id_gen.next_id();
+        // self.chunk.write_opcode(OpCode::Jump, self.state.line);
+        // let jp_index = self.chunk.add_operand(JumpPoint(0), self.state.line);
+        self.emit_instruction(InstructionKind::Jump(next_label))?;
 
         let for_state = ForState {
             var: stmt.var,
             step: step_var,
             to: to_var,
-            start_code_point: self.chunk.len(),
-            next_cp_index: jp_index,
+            loop_start: start_label,
+            next_label: next_label,
         };
+
+        self.emit_labeled_instruction(start_label, InstructionKind::Noop)?;
 
         self.for_states.insert(stmt.var, for_state);
 
@@ -291,26 +359,31 @@ impl<'a> Visitor<Result> for Compiler<'a> {
             .ok_or(CompileErrorInner::NextWithoutFor)?;
         let step_var = for_state.step;
         let to_var = for_state.to;
-        let loop_start = for_state.start_code_point;
+        let loop_start = for_state.loop_start;
 
         self.visit_variable(&step_var)?;
 
-        self.chunk.write_opcode(OpCode::Dup, self.state.line);
+        // self.chunk.write_opcode(OpCode::Dup, self.state.line);
+        self.emit_instruction(InstructionKind::Dup)?;
         self.visit_variable(&stmt.var)?;
-        self.chunk.write_opcode(OpCode::Add, self.state.line);
-        self.chunk.write_opcode(OpCode::Dup, self.state.line);
+        // self.chunk.write_opcode(OpCode::Add, self.state.line);
+        // self.chunk.write_opcode(OpCode::Dup, self.state.line);
+
+        self.emit_instruction(InstructionKind::Add)?;
+        self.emit_instruction(InstructionKind::Dup)?;
 
         self.assigning(|this| this.visit_variable(&stmt.var))?;
         self.visit_variable(&to_var)?;
 
-        self.chunk
-            .set_operand(for_state.next_cp_index, JumpPoint(self.chunk.len()));
-
+        // self.chunk
+        // .set_operand(for_state.next_cp_index, JumpPoint(self.chunk.len()));
         // value stack: [step, current, to]
-        self.chunk.write_opcode(OpCode::LoopTest, self.state.line);
-        self.chunk.write_opcode(OpCode::JumpFalse, self.state.line);
-        self.chunk
-            .add_operand(JumpPoint(loop_start), self.state.line);
+        // self.chunk.write_opcode(OpCode::LoopTest, self.state.line);
+        // self.chunk.write_opcode(OpCode::JumpFalse, self.state.line);
+        // self.chunk
+        // .add_operand(JumpPoint(loop_start), self.state.line);
+        self.emit_labeled_instruction(for_state.next_label, InstructionKind::LoopTest)?;
+        self.emit_instruction(InstructionKind::JumpFalse(loop_start))?;
 
         Ok(())
     }
@@ -355,35 +428,40 @@ impl<'a> Visitor<Result> for Compiler<'a> {
     }
 
     fn visit_rem(&mut self) -> Result {
-        self.chunk.write_opcode(OpCode::Noop, self.state.line);
-        Ok(())
+        // self.chunk.write_opcode(OpCode::Noop, self.state.line);
+        self.emit_instruction(InstructionKind::Noop)
     }
 
     fn visit_end(&mut self) -> Result {
-        self.chunk.write_opcode(OpCode::Stop, self.state.line);
-        Ok(())
+        // self.chunk.write_opcode(OpCode::Stop, self.state.line);
+        // Ok(())
+        self.emit_instruction(InstructionKind::Stop)
     }
 
     fn visit_stop(&mut self) -> Result {
-        self.chunk.write_opcode(OpCode::Stop, self.state.line);
-        Ok(())
+        // self.chunk.write_opcode(OpCode::Stop, self.state.line);
+        // Ok(())
+        self.emit_instruction(InstructionKind::Stop)
     }
 
     fn visit_return(&mut self) -> Result {
-        self.chunk.write_opcode(OpCode::Return, self.state.line);
-        Ok(())
+        // self.chunk.write_opcode(OpCode::Return, self.state.line);
+        // Ok(())
+        self.emit_instruction(InstructionKind::Return)
     }
 
-    fn visit_variable(&mut self, lval: &Variable) -> Result {
+    fn visit_variable(&mut self, var: &Variable) -> Result {
         if self.state.assign {
-            self.chunk.write_opcode(OpCode::SetGlobal, self.state.line);
+            // self.chunk.write_opcode(OpCode::SetGlobal, self.state.line);
+            self.emit_instruction(InstructionKind::SetGlobal(*var))
         } else {
-            self.chunk.write_opcode(OpCode::GetGlobal, self.state.line);
+            // self.chunk.write_opcode(OpCode::GetGlobal, self.state.line);
+            self.emit_instruction(InstructionKind::GetGlobal(*var))
         }
 
-        self.chunk.add_inline_operand(lval.clone(), self.state.line);
+        // self.chunk.add_inline_operand(lval.clone(), self.state.line);
 
-        Ok(())
+        // Ok(())
     }
 
     fn visit_list(&mut self, list: &List) -> Result {
