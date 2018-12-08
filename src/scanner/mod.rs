@@ -188,7 +188,7 @@ impl<'a> Scanner<'a> {
             col: self.start - self.line_start,
         };
 
-        SourceMapped { value: value, loc }
+        SourceMapped { value, loc }
     }
 
     fn scan_token(&mut self) -> Result<Token, Error> {

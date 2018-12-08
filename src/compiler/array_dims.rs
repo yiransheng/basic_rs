@@ -98,11 +98,8 @@ where
 
     fn visit_print(&mut self, stmt: &PrintStmt) -> Result<(), CompileError> {
         for part in &stmt.parts {
-            match part {
-                Printable::Expr(expr) => {
-                    self.visit_expr(expr)?;
-                }
-                _ => {}
+            if let Printable::Expr(expr) = part {
+                self.visit_expr(expr)?;
             }
         }
         Ok(())

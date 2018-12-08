@@ -490,10 +490,10 @@ pub mod disassembler {
                     PrintLabel => self.disassemble_label(),
                     _ => {}
                 }
-                let _ = writeln!(&mut self.out, "");
+                let _ = writeln!(&mut self.out);
             }
 
-            let _ = writeln!(&mut self.out, "");
+            let _ = writeln!(&mut self.out);
         }
 
         fn disassemble_constant(&mut self) {
@@ -546,10 +546,11 @@ pub mod disassembler {
             let byte = self.chunk.code[self.ip];
 
             let _ = if self.line == line {
-                write!(&mut self.out, "{} {:04}", " |   ", self.ip);
+                #[allow(clippy::write_literal)]
+                write!(&mut self.out, "{} {:04}", " |   ", self.ip)
             } else {
                 self.line = line;
-                write!(&mut self.out, "{:<5} {:04}", line, self.ip);
+                write!(&mut self.out, "{:<5} {:04}", line, self.ip)
             };
 
             self.ip += 1;

@@ -13,7 +13,7 @@ impl LineMapping {
     pub fn add_mapping(&mut self, line: usize, code_point: usize) {
         let start = match self.lines.last_mut() {
             Some((last_line, ref mut rng)) if *last_line == line => {
-                *(&mut rng.end) = code_point;
+                rng.end = code_point;
                 return;
             }
             Some((_, rng)) => rng.end,

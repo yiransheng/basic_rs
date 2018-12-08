@@ -492,7 +492,7 @@ where
             step: step_var,
             to: to_var,
             loop_start: start_label,
-            next_label: next_label,
+            next_label,
         };
 
         self.emit_labeled_instruction(start_label, InstructionKind::Noop)?;

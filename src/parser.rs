@@ -453,7 +453,7 @@ impl<'a> Parser<'a> {
                 Ok(-n)
             }
             Token::Natural(_) | Token::Real(_) => self.number(),
-            _ => return self.unexpected_token(),
+            _ => self.unexpected_token(),
         }
     }
 

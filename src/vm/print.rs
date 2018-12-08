@@ -75,11 +75,8 @@ impl<W: Write> Printer<W> {
         }
     }
     pub fn write_end(&mut self) {
-        match self.state {
-            PrintState::Printing(_, true) => {
-                write!(&mut self.out, "\n");
-            }
-            _ => {}
+        if let PrintState::Printing(_, true) = self.state {
+            let _ = writeln!(&mut self.out);
         }
         self.state = PrintState::Idle;
     }
