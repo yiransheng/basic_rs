@@ -84,10 +84,6 @@ impl Variable {
         self.0[1] == 0
     }
 
-    pub fn raw(self) -> [u8; 2] {
-        self.0
-    }
-
     fn fmt(
         &self,
         f: &mut ::std::fmt::Formatter,

@@ -1,7 +1,6 @@
 use std::collections::VecDeque;
 
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
-use int_hash::IntHashMap;
 use num_traits::{FromPrimitive, ToPrimitive};
 
 use super::line_mapping::LineMapping;

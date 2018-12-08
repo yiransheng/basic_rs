@@ -17,7 +17,6 @@ use crate::compiler::compile;
 use crate::error_print::{print_source_error, InterpreterError};
 use crate::parser::Parser;
 use crate::scanner::Scanner;
-use crate::vm::{Chunk, VM};
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "basic_rs", about = "basic_rs file")]

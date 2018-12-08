@@ -8,7 +8,6 @@ pub enum CompileError {
     LinesNotInOrder(usize, usize),
     NextWithoutFor,
     CannotAssignTo(String),
-    IllegalFuncDef,
     ListUsedAsTable,
     TableUsedAsList,
 }
@@ -37,7 +36,6 @@ impl Error for CompileError {
             CompileError::LinesNotInOrder(..) => "Lines not in order",
             CompileError::NextWithoutFor => "NEXT without FOR",
             CompileError::CannotAssignTo(_) => "Cannot assign to Expression",
-            CompileError::IllegalFuncDef => "Illegal Function DEF",
             CompileError::ListUsedAsTable => "List used as Table",
             CompileError::TableUsedAsList => "Table used as List",
         }

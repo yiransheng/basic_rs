@@ -10,7 +10,6 @@ mod line_order;
 pub use self::compiler::{CompileError, Compiler, Target};
 
 use crate::ast;
-use crate::ir::Visitor;
 use crate::vm::from_ir::{ChunkWriter, WriteError};
 use crate::vm::VM;
 
@@ -88,7 +87,7 @@ mod tests {
         let mut vm = compile(&ast).unwrap();
 
         let mut output = Vec::new();
-        vm.run(&mut output);
+        vm.run(&mut output).expect("no runtime error");
 
         assert_eq!(::std::str::from_utf8(&output), Ok(printed));
     }

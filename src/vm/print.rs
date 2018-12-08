@@ -51,6 +51,7 @@ pub struct Printer<W> {
 }
 
 impl<W: Write> Printer<W> {
+    #[allow(dead_code)]
     pub fn new(out: W) -> Self {
         Printer {
             num: Vec::new(),

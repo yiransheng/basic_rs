@@ -11,7 +11,6 @@ use super::anon_var::AnonVarGen;
 use super::array_dims::ArrayDims;
 use super::data::PrepareData;
 use super::error::CompileError as CompileErrorInner;
-// use super::func_compiler::FuncCompiler;
 use super::ir_labels::IrLabels;
 use super::line_order::LineOrder;
 
@@ -30,7 +29,6 @@ struct CompileState {
 }
 
 struct ForState {
-    var: Variable,
     step: Variable,
     to: Variable,
     loop_start: Label,
@@ -491,7 +489,6 @@ where
         self.emit_instruction(InstructionKind::Jump(next_label))?;
 
         let for_state = ForState {
-            var: stmt.var,
             step: step_var,
             to: to_var,
             loop_start: start_label,
