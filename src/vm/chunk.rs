@@ -218,6 +218,7 @@ pub mod from_ir {
     use super::*;
     use crate::ir::*;
 
+    //TODO: add a &'static str field for easy debugging
     #[derive(Debug, Copy, Clone)]
     pub struct WriteError;
 

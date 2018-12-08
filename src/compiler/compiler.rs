@@ -24,6 +24,7 @@ pub struct CompileError {
 struct CompileState {
     assign: bool,
     line: LineNo,
+    line_label: Option<Label>,
     local_pool: LocalVarPool,
     label_id_gen: LabelIdGen,
 }
@@ -193,7 +194,7 @@ where
 {
     fn emit_instruction(&mut self, instr_kind: InstructionKind) -> Result {
         let line_no = self.state.line;
-        let label = self.label_mapping.get(&line_no).cloned();
+        let label = self.state.line_label.take();
 
         let instr = Instruction {
             label,
@@ -268,6 +269,7 @@ where
             state: CompileState {
                 assign: false,
                 line: 0,
+                line_label: None,
                 label_id_gen: LabelIdGen::new(),
                 local_pool: LocalVarPool {
                     free: IntHashSet::default(),
@@ -334,6 +336,7 @@ where
     fn visit_statement(&mut self, stmt: &Statement) -> Result {
         let line_no = stmt.line_no;
         self.state.line = line_no;
+        self.state.line_label = self.label_mapping.get(&line_no).cloned();
 
         match &stmt.statement {
             Stmt::Let(s) => self.visit_let(s),
