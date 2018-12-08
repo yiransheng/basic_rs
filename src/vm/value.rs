@@ -10,7 +10,7 @@ pub struct True;
 pub struct False;
 
 #[derive(
-    Debug, Copy, Clone, Hash, Eq, PartialEq, FromPrimitive, ToPrimitive,
+    Debug, Copy, Clone, Hash, Eq, PartialEq, FromPrimitive, ToPrimitive, Default,
 )]
 pub struct FuncId(u8);
 

@@ -11,7 +11,7 @@ use super::anon_var::AnonVarGen;
 use super::array_dims::ArrayDims;
 use super::data::PrepareData;
 use super::error::CompileError as CompileErrorInner;
-use super::func_compiler::FuncCompiler;
+// use super::func_compiler::FuncCompiler;
 use super::ir_labels::IrLabels;
 use super::line_order::LineOrder;
 
@@ -25,7 +25,6 @@ struct CompileState {
     assign: bool,
     line: LineNo,
     local_pool: LocalVarPool,
-    func_id_gen: FuncIdGen,
     label_id_gen: LabelIdGen,
 }
 
@@ -54,6 +53,15 @@ impl LocalVarPool {
 
         var
     }
+    fn mask_global<F>(&mut self, var: Variable, f: F) -> Result
+    where
+        F: FnMut() -> Result,
+    {
+        self.in_use.insert(var);
+        f()?;
+        self.in_use.remove(&var);
+        Ok(())
+    }
     fn is_in_use(&self, var: &Variable) -> bool {
         self.in_use.contains(var)
     }
@@ -64,6 +72,62 @@ impl LocalVarPool {
     }
 }
 
+struct Target<T> {
+    main: FuncId,
+    current: FuncId,
+    func_id_gen: FuncIdGen,
+    functions: IntHashMap<FuncId, T>,
+}
+impl<T: IRVisitor + Default> Target<T>
+where
+    T::Error: Into<CompileErrorInner>,
+{
+    fn new_function<F>(
+        &mut self,
+        f: F,
+    ) -> ::std::result::Result<FuncId, CompileErrorInner>
+    where
+        F: FnOnce() -> Result,
+    {
+        let func_id = self.func_id_gen.next_id();
+        self.functions.insert(func_id, T::default());
+        self.current = func_id;
+
+        f()?;
+
+        self.current = self.main;
+
+        Ok(func_id)
+    }
+}
+
+impl<T: IRVisitor> IRVisitor for Target<T>
+where
+    T::Error: Into<CompileErrorInner>,
+{
+    type Output = (FuncId, IntHashMap<FuncId, T>);
+    type Error = CompileErrorInner;
+
+    fn finish(self) -> ::std::result::Result<Self::Output, Self::Error> {
+        Ok((self.main, self.functions))
+    }
+
+    #[inline]
+    fn visit_instruction(
+        &mut self,
+        instr: Instruction,
+    ) -> ::std::result::Result<(), Self::Error> {
+        let current_visitor = self
+            .functions
+            .get_mut(&self.current)
+            .ok_or(CompileErrorInner::Custom("Missing function"))?;
+
+        current_visitor
+            .visit_instruction(instr)
+            .map_err(<T as IRVisitor>::Error::into)
+    }
+}
+
 pub struct Compiler<V> {
     state: CompileState,
     for_states: IntHashMap<Variable, ForState>,
@@ -71,37 +135,12 @@ pub struct Compiler<V> {
     ir_visitor: V,
 }
 
+type Result = ::std::result::Result<(), CompileErrorInner>;
+
 impl<V: IRVisitor> Compiler<V>
 where
     V::Error: Into<CompileErrorInner>,
 {
-    pub fn new() -> Self {
-        /*
-         * Compiler {
-         *     chunk,
-         *     line_addr_map: IntHashMap::default(),
-         *     jumps: Vec::new(),
-         *     for_states: IntHashMap::default(),
-         *     state: CompileState {
-         *         assign: false,
-         *         line: 0,
-         *         var_gen: AnonVarGen::new(),
-         *         func_id_gen: FuncIdGen::new(),
-         *     },
-         * }
-         */
-        unimplemented!()
-    }
-    pub fn compile(
-        &mut self,
-        prog: &Program,
-    ) -> ::std::result::Result<(), CompileError> {
-        self.visit_program(prog).map_err(|err| CompileError {
-            inner: err,
-            line_no: self.state.line,
-        })
-    }
-
     fn emit_instruction(&self, instr_kind: InstructionKind) -> Result {
         let line_no = self.state.line;
         let label = self.label_mapping.get(&line_no).cloned();
@@ -156,12 +195,42 @@ where
         ret
     }
 }
-
-type Result = ::std::result::Result<(), CompileErrorInner>;
-
-impl<'a, V: IRVisitor> Visitor<Result> for Compiler<'a, V>
+impl<V: IRVisitor + Default> Compiler<Target<V>>
 where
     V::Error: Into<CompileErrorInner>,
+{
+    pub fn new() -> Self {
+        /*
+         * Compiler {
+         *     chunk,
+         *     line_addr_map: IntHashMap::default(),
+         *     jumps: Vec::new(),
+         *     for_states: IntHashMap::default(),
+         *     state: CompileState {
+         *         assign: false,
+         *         line: 0,
+         *         var_gen: AnonVarGen::new(),
+         *         func_id_gen: FuncIdGen::new(),
+         *     },
+         * }
+         */
+        unimplemented!()
+    }
+    pub fn compile(
+        &mut self,
+        prog: &Program,
+    ) -> ::std::result::Result<(), CompileError> {
+        self.visit_program(prog).map_err(|err| CompileError {
+            inner: err,
+            line_no: self.state.line,
+        })
+    }
+}
+
+impl<V: IRVisitor> Visitor<Result> for Compiler<Target<V>>
+where
+    V::Error: Into<CompileErrorInner>,
+    V: Default,
 {
     fn visit_program(&mut self, prog: &Program) -> Result {
         // check input line numbers are in order and unique
@@ -408,7 +477,21 @@ where
         // let func_id = self.state.func_id_gen.next_id();
 
         // self.emit_instruction(InstructionKind::MapFunc(stmt.func, func_id))
-        unimplemented!()
+        let var = stmt.var;
+        let func = stmt.func;
+        let expr = &stmt.expr;
+
+        self.state.local_pool.mask_global(var, || {
+            let func_id = self.ir_visitor.new_function(|| {
+                self.visit_expr(expr).and_then(|_| {
+                    self.emit_instruction(InstructionKind::Return)
+                })
+            });
+
+            func_id.and_then(|func_id| {
+                self.emit_instruction(InstructionKind::MapFunc(func, func_id))
+            })
+        })
     }
 
     fn visit_dim(&mut self, stmt: &DimStmt) -> Result {
