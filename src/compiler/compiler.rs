@@ -53,14 +53,15 @@ impl LocalVarPool {
 
         var
     }
-    fn mask_global<F>(&mut self, var: Variable, f: F) -> Result
-    where
-        F: FnMut() -> Result,
-    {
+    fn mask_global(&mut self, var: Variable) {
         self.in_use.insert(var);
-        f()?;
-        self.in_use.remove(&var);
-        Ok(())
+    }
+    fn unmask_global(&mut self, var: Variable) -> Result {
+        if self.in_use.remove(&var) {
+            Ok(())
+        } else {
+            Err(CompileErrorInner::Custom("Global variable not in use"))
+        }
     }
     fn is_in_use(&self, var: &Variable) -> bool {
         self.in_use.contains(var)
@@ -71,8 +72,32 @@ impl LocalVarPool {
         }
     }
 }
+// Scoping of mask_global is implemented as a macro.
+//
+// Implemeting a method on `LocalVarPool` to take a closure
+// is obviously better, however, that requires self to be borrowed
+// mutablely for the entire lifetime of the closure, which
+// will block compiler method calls inside (all requires exclusive
+// &mut self ref). This macro ensures make/unmask is always done
+// in pairs. A similar macro is defined for function compile scope.
+//
+// The other solution is to store an `Option<LocalVarPool>` in `Compiler`,
+// and use `take()` (or mem::replace), however, I think that
+// adds a lot of noise and detracts from the main logic of underlying
+// code.
+macro_rules! mask_global {
+    ($pool: expr, $var: expr, $body: expr) => {{
+        $pool.mask_global($var);
 
-struct Target<T> {
+        let r = $body;
+
+        $pool.unmask_global($var)?;
+
+        r
+    }};
+}
+
+pub struct Target<T> {
     main: FuncId,
     current: FuncId,
     func_id_gen: FuncIdGen,
@@ -82,23 +107,35 @@ impl<T: IRVisitor + Default> Target<T>
 where
     T::Error: Into<CompileErrorInner>,
 {
-    fn new_function<F>(
-        &mut self,
-        f: F,
-    ) -> ::std::result::Result<FuncId, CompileErrorInner>
-    where
-        F: FnOnce() -> Result,
-    {
+    fn new_function(&mut self) -> FuncId {
         let func_id = self.func_id_gen.next_id();
         self.functions.insert(func_id, T::default());
         self.current = func_id;
 
-        f()?;
-
-        self.current = self.main;
-
-        Ok(func_id)
+        func_id
     }
+
+    fn restore(&mut self, func_id: FuncId) -> Result {
+        if self.current == func_id {
+            self.current = self.main;
+
+            Ok(())
+        } else {
+            Err(CompileErrorInner::Custom("Unenclosed function"))
+        }
+    }
+}
+
+macro_rules! function {
+    ($tgt: expr, $body: expr) => {{
+        let func_id = $tgt.new_function();
+
+        $body?;
+
+        $tgt.restore(func_id)?;
+
+        func_id
+    }};
 }
 
 impl<T: IRVisitor> IRVisitor for Target<T>
@@ -141,7 +178,7 @@ impl<V: IRVisitor> Compiler<V>
 where
     V::Error: Into<CompileErrorInner>,
 {
-    fn emit_instruction(&self, instr_kind: InstructionKind) -> Result {
+    fn emit_instruction(&mut self, instr_kind: InstructionKind) -> Result {
         let line_no = self.state.line;
         let label = self.label_mapping.get(&line_no).cloned();
 
@@ -157,7 +194,7 @@ where
     }
 
     fn emit_labeled_instruction(
-        &self,
+        &mut self,
         label: Label,
         instr_kind: InstructionKind,
     ) -> Result {
@@ -203,12 +240,17 @@ where
         let mut func_id_gen = FuncIdGen::new();
         let main_id = func_id_gen.next_id();
 
+        let mut functions = IntHashMap::default();
+        let main = V::default();
+
+        functions.insert(main_id, main);
+
         Compiler {
             ir_visitor: Target {
                 main: main_id,
                 current: main_id,
                 func_id_gen,
-                functions: IntHashMap::default(),
+                functions,
             },
             state: CompileState {
                 assign: false,
@@ -225,15 +267,17 @@ where
         }
     }
     pub fn compile(
-        self,
+        mut self,
         prog: &Program,
     ) -> ::std::result::Result<(FuncId, IntHashMap<FuncId, V>), CompileError>
     {
+        let line_no = self.state.line;
+
         self.visit_program(prog)
-            .and_then(|_| self.ir_visitor.finish())
+            .and_then(move |_| self.ir_visitor.finish())
             .map_err(|err| CompileError {
                 inner: err,
-                line_no: self.state.line,
+                line_no,
             })
     }
 }
@@ -480,28 +524,17 @@ where
     }
 
     fn visit_def(&mut self, stmt: &DefStmt) -> Result {
-        // let mut fchunk = Chunk::new();
-        // let mut fc = FuncCompiler::new(stmt.var, self.state.line, &mut fchunk);
-        // fc.visit_expr(&stmt.expr)?;
-        // fchunk.write_opcode(OpCode::Return, self.state.line);
-
-        // let func_id = self.state.func_id_gen.next_id();
-
-        // self.emit_instruction(InstructionKind::MapFunc(stmt.func, func_id))
         let var = stmt.var;
         let func = stmt.func;
         let expr = &stmt.expr;
 
-        self.state.local_pool.mask_global(var, || {
-            let func_id = self.ir_visitor.new_function(|| {
-                self.visit_expr(expr).and_then(|_| {
-                    self.emit_instruction(InstructionKind::Return)
-                })
+        mask_global!(self.state.local_pool, var, {
+            let func_id = function!(self.ir_visitor, {
+                self.emit_instruction(InstructionKind::DefineLocal(var))?;
+                self.visit_expr(expr)?;
+                self.emit_instruction(InstructionKind::Return)
             });
-
-            func_id.and_then(|func_id| {
-                self.emit_instruction(InstructionKind::MapFunc(func, func_id))
-            })
+            self.emit_instruction(InstructionKind::MapFunc(func, func_id))
         })
     }
 
@@ -647,6 +680,22 @@ mod tests {
     use crate::scanner::Scanner;
     use crate::vm::{Chunk, VM};
 
+    #[derive(Default, Debug)]
+    struct PrintIR;
+
+    impl IRVisitor for PrintIR {
+        type Output = ();
+        type Error = CompileErrorInner;
+
+        fn finish(self) -> Result {
+            Ok(())
+        }
+        fn visit_instruction(&mut self, instr: Instruction) -> Result {
+            println!("{:?}", instr);
+            Ok(())
+        }
+    }
+
     #[test]
     fn test_simple() {
         let program = indoc!(
@@ -660,7 +709,7 @@ mod tests {
             24 FOR I = 10 TO 1 STEP -1
             25   PRINT Y(I)
             26 NEXT I
-            31 DEF FNA(X) = X + 10
+            31 DEF FNA(D) = D + 10
             32 DEF FNB(X) = X + FNA(X) + Y
             40 PRINT \"FNB(Y)\", FNB(Y)
             50 REM IGNORE ME
@@ -695,15 +744,17 @@ mod tests {
         let scanner = Scanner::new(program);
         let ast = Parser::new(scanner).parse().unwrap();
 
-        let mut chunk = Chunk::new();
-        let mut compiler = Compiler::new(&mut chunk);
+        let compiler: Compiler<Target<PrintIR>> = Compiler::new();
+        let (_, fns) = compiler.compile(&ast).unwrap();
 
-        let _result = compiler.visit_program(&ast);
+        println!("functions: {:?}", fns);
 
-        let mut vm = VM::new(chunk);
-        let mut output = Vec::new();
-        vm.run(&mut output);
+        assert!(false);
 
-        assert_eq!(::std::str::from_utf8(&output), Ok(printed));
+        // let mut vm = VM::new(chunk);
+        // let mut output = Vec::new();
+        // vm.run(&mut output);
+
+        // assert_eq!(::std::str::from_utf8(&output), Ok(printed));
     }
 }

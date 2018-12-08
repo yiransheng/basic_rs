@@ -33,7 +33,6 @@ pub struct Instruction {
 #[derive(Debug)]
 pub enum InstructionKind {
     Data(f64),
-    Extern(FuncId),
     Constant(f64),
     Return,
     Jump(Label),
@@ -44,8 +43,8 @@ pub enum InstructionKind {
     Call(Func),
     Stop,
 
-    Pop,
     MapFunc(Func, FuncId),
+    DefineGlobal(Variable),
     GetGlobal(Variable),
     SetGlobal(Variable),
     GetGlobalArray(Variable),
@@ -53,6 +52,7 @@ pub enum InstructionKind {
     GetGlobalArray2d(Variable),
     SetGlobalArray2d(Variable),
 
+    DefineLocal(Variable),
     SetLocal(Variable),
     GetLocal(Variable),
 

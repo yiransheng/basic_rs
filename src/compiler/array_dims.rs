@@ -15,6 +15,8 @@ enum ArrayType {
 pub struct ArrayDims<V> {
     ir_visitor: V,
     types: IntHashMap<Variable, ArrayType>,
+    globals: IntHashMap<Variable, LineNo>,
+    local: Option<Variable>,
     line: LineNo,
 }
 
@@ -22,6 +24,8 @@ impl<V: IRVisitor> ArrayDims<V> {
     pub fn new(ir_visitor: V) -> Self {
         ArrayDims {
             types: IntHashMap::default(),
+            globals: IntHashMap::default(),
+            local: None,
             ir_visitor,
             line: 0,
         }
@@ -36,6 +40,16 @@ where
         for s in &prog.statements {
             self.line = s.line_no;
             self.visit_statement(s)?;
+        }
+        for (var, line_no) in self.globals.iter() {
+            let kind = InstructionKind::DefineGlobal(*var);
+            self.ir_visitor
+                .visit_instruction(Instruction {
+                    label: None,
+                    line_no: *line_no,
+                    kind,
+                })
+                .map_err(V::Error::into)?;
         }
         for (var, ty) in self.types.iter() {
             match ty {
@@ -109,6 +123,7 @@ where
     }
 
     fn visit_for(&mut self, stmt: &ForStmt) -> Result<(), CompileError> {
+        self.visit_variable(&stmt.var)?;
         self.visit_expr(&stmt.from)?;
         self.visit_expr(&stmt.to)?;
         if let Some(ref expr) = stmt.step {
@@ -117,12 +132,15 @@ where
         Ok(())
     }
 
-    fn visit_next(&mut self, _stmt: &NextStmt) -> Result<(), CompileError> {
-        Ok(())
+    fn visit_next(&mut self, stmt: &NextStmt) -> Result<(), CompileError> {
+        self.visit_variable(&stmt.var)
     }
 
     fn visit_def(&mut self, stmt: &DefStmt) -> Result<(), CompileError> {
-        self.visit_expr(&stmt.expr)
+        self.local = Some(stmt.var);
+        self.visit_expr(&stmt.expr)?;
+        self.local = None;
+        Ok(())
     }
 
     fn visit_dim(&mut self, stmt: &DimStmt) -> Result<(), CompileError> {
@@ -156,8 +174,16 @@ where
         Ok(())
     }
 
-    fn visit_variable(&mut self, _lval: &Variable) -> Result<(), CompileError> {
-        Ok(())
+    fn visit_variable(&mut self, var: &Variable) -> Result<(), CompileError> {
+        match self.local {
+            Some(local_var) if local_var.eq(var) => Ok(()),
+            _ => {
+                if !self.globals.contains_key(var) {
+                    self.globals.insert(*var, self.line);
+                }
+                Ok(())
+            }
+        }
     }
 
     fn visit_list(&mut self, list: &List) -> Result<(), CompileError> {
