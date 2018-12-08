@@ -68,6 +68,10 @@ fn test_parse_error() {
         ErrorInner::ScanError(ScannerError::BadIdentifier(_))
     );
     assert_matches!(
+        parse_error(include_str!("parse_fail/bad_number.bas")),
+        ErrorInner::ScanError(ScannerError::BadNumber)
+    );
+    assert_matches!(
         parse_error(include_str!("parse_fail/generic_error.bas")),
         ErrorInner::UnexpectedToken(_)
     );
