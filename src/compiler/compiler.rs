@@ -200,30 +200,41 @@ where
     V::Error: Into<CompileErrorInner>,
 {
     pub fn new() -> Self {
-        /*
-         * Compiler {
-         *     chunk,
-         *     line_addr_map: IntHashMap::default(),
-         *     jumps: Vec::new(),
-         *     for_states: IntHashMap::default(),
-         *     state: CompileState {
-         *         assign: false,
-         *         line: 0,
-         *         var_gen: AnonVarGen::new(),
-         *         func_id_gen: FuncIdGen::new(),
-         *     },
-         * }
-         */
-        unimplemented!()
+        let mut func_id_gen = FuncIdGen::new();
+        let main_id = func_id_gen.next_id();
+
+        Compiler {
+            ir_visitor: Target {
+                main: main_id,
+                current: main_id,
+                func_id_gen,
+                functions: IntHashMap::default(),
+            },
+            state: CompileState {
+                assign: false,
+                line: 0,
+                label_id_gen: LabelIdGen::new(),
+                local_pool: LocalVarPool {
+                    free: IntHashSet::default(),
+                    in_use: IntHashSet::default(),
+                    var_gen: AnonVarGen::new(),
+                },
+            },
+            for_states: IntHashMap::default(),
+            label_mapping: IntHashMap::default(),
+        }
     }
     pub fn compile(
-        &mut self,
+        self,
         prog: &Program,
-    ) -> ::std::result::Result<(), CompileError> {
-        self.visit_program(prog).map_err(|err| CompileError {
-            inner: err,
-            line_no: self.state.line,
-        })
+    ) -> ::std::result::Result<(FuncId, IntHashMap<FuncId, V>), CompileError>
+    {
+        self.visit_program(prog)
+            .and_then(|_| self.ir_visitor.finish())
+            .map_err(|err| CompileError {
+                inner: err,
+                line_no: self.state.line,
+            })
     }
 }
 

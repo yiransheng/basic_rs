@@ -13,6 +13,9 @@ pub struct LabelIdGen {
 }
 
 impl LabelIdGen {
+    pub fn new() -> Self {
+        LabelIdGen { id: 0 }
+    }
     pub fn next_id(&mut self) -> Label {
         let label = Label(self.id);
         self.id += 1;
