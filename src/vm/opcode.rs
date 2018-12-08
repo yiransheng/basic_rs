@@ -24,6 +24,7 @@ pub enum OpCode {
     SetGlobalArray2d,
 
     GetLocal,
+    SetLocal,
 
     InitArray,
     InitArray2d,
@@ -82,6 +83,7 @@ impl OpCode {
             SetGlobalArray2d => "set.mat",
 
             GetLocal => "get.loc",
+            SetLocal => "set.loc",
 
             InitArray => "init.arr",
             InitArray2d => "init.mat",

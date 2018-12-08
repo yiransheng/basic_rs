@@ -208,6 +208,226 @@ impl Chunk {
     }
 }
 
+pub mod from_ir {
+    use int_hash::IntHashMap;
+
+    use super::*;
+    use crate::ir::*;
+
+    #[derive(Debug, Copy, Clone)]
+    pub struct WriteError;
+
+    pub struct ChunkWriter {
+        data: Vec<f64>,
+        jp_label_map: IntHashMap<Label, JumpPoint>,
+        jp_indices: Vec<(u16, Label)>,
+        chunk: Chunk,
+    }
+    impl Default for ChunkWriter {
+        fn default() -> Self {
+            ChunkWriter {
+                data: Vec::new(),
+                jp_label_map: IntHashMap::default(),
+                jp_indices: Vec::new(),
+                chunk: Chunk::new(),
+            }
+        }
+    }
+
+    impl Visitor for ChunkWriter {
+        type Output = Chunk;
+        type Error = WriteError;
+
+        fn finish(self) -> Result<Chunk, WriteError> {
+            Ok(self.chunk)
+        }
+
+        fn visit_instruction(
+            &mut self,
+            instr: Instruction,
+        ) -> Result<(), WriteError> {
+            use self::InstructionKind::*;
+
+            let Instruction {
+                kind,
+                line_no,
+                label,
+            } = instr;
+
+            if let Some(label) = label {
+                let jp = JumpPoint(self.chunk.len());
+                if let Some(_) = self.jp_label_map.insert(label, jp) {
+                    return Err(WriteError);
+                }
+            }
+
+            match kind {
+                Data(n) => self.data.push(n),
+                Constant(n) => {
+                    self.chunk.write_opcode(OpCode::Constant, line_no);
+                    self.chunk.add_operand(n, line_no);
+                }
+                Return => {
+                    self.chunk.write_opcode(OpCode::Return, line_no);
+                }
+                Stop => {
+                    self.chunk.write_opcode(OpCode::Stop, line_no);
+                }
+                Jump(label) => {
+                    self.chunk.write_opcode(OpCode::Jump, line_no);
+                    let jp_index =
+                        self.chunk.add_operand(JumpPoint(0), line_no);
+                    self.jp_indices.push((jp_index, label));
+                }
+                JumpTrue(label) => {
+                    self.chunk.write_opcode(OpCode::JumpTrue, line_no);
+                    let jp_index =
+                        self.chunk.add_operand(JumpPoint(0), line_no);
+                    self.jp_indices.push((jp_index, label));
+                }
+                JumpFalse(label) => {
+                    self.chunk.write_opcode(OpCode::JumpFalse, line_no);
+                    let jp_index =
+                        self.chunk.add_operand(JumpPoint(0), line_no);
+                    self.jp_indices.push((jp_index, label));
+                }
+                Subroutine(label) => {
+                    self.chunk.write_opcode(OpCode::Subroutine, line_no);
+                    let jp_index =
+                        self.chunk.add_operand(JumpPoint(0), line_no);
+                    self.jp_indices.push((jp_index, label));
+                }
+                CallNative(func) => {
+                    self.chunk.write_opcode(OpCode::CallNative, line_no);
+                    self.chunk.add_inline_operand(func, line_no);
+                }
+                MapFunc(func, func_id) => {
+                    self.chunk.write_opcode(OpCode::FnConstant, line_no);
+                    self.chunk.add_inline_operand(func_id, line_no);
+                    self.chunk.write_opcode(OpCode::SetFunc, line_no);
+                    self.chunk.add_inline_operand(func, line_no);
+                }
+                Call(func) => {
+                    self.chunk.write_opcode(OpCode::Call, line_no);
+                    self.chunk.add_inline_operand(func, line_no);
+                }
+                DefineGlobal(_) => {}
+                DefineLocal(_) => {}
+                SetLocal(var) => {
+                    self.chunk.write_opcode(OpCode::SetLocal, line_no);
+                    self.chunk.add_inline_operand(var, line_no);
+                }
+                GetLocal(var) => {
+                    self.chunk.write_opcode(OpCode::GetLocal, line_no);
+                    self.chunk.add_inline_operand(var, line_no);
+                }
+                GetGlobal(var) => {
+                    self.chunk.write_opcode(OpCode::GetGlobal, line_no);
+                    self.chunk.add_inline_operand(var, line_no);
+                }
+                SetGlobal(var) => {
+                    self.chunk.write_opcode(OpCode::SetGlobal, line_no);
+                    self.chunk.add_inline_operand(var, line_no);
+                }
+                GetGlobalArray(var) => {
+                    self.chunk.write_opcode(OpCode::GetGlobalArray, line_no);
+                    self.chunk.add_inline_operand(var, line_no);
+                }
+                SetGlobalArray(var) => {
+                    self.chunk.write_opcode(OpCode::SetGlobalArray, line_no);
+                    self.chunk.add_inline_operand(var, line_no);
+                }
+                GetGlobalArray2d(var) => {
+                    self.chunk.write_opcode(OpCode::GetGlobalArray2d, line_no);
+                    self.chunk.add_inline_operand(var, line_no);
+                }
+                SetGlobalArray2d(var) => {
+                    self.chunk.write_opcode(OpCode::SetGlobalArray2d, line_no);
+                    self.chunk.add_inline_operand(var, line_no);
+                }
+                // TODO: locals
+                InitArray(var) => {
+                    self.chunk.write_opcode(OpCode::InitArray, line_no);
+                    self.chunk.add_inline_operand(var, line_no);
+                }
+                InitArray2d(var) => {
+                    self.chunk.write_opcode(OpCode::InitArray2d, line_no);
+                    self.chunk.add_inline_operand(var, line_no);
+                }
+                SetArrayBound(var) => {
+                    self.chunk.write_opcode(OpCode::SetArrayBound, line_no);
+                    self.chunk.add_inline_operand(var, line_no);
+                }
+                SetArrayBound2d(var) => {
+                    self.chunk.write_opcode(OpCode::SetArrayBound2d, line_no);
+                    self.chunk.add_inline_operand(var, line_no);
+                }
+                PrintStart => {
+                    self.chunk.write_opcode(OpCode::PrintStart, line_no);
+                }
+                PrintEnd => {
+                    self.chunk.write_opcode(OpCode::PrintEnd, line_no);
+                }
+                PrintExpr => {
+                    self.chunk.write_opcode(OpCode::PrintExpr, line_no);
+                }
+                PrintLabel(s) => {
+                    self.chunk.write_opcode(OpCode::PrintLabel, line_no);
+                    self.chunk.add_operand(s, line_no);
+                }
+                PrintAdvance3 => {
+                    self.chunk.write_opcode(OpCode::PrintAdvance3, line_no);
+                }
+                PrintAdvance15 => {
+                    self.chunk.write_opcode(OpCode::PrintAdvance15, line_no);
+                }
+                Dup => {
+                    self.chunk.write_opcode(OpCode::Dup, line_no);
+                }
+                Negate => {
+                    self.chunk.write_opcode(OpCode::Negate, line_no);
+                }
+                Not => {
+                    self.chunk.write_opcode(OpCode::Not, line_no);
+                }
+                Add => {
+                    self.chunk.write_opcode(OpCode::Add, line_no);
+                }
+                Sub => {
+                    self.chunk.write_opcode(OpCode::Sub, line_no);
+                }
+                Mul => {
+                    self.chunk.write_opcode(OpCode::Mul, line_no);
+                }
+                Div => {
+                    self.chunk.write_opcode(OpCode::Div, line_no);
+                }
+                Pow => {
+                    self.chunk.write_opcode(OpCode::Pow, line_no);
+                }
+                Equal => {
+                    self.chunk.write_opcode(OpCode::Equal, line_no);
+                }
+                Less => {
+                    self.chunk.write_opcode(OpCode::Less, line_no);
+                }
+                Greater => {
+                    self.chunk.write_opcode(OpCode::Greater, line_no);
+                }
+                LoopTest => {
+                    self.chunk.write_opcode(OpCode::LoopTest, line_no);
+                }
+                Noop => {
+                    self.chunk.write_opcode(OpCode::Noop, line_no);
+                }
+            }
+
+            Ok(())
+        }
+    }
+
+}
+
 pub mod disassembler {
     use std::io;
 
