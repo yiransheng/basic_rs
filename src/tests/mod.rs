@@ -1,7 +1,7 @@
 use matches::*;
 
 use crate::compiler::compile;
-use crate::parser::{Error as ParseError, ErrorInner, Parser};
+use crate::parser::{ErrorInner, Parser};
 use crate::scanner::{Error as ScannerError, Scanner, SourceLoc};
 
 fn test_correct_program(name: &str, prog_and_output: &str) {
