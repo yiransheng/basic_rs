@@ -13,6 +13,9 @@ mod parser;
 mod scanner;
 mod vm;
 
+#[cfg(test)]
+mod tests;
+
 use crate::compiler::compile;
 use crate::error_print::{print_source_error, InterpreterError};
 use crate::parser::Parser;
