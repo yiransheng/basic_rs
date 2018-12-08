@@ -54,35 +54,72 @@ BASIC source code is _lexed_, _parsed_ and _compiled_ into a custom stack based 
 
 
 
-Some sample disassembler output.
+Some sample disassembler output. (Source of this program is `sample_programs/func_redefine.bas`).
 
 ```
-550   0538    get.var    <anonymous variable 06>
- |    0541    dup       
- |    0542    sign      
- |    0543    swap      
- |    0544    get.var    Y
- |    0547    add       
- |    0548    dup       
- |    0549    set.var    Y
- |    0552    get.var    <anonymous variable 07>
- |    0555    sub       
- |    0556    sign      
- |    0557    eq        
- |    0558    jmp.f      479
-560   0561    ret       
-700   0562    noop      
-705   0563    prt       
- |    0564      prt.lab  "GEN "
- |    0567      get.var  I
- |    0570      prt.expr
- |    0571    prt.end   
-710   0572    const      1
- |    0575    set.var    Y
- |    0578    get.var    M
- |    0581    set.var    <anonymous variable 011>
- |    0584    const      1
- |    0587    set.var    <anonymous variable 010>
-```
+10    0000    noop      
+15    0001    fn         <compiled function 1>
+ |    0004    set.fn     FNZ
+20    0007    fn         <compiled function 2>
+ |    0010    set.fn     FNA
+25    0013    const      10
+ |    0016    get.fn     FNA
+ |    0019    call      
+ |    0020    set.var    Y1
+30    0023    prt       
+ |    0024      prt.lab  "FNA(10) ="
+ |    0027      prt;    
+ |    0028      get.var  Y1
+ |    0031      prt.expr
+ |    0032    prt.end   
+40    0033    fn         <compiled function 3>
+ |    0036    set.fn     FNA
+45    0039    const      10
+ |    0042    get.fn     FNA
+ |    0045    call      
+ |    0046    set.var    Y2
+50    0049    prt       
+ |    0050      prt.lab  "FNA(10) ="
+ |    0053      prt;    
+ |    0054      get.var  Y2
+ |    0057      prt.expr
+ |    0058    prt.end   
+60    0059    get.var    Y1
+ |    0062    get.var    Y2
+ |    0065    eq        
+ |    0066    not       
+ |    0067    jmp.t      76
+70    0070    prt       
+ |    0071      prt.lab  "FAILED"
+ |    0074    prt.end   
+80    0075    stop      
+100   0076    prt       
+ |    0077      prt.lab  "Ok"
+ |    0080    prt.end   
+110   0081    stop      
+ |    0082    stop      
 
-(`<anonymous variable>`s are used by compiler to implement `FOR` loops.. based on a particularly chosen `FOR` / `NEXT` semantics).
+Chunk: <compiled function 1>
+
+15    0000    set.loc    X
+ |    0003    get.loc    X
+ |    0006    ret       
+
+Chunk: <compiled function 2>
+
+20    0000    set.loc    X
+ |    0003    const      1
+ |    0006    get.loc    X
+ |    0009    add       
+ |    0010    ret       
+
+Chunk: <compiled function 3>
+
+40    0000    set.loc    X
+ |    0003    get.loc    X
+ |    0006    get.fn     FNZ
+ |    0009    call      
+ |    0010    const      1
+ |    0013    sub       
+ |    0014    ret      
+```
