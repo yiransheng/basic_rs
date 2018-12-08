@@ -549,6 +549,7 @@ where
         mask_global!(self.state.local_pool, var, {
             let func_id = function!(self.ir_visitor, {
                 self.emit_instruction(InstructionKind::DefineLocal(var))?;
+                self.emit_instruction(InstructionKind::SetLocal(var))?;
                 self.visit_expr(expr)?;
                 self.emit_instruction(InstructionKind::Return)
             });

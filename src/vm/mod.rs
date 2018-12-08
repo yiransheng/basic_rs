@@ -152,6 +152,19 @@ impl VM {
         }
     }
 
+    pub fn disassemble<W: io::Write>(&mut self, mut out: W) {
+        use self::disassembler::Disassembler;
+
+        let mut main_chunk = Disassembler::new(&mut self.chunk, &mut out);
+        main_chunk.disassemble();
+
+        for (func_id, chunk) in self.user_fns.iter_mut() {
+            let _ = writeln!(&mut out, "Chunk: {}\n", func_id);
+            let mut fn_chunk = Disassembler::new(chunk, &mut out);
+            fn_chunk.disassemble();
+        }
+    }
+
     #[inline]
     pub fn run<W: io::Write>(&mut self, out: W) -> Result<(), RuntimeError> {
         match self.exec(out) {

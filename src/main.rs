@@ -47,9 +47,7 @@ fn run(source: &str, opt: &Opt) -> Result<(), InterpreterError> {
     let stdout = io::stdout();
 
     if opt.disassemble {
-        use crate::vm::disassembler::Disassembler;
-        // let mut disassembler = Disassembler::new(&mut chunk, stdout.lock());
-        // disassembler.disassemble();
+        vm.disassemble(stdout.lock());
     }
 
     vm.run(stdout.lock())?;
