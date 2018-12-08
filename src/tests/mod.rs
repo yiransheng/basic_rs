@@ -1,6 +1,8 @@
+use matches::*;
+
 use crate::compiler::compile;
-use crate::parser::Parser;
-use crate::scanner::Scanner;
+use crate::parser::{Error as ParseError, ErrorInner, Parser};
+use crate::scanner::{Error as ScannerError, Scanner, SourceLoc};
 
 fn test_correct_program(name: &str, prog_and_output: &str) {
     println!("Running test for: {}", name);
@@ -26,6 +28,16 @@ fn test_correct_program(name: &str, prog_and_output: &str) {
     assert_eq!(printed.trim(), output.trim(), "{}", name);
 }
 
+fn parse_error(prog: &str) -> ErrorInner {
+    let scanner = Scanner::new(prog);
+    Parser::new(scanner).parse().unwrap_err().value
+}
+
+fn parse_error_source_loc(prog: &str) -> SourceLoc {
+    let scanner = Scanner::new(prog);
+    Parser::new(scanner).parse().unwrap_err().loc
+}
+
 macro_rules! test_bas {
     ( $($x:expr),* ) => {{
 	$(
@@ -37,9 +49,38 @@ macro_rules! test_bas {
 #[test]
 fn test_sample_programs() {
     test_bas!(
+        "bas/let.bas",
+        "bas/rem.bas",
+        "bas/read.bas",
+        "bas/for.bas",
+        "bas/def.bas",
         "bas/power.bas",
         "bas/lin_eq.bas",
         "bas/sales.bas",
         "bas/game_of_life.bas"
     );
+}
+
+#[test]
+fn test_parse_error() {
+    assert_matches!(
+        parse_error(include_str!("parse_fail/bad_name.bas")),
+        ErrorInner::ScanError(ScannerError::BadIdentifier(_))
+    );
+    assert_matches!(
+        parse_error(include_str!("parse_fail/generic_error.bas")),
+        ErrorInner::UnexpectedToken(_)
+    );
+    assert_matches!(
+        parse_error(include_str!("parse_fail/missing_line_no.bas")),
+        ErrorInner::BadLineNo
+    );
+}
+
+#[test]
+fn test_parse_source_loc() {
+    let loc =
+        parse_error_source_loc(include_str!("parse_fail/fail_line_9.bas"));
+
+    assert_eq!(loc.line, 9);
 }

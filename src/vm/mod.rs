@@ -130,7 +130,7 @@ impl VM {
     pub fn new(main_id: FuncId, mut chunks: IntHashMap<FuncId, Chunk>) -> Self {
         let chunk = chunks.remove(&main_id).unwrap();
 
-        let mut call_stack = VecDeque::new();
+        let mut call_stack = VecDeque::with_capacity(16);
         let call_frame = CallFrame {
             depth: 0,
             ip: 0,
@@ -146,7 +146,7 @@ impl VM {
             functions: IntHashMap::default(),
             global_lists: IntHashMap::default(),
             global_tables: IntHashMap::default(),
-            stack: VecDeque::new(),
+            stack: VecDeque::with_capacity(256),
 
             call_stack,
         }

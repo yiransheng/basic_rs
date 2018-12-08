@@ -1,0 +1,3 @@
+10 LET X = 10
+FOR I = 1 TO 10
+30 NEXT I
