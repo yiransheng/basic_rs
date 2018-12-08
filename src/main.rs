@@ -13,7 +13,7 @@ mod parser;
 mod scanner;
 mod vm;
 
-use crate::compiler::Compiler;
+use crate::compiler::compile;
 use crate::error_print::{print_source_error, InterpreterError};
 use crate::parser::Parser;
 use crate::scanner::Scanner;
@@ -42,24 +42,17 @@ fn run(source: &str, opt: &Opt) -> Result<(), InterpreterError> {
     let scanner = Scanner::new(source);
     let ast = Parser::new(scanner).parse()?;
 
-    let mut chunk = Chunk::new();
-    /*
-     *     let mut compiler = Compiler::new(&mut chunk);
-     *
-     *     compiler.compile(&ast)?;
-     *
-     *     let stdout = io::stdout();
-     *
-     *     if opt.disassemble {
-     *         use crate::vm::disassembler::Disassembler;
-     *         let mut disassembler = Disassembler::new(&mut chunk, stdout.lock());
-     *         disassembler.disassemble();
-     *     }
-     *
-     *     let mut vm = VM::new(chunk);
-     *
-     *     vm.run(stdout.lock())?;
-     */
+    let mut vm = compile(&ast)?;
+
+    let stdout = io::stdout();
+
+    if opt.disassemble {
+        use crate::vm::disassembler::Disassembler;
+        // let mut disassembler = Disassembler::new(&mut chunk, stdout.lock());
+        // disassembler.disassemble();
+    }
+
+    vm.run(stdout.lock())?;
 
     Ok(())
 }

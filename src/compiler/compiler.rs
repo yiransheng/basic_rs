@@ -142,11 +142,24 @@ impl<T: IRVisitor> IRVisitor for Target<T>
 where
     T::Error: Into<CompileErrorInner>,
 {
-    type Output = (FuncId, IntHashMap<FuncId, T>);
+    type Output = (FuncId, IntHashMap<FuncId, T::Output>);
     type Error = CompileErrorInner;
 
-    fn finish(self) -> ::std::result::Result<Self::Output, Self::Error> {
-        Ok((self.main, self.functions))
+    fn finish(mut self) -> ::std::result::Result<Self::Output, Self::Error> {
+        let main = self.main;
+        let n = self.functions.len();
+
+        let outputs: IntHashMap<_, _> = self
+            .functions
+            .drain()
+            .filter_map(|(func_id, t)| t.finish().map(|x| (func_id, x)).ok())
+            .collect();
+
+        if n == outputs.len() {
+            Ok((main, outputs))
+        } else {
+            Err(CompileErrorInner::Custom("Compile failed"))
+        }
     }
 
     #[inline]
@@ -269,8 +282,10 @@ where
     pub fn compile(
         mut self,
         prog: &Program,
-    ) -> ::std::result::Result<(FuncId, IntHashMap<FuncId, V>), CompileError>
-    {
+    ) -> ::std::result::Result<
+        (FuncId, IntHashMap<FuncId, V::Output>),
+        CompileError,
+    > {
         let line_no = self.state.line;
 
         self.visit_program(prog)

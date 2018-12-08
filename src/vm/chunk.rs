@@ -1,3 +1,5 @@
+use std::collections::VecDeque;
+
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use int_hash::IntHashMap;
 use num_traits::{FromPrimitive, ToPrimitive};
@@ -113,24 +115,26 @@ impl Operand for String {
 
 pub struct Chunk {
     code: Vec<u8>,
+
+    data: VecDeque<f64>,
     constants: Vec<f64>,
+
     jump_points: Vec<JumpPoint>,
     strings: Vec<String>,
     line_map: LineMapping,
-
-    user_fns: IntHashMap<FuncId, Chunk>,
 }
 
 impl Chunk {
     pub fn new() -> Self {
         Chunk {
             code: Vec::new(),
+
+            data: VecDeque::new(),
             constants: Vec::new(),
+
             jump_points: Vec::new(),
             strings: Vec::new(),
             line_map: LineMapping::new(),
-
-            user_fns: IntHashMap::default(),
         }
     }
 
@@ -142,17 +146,12 @@ impl Chunk {
     pub fn write_opcode(&mut self, code: OpCode, line: usize) {
         self.write(code as u8, line)
     }
+
     pub fn write(&mut self, byte: u8, line: usize) {
         self.code.push(byte.into());
         self.line_map.add_mapping(line, self.len());
     }
-    pub fn add_function(&mut self, func: FuncId, chunk: Chunk) {
-        self.user_fns.insert(func, chunk);
-    }
-    #[inline(always)]
-    pub fn get_function(&mut self, func: &FuncId) -> Option<&mut Chunk> {
-        self.user_fns.get_mut(func)
-    }
+
     pub fn line_no(&self, offset: usize) -> usize {
         self.line_map.find_line(offset)
     }
@@ -199,6 +198,11 @@ impl Chunk {
         O::from_bytes_unchecked(bytes)
     }
 
+    #[inline(always)]
+    pub fn pop_data(&mut self) -> Option<f64> {
+        self.data.pop_front()
+    }
+
     fn write_index(&mut self, index: u16) {
         self.code.write_u16::<LittleEndian>(index).unwrap();
     }
@@ -218,7 +222,6 @@ pub mod from_ir {
     pub struct WriteError;
 
     pub struct ChunkWriter {
-        data: Vec<f64>,
         jp_label_map: IntHashMap<Label, JumpPoint>,
         jp_indices: Vec<(u16, Label)>,
         chunk: Chunk,
@@ -226,7 +229,6 @@ pub mod from_ir {
     impl Default for ChunkWriter {
         fn default() -> Self {
             ChunkWriter {
-                data: Vec::new(),
                 jp_label_map: IntHashMap::default(),
                 jp_indices: Vec::new(),
                 chunk: Chunk::new(),
@@ -238,7 +240,11 @@ pub mod from_ir {
         type Output = Chunk;
         type Error = WriteError;
 
-        fn finish(self) -> Result<Chunk, WriteError> {
+        fn finish(mut self) -> Result<Self::Output, WriteError> {
+            for (index, label) in self.jp_indices.iter() {
+                let jp = self.jp_label_map.get(label).ok_or(WriteError)?;
+                self.chunk.set_operand(*index, *jp);
+            }
             Ok(self.chunk)
         }
 
@@ -262,7 +268,7 @@ pub mod from_ir {
             }
 
             match kind {
-                Data(n) => self.data.push(n),
+                Data(n) => self.chunk.data.push_back(n),
                 Constant(n) => {
                     self.chunk.write_opcode(OpCode::Constant, line_no);
                     self.chunk.add_operand(n, line_no);
@@ -308,8 +314,9 @@ pub mod from_ir {
                     self.chunk.add_inline_operand(func, line_no);
                 }
                 Call(func) => {
-                    self.chunk.write_opcode(OpCode::Call, line_no);
+                    self.chunk.write_opcode(OpCode::GetFunc, line_no);
                     self.chunk.add_inline_operand(func, line_no);
+                    self.chunk.write_opcode(OpCode::Call, line_no);
                 }
                 DefineGlobal(_) => {}
                 DefineLocal(_) => {}
