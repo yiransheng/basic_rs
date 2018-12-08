@@ -4,42 +4,76 @@ use int_hash::IntHashMap;
 use super::error::CompileError;
 use crate::ast::variable::Variable;
 use crate::ast::*;
-use crate::vm::*;
+use crate::ir::{Instruction, InstructionKind, Visitor as IRVisitor};
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 enum ArrayType {
-    List,
-    Table,
+    List(LineNo),
+    Table(LineNo),
 }
 
-pub struct ArrayDims<'a> {
-    chunk: &'a mut Chunk,
+pub struct ArrayDims<V> {
+    ir_visitor: V,
     types: IntHashMap<Variable, ArrayType>,
+    globals: IntHashMap<Variable, LineNo>,
+    local: Option<Variable>,
+    line: LineNo,
 }
 
-impl<'a> ArrayDims<'a> {
-    pub fn new(chunk: &'a mut Chunk) -> Self {
+impl<V: IRVisitor> ArrayDims<V> {
+    pub fn new(ir_visitor: V) -> Self {
         ArrayDims {
             types: IntHashMap::default(),
-            chunk,
+            globals: IntHashMap::default(),
+            local: None,
+            ir_visitor,
+            line: 0,
         }
     }
 }
 
-impl<'a> Visitor<Result<(), CompileError>> for ArrayDims<'a> {
+impl<V: IRVisitor> Visitor<Result<(), CompileError>> for ArrayDims<V>
+where
+    V::Error: Into<CompileError>,
+{
     fn visit_program(&mut self, prog: &Program) -> Result<(), CompileError> {
         for s in &prog.statements {
+            self.line = s.line_no;
             self.visit_statement(s)?;
+        }
+        for (var, line_no) in self.globals.iter() {
+            let kind = InstructionKind::DefineGlobal(*var);
+            self.ir_visitor
+                .visit_instruction(Instruction {
+                    label: None,
+                    line_no: *line_no,
+                    kind,
+                })
+                .map_err(V::Error::into)?;
         }
         for (var, ty) in self.types.iter() {
             match ty {
-                ArrayType::List => {
-                    self.chunk.write_opcode(OpCode::InitArray, 0);
-                    self.chunk.add_inline_operand(*var, 0);
+                ArrayType::List(line_no) => {
+                    let kind = InstructionKind::InitArray(*var);
+
+                    self.ir_visitor
+                        .visit_instruction(Instruction {
+                            label: None,
+                            line_no: *line_no,
+                            kind,
+                        })
+                        .map_err(V::Error::into)?;
                 }
-                ArrayType::Table => {
-                    self.chunk.write_opcode(OpCode::InitArray2d, 0);
-                    self.chunk.add_inline_operand(*var, 0);
+                ArrayType::Table(line_no) => {
+                    let kind = InstructionKind::InitArray2d(*var);
+
+                    self.ir_visitor
+                        .visit_instruction(Instruction {
+                            label: None,
+                            line_no: *line_no,
+                            kind,
+                        })
+                        .map_err(V::Error::into)?;
                 }
             }
         }
@@ -89,6 +123,7 @@ impl<'a> Visitor<Result<(), CompileError>> for ArrayDims<'a> {
     }
 
     fn visit_for(&mut self, stmt: &ForStmt) -> Result<(), CompileError> {
+        self.visit_variable(&stmt.var)?;
         self.visit_expr(&stmt.from)?;
         self.visit_expr(&stmt.to)?;
         if let Some(ref expr) = stmt.step {
@@ -97,12 +132,15 @@ impl<'a> Visitor<Result<(), CompileError>> for ArrayDims<'a> {
         Ok(())
     }
 
-    fn visit_next(&mut self, _stmt: &NextStmt) -> Result<(), CompileError> {
-        Ok(())
+    fn visit_next(&mut self, stmt: &NextStmt) -> Result<(), CompileError> {
+        self.visit_variable(&stmt.var)
     }
 
     fn visit_def(&mut self, stmt: &DefStmt) -> Result<(), CompileError> {
-        self.visit_expr(&stmt.expr)
+        self.local = Some(stmt.var);
+        self.visit_expr(&stmt.expr)?;
+        self.local = None;
+        Ok(())
     }
 
     fn visit_dim(&mut self, stmt: &DimStmt) -> Result<(), CompileError> {
@@ -136,17 +174,25 @@ impl<'a> Visitor<Result<(), CompileError>> for ArrayDims<'a> {
         Ok(())
     }
 
-    fn visit_variable(&mut self, _lval: &Variable) -> Result<(), CompileError> {
-        Ok(())
+    fn visit_variable(&mut self, var: &Variable) -> Result<(), CompileError> {
+        match self.local {
+            Some(local_var) if local_var.eq(var) => Ok(()),
+            _ => {
+                if !self.globals.contains_key(var) {
+                    self.globals.insert(*var, self.line);
+                }
+                Ok(())
+            }
+        }
     }
 
     fn visit_list(&mut self, list: &List) -> Result<(), CompileError> {
         let ty = self.types.get(&list.var);
         match ty {
-            Some(ArrayType::Table) => Err(CompileError::TableUsedAsList),
-            Some(ArrayType::List) => Ok(()),
+            Some(ArrayType::Table(_)) => Err(CompileError::TableUsedAsList),
+            Some(ArrayType::List(_)) => Ok(()),
             None => {
-                self.types.insert(list.var, ArrayType::List);
+                self.types.insert(list.var, ArrayType::List(self.line));
                 Ok(())
             }
         }
@@ -155,10 +201,10 @@ impl<'a> Visitor<Result<(), CompileError>> for ArrayDims<'a> {
     fn visit_table(&mut self, table: &Table) -> Result<(), CompileError> {
         let ty = self.types.get(&table.var);
         match ty {
-            Some(ArrayType::List) => Err(CompileError::ListUsedAsTable),
-            Some(ArrayType::Table) => Ok(()),
+            Some(ArrayType::List(_)) => Err(CompileError::ListUsedAsTable),
+            Some(ArrayType::Table(_)) => Ok(()),
             None => {
-                self.types.insert(table.var, ArrayType::Table);
+                self.types.insert(table.var, ArrayType::Table(self.line));
                 Ok(())
             }
         }

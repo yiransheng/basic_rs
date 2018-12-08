@@ -373,8 +373,9 @@ mod test_keyword {
     #[test]
     fn test_match_keywords() {
         let keywords = vec![
-            "LET", "READ", "DATA", "PRINT", "GOTO", "IF", "FOR", "NEXT", "END", "DEF", "GOSUB",
-            "RETURN", "DIM", "REM", "TO", "THEN", "STEP", "STOP",
+            "LET", "READ", "DATA", "PRINT", "GOTO", "IF", "FOR", "NEXT", "END",
+            "DEF", "GOSUB", "RETURN", "DIM", "REM", "TO", "THEN", "STEP",
+            "STOP",
         ];
 
         for keyword in &keywords {

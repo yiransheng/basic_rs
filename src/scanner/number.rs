@@ -168,8 +168,8 @@ mod tests {
     #[test]
     fn test_match_num_err() {
         let mut test_cases = vec![
-            ".", "e", "E", "-", "+", " 0", "a32", "12.", "..32", "e23", "-13", "1e-", "2e+LETX=",
-            ".e0",
+            ".", "e", "E", "-", "+", " 0", "a32", "12.", "..32", "e23", "-13",
+            "1e-", "2e+LETX=", ".e0",
         ];
 
         for raw in test_cases.drain(..) {

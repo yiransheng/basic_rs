@@ -17,8 +17,12 @@ impl fmt::Display for CompileError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let desc = self.description();
         match self {
-            CompileError::LinesNotInOrder(a, b) => write!(f, "{}: {} and {}", desc, a, b),
-            CompileError::DuplicatedLines(line) => write!(f, "{}: {}", desc, line),
+            CompileError::LinesNotInOrder(a, b) => {
+                write!(f, "{}: {} and {}", desc, a, b)
+            }
+            CompileError::DuplicatedLines(line) => {
+                write!(f, "{}: {}", desc, line)
+            }
             CompileError::CannotAssignTo(s) => write!(f, "{}: {}", desc, s),
             _ => write!(f, "{}", desc),
         }

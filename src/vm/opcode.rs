@@ -24,6 +24,7 @@ pub enum OpCode {
     SetGlobalArray2d,
 
     GetLocal,
+    SetLocal,
 
     InitArray,
     InitArray2d,
@@ -38,7 +39,6 @@ pub enum OpCode {
     PrintEnd,
 
     Dup,
-    Swap,
     Negate,
     Not,
     Add,
@@ -83,6 +83,7 @@ impl OpCode {
             SetGlobalArray2d => "set.mat",
 
             GetLocal => "get.loc",
+            SetLocal => "set.loc",
 
             InitArray => "init.arr",
             InitArray2d => "init.mat",
@@ -97,7 +98,6 @@ impl OpCode {
             PrintEnd => "prt.end",
 
             Dup => "dup",
-            Swap => "swap",
             Negate => "neg",
             Not => "not",
             Add => "add",

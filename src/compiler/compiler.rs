@@ -1,14 +1,18 @@
 use either::Either;
-use int_hash::IntHashMap;
+use int_hash::{IntHashMap, IntHashSet};
 
 use crate::ast::*;
+use crate::ir::{
+    Instruction, InstructionKind, Label, LabelIdGen, Visitor as IRVisitor,
+};
 use crate::vm::*;
 
 use super::anon_var::AnonVarGen;
 use super::array_dims::ArrayDims;
 use super::data::PrepareData;
 use super::error::CompileError as CompileErrorInner;
-use super::func_compiler::FuncCompiler;
+// use super::func_compiler::FuncCompiler;
+use super::ir_labels::IrLabels;
 use super::line_order::LineOrder;
 
 #[derive(Debug)]
@@ -20,46 +24,205 @@ pub struct CompileError {
 struct CompileState {
     assign: bool,
     line: LineNo,
-    var_gen: AnonVarGen,
-    func_id_gen: FuncIdGen,
+    line_label: Option<Label>,
+    local_pool: LocalVarPool,
+    label_id_gen: LabelIdGen,
 }
 
 struct ForState {
     var: Variable,
     step: Variable,
     to: Variable,
-    start_code_point: usize,
-    next_cp_index: u16,
+    loop_start: Label,
+    next_label: Label,
 }
 
-pub struct Compiler<'a> {
-    state: CompileState,
-    line_addr_map: IntHashMap<LineNo, usize>,
-    jumps: Vec<(u16, LineNo)>,
-    for_states: IntHashMap<Variable, ForState>,
-    chunk: &'a mut Chunk,
+struct LocalVarPool {
+    free: IntHashSet<Variable>,
+    in_use: IntHashSet<Variable>,
+    var_gen: AnonVarGen,
 }
+impl LocalVarPool {
+    fn get_local(&mut self) -> Variable {
+        let var = match self.free.iter().next() {
+            Some(var) => *var,
+            None => self.var_gen.next_anonymous(),
+        };
 
-impl<'a> Compiler<'a> {
-    pub fn new(chunk: &'a mut Chunk) -> Self {
-        Compiler {
-            chunk,
-            line_addr_map: IntHashMap::default(),
-            jumps: Vec::new(),
-            for_states: IntHashMap::default(),
-            state: CompileState {
-                assign: false,
-                line: 0,
-                var_gen: AnonVarGen::new(),
-                func_id_gen: FuncIdGen::new(),
-            },
+        self.free.remove(&var);
+        self.in_use.insert(var);
+
+        var
+    }
+    fn mask_global(&mut self, var: Variable) {
+        self.in_use.insert(var);
+    }
+    fn unmask_global(&mut self, var: Variable) -> Result {
+        if self.in_use.remove(&var) {
+            Ok(())
+        } else {
+            Err(CompileErrorInner::Custom("Global variable not in use"))
         }
     }
-    pub fn compile(&mut self, prog: &Program) -> ::std::result::Result<(), CompileError> {
-        self.visit_program(prog).map_err(|err| CompileError {
-            inner: err,
-            line_no: self.state.line,
-        })
+    fn is_in_use(&self, var: &Variable) -> bool {
+        self.in_use.contains(var)
+    }
+    fn reclaim_local(&mut self, var: Variable) {
+        if self.in_use.remove(&var) {
+            self.free.insert(var);
+        }
+    }
+}
+// Scoping of mask_global is implemented as a macro.
+//
+// Implemeting a method on `LocalVarPool` to take a closure
+// is obviously better, however, that requires self to be borrowed
+// mutablely for the entire lifetime of the closure, which
+// will block compiler method calls inside (all requires exclusive
+// &mut self ref). This macro ensures make/unmask is always done
+// in pairs. A similar macro is defined for function compile scope.
+//
+// The other solution is to store an `Option<LocalVarPool>` in `Compiler`,
+// and use `take()` (or mem::replace), however, I think that
+// adds a lot of noise and detracts from the main logic of underlying
+// code.
+macro_rules! mask_global {
+    ($pool: expr, $var: expr, $body: expr) => {{
+        $pool.mask_global($var);
+
+        let r = $body;
+
+        $pool.unmask_global($var)?;
+
+        r
+    }};
+}
+
+pub struct Target<T> {
+    main: FuncId,
+    current: FuncId,
+    func_id_gen: FuncIdGen,
+    functions: IntHashMap<FuncId, T>,
+}
+impl<T: IRVisitor + Default> Target<T>
+where
+    T::Error: Into<CompileErrorInner>,
+{
+    fn new_function(&mut self) -> FuncId {
+        let func_id = self.func_id_gen.next_id();
+        self.functions.insert(func_id, T::default());
+        self.current = func_id;
+
+        func_id
+    }
+
+    fn restore(&mut self, func_id: FuncId) -> Result {
+        if self.current == func_id {
+            self.current = self.main;
+
+            Ok(())
+        } else {
+            Err(CompileErrorInner::Custom("Unenclosed function"))
+        }
+    }
+}
+
+macro_rules! function {
+    ($tgt: expr, $body: expr) => {{
+        let func_id = $tgt.new_function();
+
+        $body?;
+
+        $tgt.restore(func_id)?;
+
+        func_id
+    }};
+}
+
+impl<T: IRVisitor> IRVisitor for Target<T>
+where
+    T::Error: Into<CompileErrorInner>,
+{
+    type Output = (FuncId, IntHashMap<FuncId, T::Output>);
+    type Error = CompileErrorInner;
+
+    fn finish(mut self) -> ::std::result::Result<Self::Output, Self::Error> {
+        let main = self.main;
+        let n = self.functions.len();
+
+        let outputs: IntHashMap<_, _> = self
+            .functions
+            .drain()
+            .filter_map(|(func_id, t)| t.finish().map(|x| (func_id, x)).ok())
+            .collect();
+
+        if n == outputs.len() {
+            Ok((main, outputs))
+        } else {
+            Err(CompileErrorInner::Custom("Compile failed"))
+        }
+    }
+
+    #[inline]
+    fn visit_instruction(
+        &mut self,
+        instr: Instruction,
+    ) -> ::std::result::Result<(), Self::Error> {
+        let current_visitor = self
+            .functions
+            .get_mut(&self.current)
+            .ok_or(CompileErrorInner::Custom("Missing function"))?;
+
+        current_visitor
+            .visit_instruction(instr)
+            .map_err(<T as IRVisitor>::Error::into)
+    }
+}
+
+pub struct Compiler<V> {
+    state: CompileState,
+    for_states: IntHashMap<Variable, ForState>,
+    label_mapping: IntHashMap<LineNo, Label>,
+    ir_visitor: V,
+}
+
+type Result = ::std::result::Result<(), CompileErrorInner>;
+
+impl<V: IRVisitor> Compiler<V>
+where
+    V::Error: Into<CompileErrorInner>,
+{
+    fn emit_instruction(&mut self, instr_kind: InstructionKind) -> Result {
+        let line_no = self.state.line;
+        let label = self.state.line_label.take();
+
+        let instr = Instruction {
+            label,
+            line_no,
+            kind: instr_kind,
+        };
+
+        self.ir_visitor
+            .visit_instruction(instr)
+            .map_err(|e| e.into())
+    }
+
+    fn emit_labeled_instruction(
+        &mut self,
+        label: Label,
+        instr_kind: InstructionKind,
+    ) -> Result {
+        let line_no = self.state.line;
+
+        let instr = Instruction {
+            label: Some(label),
+            line_no,
+            kind: instr_kind,
+        };
+
+        self.ir_visitor
+            .visit_instruction(instr)
+            .map_err(|e| e.into())
     }
 
     fn assigning<T, F>(&mut self, mut f: F) -> T
@@ -83,42 +246,97 @@ impl<'a> Compiler<'a> {
         ret
     }
 }
+impl<V: IRVisitor + Default> Compiler<Target<V>>
+where
+    V::Error: Into<CompileErrorInner>,
+{
+    pub fn new() -> Self {
+        let mut func_id_gen = FuncIdGen::new();
+        let main_id = func_id_gen.next_id();
 
-type Result = ::std::result::Result<(), CompileErrorInner>;
+        let mut functions = IntHashMap::default();
+        let main = V::default();
 
-impl<'a> Visitor<Result> for Compiler<'a> {
+        functions.insert(main_id, main);
+
+        Compiler {
+            ir_visitor: Target {
+                main: main_id,
+                current: main_id,
+                func_id_gen,
+                functions,
+            },
+            state: CompileState {
+                assign: false,
+                line: 0,
+                line_label: None,
+                label_id_gen: LabelIdGen::new(),
+                local_pool: LocalVarPool {
+                    free: IntHashSet::default(),
+                    in_use: IntHashSet::default(),
+                    var_gen: AnonVarGen::new(),
+                },
+            },
+            for_states: IntHashMap::default(),
+            label_mapping: IntHashMap::default(),
+        }
+    }
+    pub fn compile(
+        mut self,
+        prog: &Program,
+    ) -> ::std::result::Result<
+        (FuncId, IntHashMap<FuncId, V::Output>),
+        CompileError,
+    > {
+        let line_no = self.state.line;
+
+        self.visit_program(prog)
+            .and_then(move |_| self.ir_visitor.finish())
+            .map_err(|err| CompileError {
+                inner: err,
+                line_no,
+            })
+    }
+}
+
+impl<V: IRVisitor> Visitor<Result> for Compiler<Target<V>>
+where
+    V::Error: Into<CompileErrorInner>,
+    V: Default,
+{
     fn visit_program(&mut self, prog: &Program) -> Result {
-        let mut line_order = LineOrder::new(self.chunk);
+        // check input line numbers are in order and unique
+        let mut line_order = LineOrder::new();
         line_order.visit_program(prog)?;
 
-        let mut array_dims = ArrayDims::new(self.chunk);
+        // preprocess: generate labels for certain line numbers
+        let mut ir_labels = IrLabels::new(
+            &mut self.state.label_id_gen,
+            &mut self.label_mapping,
+        );
+        ir_labels.visit_program(prog)?;
+
+        // preprocess: collect array dimension info for variables
+        // and ensure the same symbol is not used as both 1d and 2d
+        let mut array_dims = ArrayDims::new(&mut self.ir_visitor);
         array_dims.visit_program(prog)?;
 
-        let mut prep_data = PrepareData::new(self.chunk);
+        // preprocess: collect data statements
+        let mut prep_data = PrepareData::new(&mut self.ir_visitor);
         prep_data.visit_program(prog)?;
 
         for s in &prog.statements {
             self.visit_statement(s)?;
         }
 
-        for (index, line_no) in self.jumps.iter() {
-            let jp = self
-                .line_addr_map
-                .get(line_no)
-                .ok_or(CompileErrorInner::Custom("Don't know where to jump"))?;
-            self.chunk.set_operand(*index, JumpPoint(*jp));
-        }
-
-        self.chunk.write_opcode(OpCode::Stop, self.state.line + 1);
-
-        Ok(())
+        // adds a stop instruction to last line (implicit END)
+        self.emit_instruction(InstructionKind::Stop)
     }
 
     fn visit_statement(&mut self, stmt: &Statement) -> Result {
         let line_no = stmt.line_no;
-
         self.state.line = line_no;
-        self.line_addr_map.insert(line_no, self.chunk.len());
+        self.state.line_label = self.label_mapping.get(&line_no).cloned();
 
         match &stmt.statement {
             Stmt::Let(s) => self.visit_let(s),
@@ -158,52 +376,53 @@ impl<'a> Visitor<Result> for Compiler<'a> {
     }
 
     fn visit_data(&mut self, _stmt: &DataStmt) -> Result {
-        self.chunk.write_opcode(OpCode::Noop, self.state.line);
-        Ok(())
+        self.emit_instruction(InstructionKind::Noop)
     }
 
     fn visit_print(&mut self, stmt: &PrintStmt) -> Result {
-        self.chunk.write_opcode(OpCode::PrintStart, self.state.line);
+        self.emit_instruction(InstructionKind::PrintStart)?;
+
         for part in &stmt.parts {
             match part {
                 Printable::Expr(expr) => {
                     self.visit_expr(expr)?;
-                    self.chunk.write_opcode(OpCode::PrintExpr, self.state.line);
+                    self.emit_instruction(InstructionKind::PrintExpr)?;
                 }
                 Printable::Advance3 => {
-                    self.chunk
-                        .write_opcode(OpCode::PrintAdvance3, self.state.line);
+                    self.emit_instruction(InstructionKind::PrintAdvance3)?;
                 }
                 Printable::Advance15 => {
-                    self.chunk
-                        .write_opcode(OpCode::PrintAdvance15, self.state.line);
+                    self.emit_instruction(InstructionKind::PrintAdvance15)?;
                 }
                 Printable::Label(s) => {
-                    self.chunk.write_opcode(OpCode::PrintLabel, self.state.line);
-                    self.chunk.add_operand(s.clone(), self.state.line);
+                    self.emit_instruction(InstructionKind::PrintLabel(
+                        s.clone(),
+                    ))?;
                 }
             }
         }
 
-        self.chunk.write_opcode(OpCode::PrintEnd, self.state.line);
-
-        Ok(())
+        self.emit_instruction(InstructionKind::PrintEnd)
     }
 
     fn visit_goto(&mut self, stmt: &GotoStmt) -> Result {
-        self.chunk.write_opcode(OpCode::Jump, self.state.line);
-        let jp_index = self.chunk.add_operand(JumpPoint(0), self.state.line);
-        self.jumps.push((jp_index, stmt.goto));
+        let label = self
+            .label_mapping
+            .get(&stmt.goto)
+            .cloned()
+            .ok_or(CompileErrorInner::Custom("Unexpected GOTO"))?;
 
-        Ok(())
+        self.emit_instruction(InstructionKind::Jump(label))
     }
 
     fn visit_gosub(&mut self, stmt: &GosubStmt) -> Result {
-        self.chunk.write_opcode(OpCode::Subroutine, self.state.line);
-        let jp_index = self.chunk.add_operand(JumpPoint(0), self.state.line);
-        self.jumps.push((jp_index, stmt.goto));
+        let label = self
+            .label_mapping
+            .get(&stmt.goto)
+            .cloned()
+            .ok_or(CompileErrorInner::Custom("Unexpected GOSUB"))?;
 
-        Ok(())
+        self.emit_instruction(InstructionKind::Subroutine(label))
     }
 
     fn visit_if(&mut self, stmt: &IfStmt) -> Result {
@@ -212,70 +431,74 @@ impl<'a> Visitor<Result> for Compiler<'a> {
 
         match stmt.op {
             Relop::Equal => {
-                self.chunk.write_opcode(OpCode::Equal, self.state.line);
+                self.emit_instruction(InstructionKind::Equal)?;
             }
             Relop::NotEqual => {
-                self.chunk.write_opcode(OpCode::Equal, self.state.line);
-                self.chunk.write_opcode(OpCode::Not, self.state.line);
+                self.emit_instruction(InstructionKind::Equal)?;
+                self.emit_instruction(InstructionKind::Not)?;
             }
             Relop::Less => {
-                self.chunk.write_opcode(OpCode::Less, self.state.line);
+                self.emit_instruction(InstructionKind::Less)?;
             }
             Relop::Greater => {
-                self.chunk.write_opcode(OpCode::Greater, self.state.line);
+                self.emit_instruction(InstructionKind::Greater)?;
             }
             Relop::LessEqual => {
-                self.chunk.write_opcode(OpCode::Greater, self.state.line);
-                self.chunk.write_opcode(OpCode::Not, self.state.line);
+                self.emit_instruction(InstructionKind::Greater)?;
+                self.emit_instruction(InstructionKind::Not)?;
             }
             Relop::GreaterEqual => {
-                self.chunk.write_opcode(OpCode::Less, self.state.line);
-                self.chunk.write_opcode(OpCode::Not, self.state.line);
+                self.emit_instruction(InstructionKind::Less)?;
+                self.emit_instruction(InstructionKind::Not)?;
             }
         }
 
-        self.chunk.write_opcode(OpCode::JumpTrue, self.state.line);
-        let jp_index = self.chunk.add_operand(JumpPoint(0), self.state.line);
-        self.jumps.push((jp_index, stmt.then));
+        let label = self
+            .label_mapping
+            .get(&stmt.then)
+            .cloned()
+            .ok_or(CompileErrorInner::Custom("Unexpected THEN"))?;
 
-        Ok(())
+        self.emit_instruction(InstructionKind::JumpTrue(label))
     }
 
     fn visit_for(&mut self, stmt: &ForStmt) -> Result {
-        let step_var = self.state.var_gen.next_anonymous();
-        let to_var = self.state.var_gen.next_anonymous();
+        let step_var = self.state.local_pool.get_local();
+        let to_var = self.state.local_pool.get_local();
 
         match stmt.step {
             Some(ref step_expr) => {
                 self.visit_expr(step_expr)?;
             }
             None => {
-                self.chunk.write_opcode(OpCode::Constant, self.state.line);
-                self.chunk.add_operand(1.0, self.state.line);
+                self.emit_instruction(InstructionKind::Constant(1.0))?;
             }
         }
-        self.chunk.write_opcode(OpCode::Dup, self.state.line);
+        self.emit_instruction(InstructionKind::Dup)?;
         self.assigning(|this| this.visit_variable(&step_var))?;
 
         self.visit_expr(&stmt.from)?;
-        self.chunk.write_opcode(OpCode::Dup, self.state.line);
+        self.emit_instruction(InstructionKind::Dup)?;
         self.assigning(|this| this.visit_variable(&stmt.var))?;
 
         self.visit_expr(&stmt.to)?;
-        self.chunk.write_opcode(OpCode::Dup, self.state.line);
+        self.emit_instruction(InstructionKind::Dup)?;
         self.assigning(|this| this.visit_variable(&to_var))?;
         // value stack: [step, current, to]
 
-        self.chunk.write_opcode(OpCode::Jump, self.state.line);
-        let jp_index = self.chunk.add_operand(JumpPoint(0), self.state.line);
+        let start_label = self.state.label_id_gen.next_id();
+        let next_label = self.state.label_id_gen.next_id();
+        self.emit_instruction(InstructionKind::Jump(next_label))?;
 
         let for_state = ForState {
             var: stmt.var,
             step: step_var,
             to: to_var,
-            start_code_point: self.chunk.len(),
-            next_cp_index: jp_index,
+            loop_start: start_label,
+            next_label: next_label,
         };
+
+        self.emit_labeled_instruction(start_label, InstructionKind::Noop)?;
 
         self.for_states.insert(stmt.var, for_state);
 
@@ -289,47 +512,49 @@ impl<'a> Visitor<Result> for Compiler<'a> {
             .for_states
             .remove(&stmt.var)
             .ok_or(CompileErrorInner::NextWithoutFor)?;
+
         let step_var = for_state.step;
         let to_var = for_state.to;
-        let loop_start = for_state.start_code_point;
+        let loop_start = for_state.loop_start;
 
         self.visit_variable(&step_var)?;
 
-        self.chunk.write_opcode(OpCode::Dup, self.state.line);
+        self.emit_instruction(InstructionKind::Dup)?;
         self.visit_variable(&stmt.var)?;
-        self.chunk.write_opcode(OpCode::Add, self.state.line);
-        self.chunk.write_opcode(OpCode::Dup, self.state.line);
+
+        self.emit_instruction(InstructionKind::Add)?;
+        self.emit_instruction(InstructionKind::Dup)?;
 
         self.assigning(|this| this.visit_variable(&stmt.var))?;
         self.visit_variable(&to_var)?;
 
-        self.chunk
-            .set_operand(for_state.next_cp_index, JumpPoint(self.chunk.len()));
-
         // value stack: [step, current, to]
-        self.chunk.write_opcode(OpCode::LoopTest, self.state.line);
-        self.chunk.write_opcode(OpCode::JumpFalse, self.state.line);
-        self.chunk
-            .add_operand(JumpPoint(loop_start), self.state.line);
+        self.emit_labeled_instruction(
+            for_state.next_label,
+            InstructionKind::LoopTest,
+        )?;
+        self.emit_instruction(InstructionKind::JumpFalse(loop_start))?;
+
+        self.state.local_pool.reclaim_local(step_var);
+        self.state.local_pool.reclaim_local(to_var);
 
         Ok(())
     }
 
     fn visit_def(&mut self, stmt: &DefStmt) -> Result {
-        let mut fchunk = Chunk::new();
-        let mut fc = FuncCompiler::new(stmt.var, self.state.line, &mut fchunk);
-        fc.visit_expr(&stmt.expr)?;
-        fchunk.write_opcode(OpCode::Return, self.state.line);
+        let var = stmt.var;
+        let func = stmt.func;
+        let expr = &stmt.expr;
 
-        let func_id = self.state.func_id_gen.next_id();
-
-        self.chunk.add_function(func_id, fchunk);
-        self.chunk.write_opcode(OpCode::FnConstant, self.state.line);
-        self.chunk.add_inline_operand(func_id, self.state.line);
-        self.chunk.write_opcode(OpCode::SetFunc, self.state.line);
-        self.chunk.add_inline_operand(stmt.func, self.state.line);
-
-        Ok(())
+        mask_global!(self.state.local_pool, var, {
+            let func_id = function!(self.ir_visitor, {
+                self.emit_instruction(InstructionKind::DefineLocal(var))?;
+                self.emit_instruction(InstructionKind::SetLocal(var))?;
+                self.visit_expr(expr)?;
+                self.emit_instruction(InstructionKind::Return)
+            });
+            self.emit_instruction(InstructionKind::MapFunc(func, func_id))
+        })
     }
 
     fn visit_dim(&mut self, stmt: &DimStmt) -> Result {
@@ -337,16 +562,16 @@ impl<'a> Visitor<Result> for Compiler<'a> {
             match dim {
                 Either::Left(list) => {
                     self.visit_expr(&list.subscript)?;
-                    self.chunk
-                        .write_opcode(OpCode::SetArrayBound, self.state.line);
-                    self.chunk.add_inline_operand(list.var, self.state.line);
+                    self.emit_instruction(InstructionKind::SetArrayBound(
+                        list.var,
+                    ))?;
                 }
                 Either::Right(table) => {
                     self.visit_expr(&table.subscript.0)?;
                     self.visit_expr(&table.subscript.1)?;
-                    self.chunk
-                        .write_opcode(OpCode::SetArrayBound2d, self.state.line);
-                    self.chunk.add_inline_operand(table.var, self.state.line);
+                    self.emit_instruction(InstructionKind::SetArrayBound2d(
+                        table.var,
+                    ))?;
                 }
             }
         }
@@ -355,49 +580,48 @@ impl<'a> Visitor<Result> for Compiler<'a> {
     }
 
     fn visit_rem(&mut self) -> Result {
-        self.chunk.write_opcode(OpCode::Noop, self.state.line);
-        Ok(())
+        self.emit_instruction(InstructionKind::Noop)
     }
 
     fn visit_end(&mut self) -> Result {
-        self.chunk.write_opcode(OpCode::Stop, self.state.line);
-        Ok(())
+        self.emit_instruction(InstructionKind::Stop)
     }
 
     fn visit_stop(&mut self) -> Result {
-        self.chunk.write_opcode(OpCode::Stop, self.state.line);
-        Ok(())
+        self.emit_instruction(InstructionKind::Stop)
     }
 
     fn visit_return(&mut self) -> Result {
-        self.chunk.write_opcode(OpCode::Return, self.state.line);
-        Ok(())
+        self.emit_instruction(InstructionKind::Return)
     }
 
-    fn visit_variable(&mut self, lval: &Variable) -> Result {
-        if self.state.assign {
-            self.chunk.write_opcode(OpCode::SetGlobal, self.state.line);
-        } else {
-            self.chunk.write_opcode(OpCode::GetGlobal, self.state.line);
+    fn visit_variable(&mut self, var: &Variable) -> Result {
+        let is_local = self.state.local_pool.is_in_use(var);
+
+        match (self.state.assign, is_local) {
+            (true, true) => {
+                self.emit_instruction(InstructionKind::SetLocal(*var))
+            }
+            (true, false) => {
+                self.emit_instruction(InstructionKind::SetGlobal(*var))
+            }
+            (false, true) => {
+                self.emit_instruction(InstructionKind::GetLocal(*var))
+            }
+            (false, false) => {
+                self.emit_instruction(InstructionKind::GetGlobal(*var))
+            }
         }
-
-        self.chunk.add_inline_operand(lval.clone(), self.state.line);
-
-        Ok(())
     }
 
     fn visit_list(&mut self, list: &List) -> Result {
         self.evaluating(|this| this.visit_expr(&list.subscript))?;
-        if self.state.assign {
-            self.chunk
-                .write_opcode(OpCode::SetGlobalArray, self.state.line);
-        } else {
-            self.chunk
-                .write_opcode(OpCode::GetGlobalArray, self.state.line);
-        }
-        self.chunk.add_inline_operand(list.var, self.state.line);
 
-        Ok(())
+        if self.state.assign {
+            self.emit_instruction(InstructionKind::SetGlobalArray(list.var))
+        } else {
+            self.emit_instruction(InstructionKind::GetGlobalArray(list.var))
+        }
     }
 
     fn visit_table(&mut self, table: &Table) -> Result {
@@ -407,15 +631,10 @@ impl<'a> Visitor<Result> for Compiler<'a> {
         })?;
 
         if self.state.assign {
-            self.chunk
-                .write_opcode(OpCode::SetGlobalArray2d, self.state.line);
+            self.emit_instruction(InstructionKind::SetGlobalArray2d(table.var))
         } else {
-            self.chunk
-                .write_opcode(OpCode::GetGlobalArray2d, self.state.line);
+            self.emit_instruction(InstructionKind::GetGlobalArray2d(table.var))
         }
-        self.chunk.add_inline_operand(table.var, self.state.line);
-
-        Ok(())
     }
 
     fn visit_expr(&mut self, expr: &Expression) -> Result {
@@ -426,55 +645,48 @@ impl<'a> Visitor<Result> for Compiler<'a> {
         }
         match expr {
             Expression::Lit(n) => {
-                self.chunk.write_opcode(OpCode::Constant, self.state.line);
-                self.chunk.add_operand(*n, self.state.line);
+                self.emit_instruction(InstructionKind::Constant(*n))
             }
-            Expression::Var(v) => {
-                self.visit_lvalue(v)?;
-            }
+            Expression::Var(v) => self.visit_lvalue(v),
             Expression::Call(func, arg) => {
                 self.visit_expr(arg)?;
+
                 if func.is_native() {
-                    self.chunk.write_opcode(OpCode::CallNative, self.state.line);
-                    self.chunk.add_inline_operand(*func, self.state.line);
+                    self.emit_instruction(InstructionKind::CallNative(*func))
                 } else {
-                    self.chunk.write_opcode(OpCode::GetFunc, self.state.line);
-                    self.chunk.add_inline_operand(*func, self.state.line);
-                    self.chunk.write_opcode(OpCode::Call, self.state.line);
+                    self.emit_instruction(InstructionKind::Call(*func))
                 }
             }
             Expression::Neg(expr) => {
                 self.visit_expr(expr)?;
-                self.chunk.write_opcode(OpCode::Negate, self.state.line);
+                self.emit_instruction(InstructionKind::Negate)
             }
             Expression::Add(lhs, rhs) => {
                 self.visit_expr(lhs)?;
                 self.visit_expr(rhs)?;
-                self.chunk.write_opcode(OpCode::Add, self.state.line);
+                self.emit_instruction(InstructionKind::Add)
             }
             Expression::Sub(lhs, rhs) => {
                 self.visit_expr(lhs)?;
                 self.visit_expr(rhs)?;
-                self.chunk.write_opcode(OpCode::Sub, self.state.line);
+                self.emit_instruction(InstructionKind::Sub)
             }
             Expression::Mul(lhs, rhs) => {
                 self.visit_expr(lhs)?;
                 self.visit_expr(rhs)?;
-                self.chunk.write_opcode(OpCode::Mul, self.state.line);
+                self.emit_instruction(InstructionKind::Mul)
             }
             Expression::Div(lhs, rhs) => {
                 self.visit_expr(lhs)?;
                 self.visit_expr(rhs)?;
-                self.chunk.write_opcode(OpCode::Div, self.state.line);
+                self.emit_instruction(InstructionKind::Div)
             }
             Expression::Pow(lhs, rhs) => {
                 self.visit_expr(lhs)?;
                 self.visit_expr(rhs)?;
-                self.chunk.write_opcode(OpCode::Pow, self.state.line);
+                self.emit_instruction(InstructionKind::Pow)
             }
         }
-
-        Ok(())
     }
 }
 
@@ -486,6 +698,22 @@ mod tests {
     use crate::parser::Parser;
     use crate::scanner::Scanner;
     use crate::vm::{Chunk, VM};
+
+    #[derive(Default, Debug)]
+    struct PrintIR;
+
+    impl IRVisitor for PrintIR {
+        type Output = ();
+        type Error = CompileErrorInner;
+
+        fn finish(self) -> Result {
+            Ok(())
+        }
+        fn visit_instruction(&mut self, instr: Instruction) -> Result {
+            println!("{:?}", instr);
+            Ok(())
+        }
+    }
 
     #[test]
     fn test_simple() {
@@ -500,7 +728,7 @@ mod tests {
             24 FOR I = 10 TO 1 STEP -1
             25   PRINT Y(I)
             26 NEXT I
-            31 DEF FNA(X) = X + 10
+            31 DEF FNA(D) = D + 10
             32 DEF FNB(X) = X + FNA(X) + Y
             40 PRINT \"FNB(Y)\", FNB(Y)
             50 REM IGNORE ME
@@ -535,15 +763,17 @@ mod tests {
         let scanner = Scanner::new(program);
         let ast = Parser::new(scanner).parse().unwrap();
 
-        let mut chunk = Chunk::new();
-        let mut compiler = Compiler::new(&mut chunk);
+        let compiler: Compiler<Target<PrintIR>> = Compiler::new();
+        let (_, fns) = compiler.compile(&ast).unwrap();
 
-        let _result = compiler.visit_program(&ast);
+        println!("functions: {:?}", fns);
 
-        let mut vm = VM::new(chunk);
-        let mut output = Vec::new();
-        vm.run(&mut output);
+        assert!(false);
 
-        assert_eq!(::std::str::from_utf8(&output), Ok(printed));
+        // let mut vm = VM::new(chunk);
+        // let mut output = Vec::new();
+        // vm.run(&mut output);
+
+        // assert_eq!(::std::str::from_utf8(&output), Ok(printed));
     }
 }

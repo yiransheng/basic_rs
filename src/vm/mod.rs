@@ -3,6 +3,7 @@ use std::error;
 use std::f64;
 use std::fmt;
 use std::io;
+use std::mem;
 
 use int_hash::IntHashMap;
 use num_traits::{FromPrimitive, ToPrimitive};
@@ -10,18 +11,19 @@ use num_traits::{FromPrimitive, ToPrimitive};
 use crate::ast::function::Func;
 use crate::ast::*;
 
+pub mod value;
+
 mod array;
 mod chunk;
 mod line_mapping;
 mod opcode;
 mod print;
-mod value;
 
 pub use self::chunk::*;
 pub use self::opcode::*;
 pub use self::value::{FuncId, FuncIdGen};
 
-use self::array::{Array, Error as ArrayError, Subscript};
+use self::array::{Array, Error as ArrayError};
 use self::print::{PrintError, Printer};
 use self::value::*;
 
@@ -31,15 +33,19 @@ pub const DEFAULT_ARRAY_SIZE: u8 = 11;
 pub struct CallFrame {
     depth: usize,
     ip: usize,
-    context: Option<(FuncId, Number)>,
+    context: Option<FuncId>,
+    locals: IntHashMap<Variable, Number>,
 }
 
 pub struct VM {
     chunk: Chunk,
+    user_fns: IntHashMap<FuncId, Chunk>,
+
     globals: IntHashMap<Variable, Number>,
     functions: IntHashMap<Func, FuncId>,
     global_lists: IntHashMap<Variable, Array<u8>>,
     global_tables: IntHashMap<Variable, Array<[u8; 2]>>,
+
     stack: VecDeque<Value>,
     call_stack: VecDeque<CallFrame>,
 }
@@ -53,10 +59,12 @@ pub struct RuntimeError {
 #[derive(Debug)]
 pub enum ExecError {
     NoData,
+    EmptyStack,
     ListNotFound(Variable),
     TableNotFound(Variable),
     IndexError(Variable, f64),
     TypeError(&'static str),
+    ValueError(&'static str),
     ArrayError(ArrayError),
     PrintError(PrintError),
     DecodeError(u8),
@@ -71,12 +79,19 @@ impl fmt::Display for ExecError {
         match self {
             ExecError::ListNotFound(var) => write!(f, "{}: {}", desc, var),
             ExecError::TableNotFound(var) => write!(f, "{}: {}", desc, var),
-            ExecError::IndexError(var, v) => write!(f, "{}, variable: {}, index: {}", desc, var, v),
+            ExecError::IndexError(var, v) => {
+                write!(f, "{}, variable: {}, index: {}", desc, var, v)
+            }
             ExecError::TypeError(s) => write!(f, "TypeError: {}", s),
+            ExecError::ValueError(s) => write!(f, "ValueError: {}", s),
             ExecError::ArrayError(err) => err.fmt(f),
             ExecError::PrintError(err) => err.fmt(f),
-            ExecError::DecodeError(b) => write!(f, "Failed to decode instruction: {}", b),
-            ExecError::NoData | ExecError::FunctionNotFound => write!(f, "{}", desc),
+            ExecError::DecodeError(b) => {
+                write!(f, "Failed to decode instruction: {}", b)
+            }
+            ExecError::EmptyStack
+            | ExecError::NoData
+            | ExecError::FunctionNotFound => write!(f, "{}", desc),
         }
     }
 }
@@ -85,10 +100,12 @@ impl error::Error for ExecError {
     fn description(&self) -> &str {
         match self {
             ExecError::NoData => "No data",
+            ExecError::EmptyStack => "Empty stack",
             ExecError::ListNotFound(_) => "Use uninitialized list",
             ExecError::TableNotFound(_) => "Use uninitialized table",
             ExecError::IndexError(..) => "Index error",
             ExecError::TypeError(_) => "Type error",
+            ExecError::ValueError(_) => "Value error",
             ExecError::ArrayError(err) => err.description(),
             ExecError::PrintError(err) => err.description(),
             ExecError::DecodeError(_) => "Decode error",
@@ -110,22 +127,41 @@ impl From<PrintError> for ExecError {
 }
 
 impl VM {
-    pub fn new(chunk: Chunk) -> Self {
+    pub fn new(main_id: FuncId, mut chunks: IntHashMap<FuncId, Chunk>) -> Self {
+        let chunk = chunks.remove(&main_id).unwrap();
+
         let mut call_stack = VecDeque::new();
         let call_frame = CallFrame {
             depth: 0,
             ip: 0,
             context: None,
+            locals: IntHashMap::default(),
         };
         call_stack.push_back(call_frame);
         VM {
             chunk,
+            user_fns: chunks,
+
             globals: IntHashMap::default(),
             functions: IntHashMap::default(),
             global_lists: IntHashMap::default(),
             global_tables: IntHashMap::default(),
             stack: VecDeque::new(),
+
             call_stack,
+        }
+    }
+
+    pub fn disassemble<W: io::Write>(&mut self, mut out: W) {
+        use self::disassembler::Disassembler;
+
+        let mut main_chunk = Disassembler::new(&mut self.chunk, &mut out);
+        main_chunk.disassemble();
+
+        for (func_id, chunk) in self.user_fns.iter_mut() {
+            let _ = writeln!(&mut out, "Chunk: {}\n", func_id);
+            let mut fn_chunk = Disassembler::new(chunk, &mut out);
+            fn_chunk.disassemble();
         }
     }
 
@@ -153,7 +189,8 @@ impl VM {
 
         loop {
             let byte = self.read_byte()?;
-            let instr = OpCode::from_u8(byte).ok_or(ExecError::DecodeError(byte))?;
+            let instr =
+                OpCode::from_u8(byte).ok_or(ExecError::DecodeError(byte))?;
             match instr {
                 OpCode::Stop => return Ok(()),
                 OpCode::PrintStart => {
@@ -183,7 +220,8 @@ impl VM {
                 }
                 OpCode::InitArray2d => {
                     let var: Variable = self.read_inline_operand()?;
-                    let arr = Array::new([DEFAULT_ARRAY_SIZE, DEFAULT_ARRAY_SIZE]);
+                    let arr =
+                        Array::new([DEFAULT_ARRAY_SIZE, DEFAULT_ARRAY_SIZE]);
                     self.global_tables.insert(var, arr);
                 }
                 OpCode::Noop => continue,
@@ -231,12 +269,6 @@ impl VM {
                         self.push_value(value);
                     }
                 }
-                OpCode::Swap => {
-                    let v1 = self.pop_value()?;
-                    let v2 = self.pop_value()?;
-                    self.push_value(v1);
-                    self.push_value(v2);
-                }
                 OpCode::CallNative => {
                     let func: Func = self.read_inline_operand()?;
                     let x = self.pop_number()?;
@@ -257,12 +289,16 @@ impl VM {
                 }
                 OpCode::Return => match self.current_frame().context {
                     Some(_) => {
+                        // function call
                         let v = self.pop_number()?;
                         self.call_stack.pop_back();
                         self.push_value(v);
                     }
                     _ => {
-                        self.call_stack.pop_back();
+                        // subroutine call
+                        let ret_frame = self.call_stack.pop_back().unwrap();
+                        let current_frame = self.current_frame_mut();
+                        current_frame.locals = ret_frame.locals;
                     }
                 },
                 OpCode::Call => {
@@ -271,36 +307,57 @@ impl VM {
                         Variant::Function(func_id) => func_id,
                         _ => return Err(ExecError::TypeError("not a function")),
                     };
-                    let x = self.pop_number()?;
                     let new_frame = CallFrame {
                         depth: current_depth + 1,
-                        context: Some((func, x)),
+                        context: Some(func),
+                        locals: IntHashMap::default(),
                         ip: 0,
                     };
                     self.call_stack.push_back(new_frame);
                 }
                 OpCode::Subroutine => {
-                    let current_depth = self.current_frame().depth;
                     let jp: JumpPoint = self.read_operand()?;
+                    let current_frame = self.current_frame_mut();
+
+                    // transfer locals to subroutine callframe
+                    let locals = mem::replace(
+                        &mut current_frame.locals,
+                        IntHashMap::default(),
+                    );
+
                     let new_frame = CallFrame {
-                        depth: current_depth + 1,
+                        depth: current_frame.depth,
                         context: None,
+                        locals,
                         ip: jp.0,
                     };
                     self.call_stack.push_back(new_frame);
                 }
+
                 OpCode::GetLocal => {
+                    let var: Variable = self.read_inline_operand()?;
                     let frame = self.current_frame();
+
                     let x = frame
-                        .context
-                        .map(|(_, x)| x)
-                        .ok_or(ExecError::TypeError("function argument not found"))?;
+                        .locals
+                        .get(&var)
+                        .cloned()
+                        .ok_or(ExecError::ValueError("Value not found"))?;
+
                     self.push_value(x);
+                }
+                OpCode::SetLocal => {
+                    let x = self.pop_number()?;
+                    let var: Variable = self.read_inline_operand()?;
+                    let frame = self.current_frame_mut();
+
+                    frame.locals.insert(var, x);
                 }
                 OpCode::GetFunc => {
                     let fname: Func = self.read_inline_operand()?;
                     // TODO: error handling
-                    let func_id = self.functions.get(&fname).map(|v| *v).unwrap();
+                    let func_id =
+                        self.functions.get(&fname).map(|v| *v).unwrap();
                     self.push_value(func_id);
                 }
                 OpCode::SetFunc => {
@@ -327,7 +384,9 @@ impl VM {
                 OpCode::GetGlobalArray => {
                     let var: Variable = self.read_inline_operand()?;
                     let i: u8 = match self.pop_number() {
-                        Ok(x) => x.to_u8().ok_or(ExecError::IndexError(var, x))?,
+                        Ok(x) => {
+                            x.to_u8().ok_or(ExecError::IndexError(var, x))?
+                        }
                         Err(e) => return Err(e),
                     };
                     let list = self
@@ -340,7 +399,9 @@ impl VM {
                 OpCode::SetGlobalArray => {
                     let var: Variable = self.read_inline_operand()?;
                     let i: u8 = match self.pop_number() {
-                        Ok(x) => x.to_u8().ok_or(ExecError::IndexError(var, x))?,
+                        Ok(x) => {
+                            x.to_u8().ok_or(ExecError::IndexError(var, x))?
+                        }
                         Err(e) => return Err(e),
                     };
                     let v = self.pop_number()?;
@@ -353,11 +414,15 @@ impl VM {
                 OpCode::GetGlobalArray2d => {
                     let var: Variable = self.read_inline_operand()?;
                     let i: u8 = match self.pop_number() {
-                        Ok(x) => x.to_u8().ok_or(ExecError::IndexError(var, x))?,
+                        Ok(x) => {
+                            x.to_u8().ok_or(ExecError::IndexError(var, x))?
+                        }
                         Err(e) => return Err(e),
                     };
                     let j: u8 = match self.pop_number() {
-                        Ok(x) => x.to_u8().ok_or(ExecError::IndexError(var, x))?,
+                        Ok(x) => {
+                            x.to_u8().ok_or(ExecError::IndexError(var, x))?
+                        }
                         Err(e) => return Err(e),
                     };
                     let table = self
@@ -370,11 +435,15 @@ impl VM {
                 OpCode::SetGlobalArray2d => {
                     let var: Variable = self.read_inline_operand()?;
                     let i: u8 = match self.pop_number() {
-                        Ok(x) => x.to_u8().ok_or(ExecError::IndexError(var, x))?,
+                        Ok(x) => {
+                            x.to_u8().ok_or(ExecError::IndexError(var, x))?
+                        }
                         Err(e) => return Err(e),
                     };
                     let j: u8 = match self.pop_number() {
-                        Ok(x) => x.to_u8().ok_or(ExecError::IndexError(var, x))?,
+                        Ok(x) => {
+                            x.to_u8().ok_or(ExecError::IndexError(var, x))?
+                        }
                         Err(e) => return Err(e),
                     };
                     let v = self.pop_number()?;
@@ -387,7 +456,9 @@ impl VM {
                 OpCode::SetArrayBound => {
                     let var: Variable = self.read_inline_operand()?;
                     let value = self.pop_number()?;
-                    let value = value.to_u8().ok_or(ExecError::IndexError(var, value))?;
+                    let value = value
+                        .to_u8()
+                        .ok_or(ExecError::IndexError(var, value))?;
                     let list = self
                         .global_lists
                         .get_mut(&var)
@@ -493,12 +564,18 @@ impl VM {
     }
 
     #[inline]
+    fn current_frame_mut(&mut self) -> &mut CallFrame {
+        self.call_stack.back_mut().unwrap()
+    }
+
+    #[inline]
     fn current_chunk(&mut self) -> Result<&mut Chunk, ExecError> {
-        let frame = self.call_stack.back_mut().unwrap();
+        let frame = self.call_stack.back().unwrap();
+
         match frame.context {
-            Some((func_id, _)) => self
-                .chunk
-                .get_function(&func_id)
+            Some(func_id) => self
+                .user_fns
+                .get_mut(&func_id)
                 .ok_or(ExecError::FunctionNotFound),
             _ => Ok(&mut self.chunk),
         }
@@ -535,7 +612,9 @@ impl VM {
 
         Ok(o)
     }
-    fn read_inline_operand<T: InlineOperand>(&mut self) -> Result<T, ExecError> {
+    fn read_inline_operand<T: InlineOperand>(
+        &mut self,
+    ) -> Result<T, ExecError> {
         let ip = *self.get_ip();
         let chunk = self.current_chunk()?;
         let o = chunk.read_inline_operand(ip);
@@ -549,10 +628,14 @@ impl VM {
     }
 
     fn pop_number(&mut self) -> Result<Number, ExecError> {
-        let v = self.pop_value()?;
-        match v {
-            Variant::Number(v) => Ok(v),
-            _ => Err(ExecError::TypeError("not a number")),
+        match self.pop_value() {
+            Ok(Variant::Number(v)) => Ok(v),
+            Ok(_) => Err(ExecError::TypeError("not a number")),
+            Err(ExecError::EmptyStack) => {
+                let chunk = self.current_chunk()?;
+                chunk.pop_data().ok_or(ExecError::NoData)
+            }
+            Err(e) => Err(e),
         }
     }
 
@@ -561,7 +644,7 @@ impl VM {
         self.stack
             .pop_back()
             .map(Variant::from)
-            .ok_or(ExecError::NoData)
+            .ok_or(ExecError::EmptyStack)
     }
 
     fn peek(&self, distance: usize) -> Option<Value> {

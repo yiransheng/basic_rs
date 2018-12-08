@@ -36,7 +36,9 @@ pub enum Token {
 impl Token {
     pub fn take(&mut self) -> Self {
         match self {
-            Token::Label(_) => ::std::mem::replace(self, Token::Label(String::new())),
+            Token::Label(_) => {
+                ::std::mem::replace(self, Token::Label(String::new()))
+            }
             _ => self.clone(),
         }
     }
@@ -164,7 +166,10 @@ impl str::FromStr for Func {
     }
 }
 
-fn from_tagged_token_str<T: str::FromStr>(tag: &str, src: &str) -> Result<T, Option<T::Err>> {
+fn from_tagged_token_str<T: str::FromStr>(
+    tag: &str,
+    src: &str,
+) -> Result<T, Option<T::Err>> {
     let value = src
         .trim_start_matches(tag)
         .trim_start_matches('(')

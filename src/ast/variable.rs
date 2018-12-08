@@ -23,9 +23,15 @@ impl fmt::Display for NameError {
 impl error::Error for NameError {
     fn description(&self) -> &str {
         match self {
-            NameError::NotLetter => "Variable name must start with an alphabet.",
-            NameError::NotDigit => "Second character in variable name must be a digit (0-9).",
-            NameError::LowerCase => "Variable name must use upper case alphabets.",
+            NameError::NotLetter => {
+                "Variable name must start with an alphabet."
+            }
+            NameError::NotDigit => {
+                "Second character in variable name must be a digit (0-9)."
+            }
+            NameError::LowerCase => {
+                "Variable name must use upper case alphabets."
+            }
             NameError::TooLong => "Variable name too long",
             NameError::TooShort => "Variable name too short",
         }
@@ -82,13 +88,18 @@ impl Variable {
         self.0
     }
 
-    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> Result<(), ::std::fmt::Error> {
+    fn fmt(
+        &self,
+        f: &mut ::std::fmt::Formatter,
+    ) -> Result<(), ::std::fmt::Error> {
         let b0 = self.0[0];
         let b1 = self.0[1];
 
         match (b0, b1) {
             (b'A'...b'Z', 0) => write!(f, "{}", b0 as char),
-            (b'A'...b'Z', b'0'...b'9') => write!(f, "{}{}", b0 as char, b1 as char),
+            (b'A'...b'Z', b'0'...b'9') => {
+                write!(f, "{}{}", b0 as char, b1 as char)
+            }
             _ => write!(f, "<anonymous variable {}{}>", b1, b0),
         }
     }
@@ -119,13 +130,19 @@ impl str::FromStr for Variable {
 
 impl ::std::fmt::Display for Variable {
     #[inline]
-    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> Result<(), ::std::fmt::Error> {
+    fn fmt(
+        &self,
+        f: &mut ::std::fmt::Formatter,
+    ) -> Result<(), ::std::fmt::Error> {
         self.fmt(f)
     }
 }
 impl ::std::fmt::Debug for Variable {
     #[inline]
-    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> Result<(), ::std::fmt::Error> {
+    fn fmt(
+        &self,
+        f: &mut ::std::fmt::Formatter,
+    ) -> Result<(), ::std::fmt::Error> {
         self.fmt(f)
     }
 }
