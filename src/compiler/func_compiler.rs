@@ -3,19 +3,28 @@ use crate::ast::variable::Variable;
 use crate::ast::*;
 use crate::vm::*;
 
-pub struct FuncCompiler<'a> {
+use crate::ir::{Instruction, InstructionKind, Visitor as IRVisitor};
+
+pub struct FuncCompiler<V> {
     arg: Variable,
-    chunk: &'a mut Chunk,
+    ir_visitor: V,
     line: usize,
 }
 
-impl<'a> FuncCompiler<'a> {
-    pub fn new(arg: Variable, line: usize, chunk: &'a mut Chunk) -> Self {
-        FuncCompiler { arg, line, chunk }
+impl<V: Default> FuncCompiler<V> {
+    pub fn new(arg: Variable, line: usize) -> Self {
+        FuncCompiler {
+            arg,
+            line,
+            ir_visitor: V::default(),
+        }
     }
 }
 
-impl<'a> Visitor<Result<(), CompileError>> for FuncCompiler<'a> {
+impl<V: IRVisitor> Visitor<Result<(), CompileError>> for FuncCompiler<V>
+where
+    V::Error: Into<CompileError>,
+{
     fn visit_program(&mut self, _prog: &Program) -> Result<(), CompileError> {
         Err(CompileError::IllegalFuncDef)
     }
@@ -89,11 +98,9 @@ impl<'a> Visitor<Result<(), CompileError>> for FuncCompiler<'a> {
 
     fn visit_lvalue(&mut self, lval: &LValue) -> Result<(), CompileError> {
         match lval {
-            LValue::Variable(ref var) => self.visit_variable(var)?,
-            _ => panic!(),
+            LValue::Variable(ref var) => self.visit_variable(var),
+            _ => Err(CompileError::IllegalFuncDef),
         }
-
-        Ok(())
     }
 
     fn visit_variable(&mut self, lval: &Variable) -> Result<(), CompileError> {

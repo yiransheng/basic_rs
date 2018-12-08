@@ -1,7 +1,6 @@
 use super::error::CompileError;
 use crate::ast::*;
 use crate::ir::{Instruction, InstructionKind, Visitor as IRVisitor};
-use crate::vm::*;
 
 pub struct PrepareData<V> {
     ir_visitor: V,

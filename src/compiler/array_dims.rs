@@ -40,8 +40,6 @@ where
         for (var, ty) in self.types.iter() {
             match ty {
                 ArrayType::List(line_no) => {
-                    // self.chunk.write_opcode(OpCode::InitArray, 0);
-                    // self.chunk.add_inline_operand(*var, 0);
                     let kind = InstructionKind::InitArray(*var);
 
                     self.ir_visitor
@@ -53,8 +51,6 @@ where
                         .map_err(V::Error::into)?;
                 }
                 ArrayType::Table(line_no) => {
-                    // self.chunk.write_opcode(OpCode::InitArray2d, 0);
-                    // self.chunk.add_inline_operand(*var, 0);
                     let kind = InstructionKind::InitArray2d(*var);
 
                     self.ir_visitor
