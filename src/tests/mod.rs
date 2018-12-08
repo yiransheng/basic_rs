@@ -1,4 +1,6 @@
 use matches::*;
+use rand::rngs::SmallRng;
+use rand::SeedableRng;
 
 use crate::compiler::compile;
 use crate::parser::{ErrorInner, Parser};
@@ -19,7 +21,8 @@ fn test_correct_program(name: &str, prog_and_output: &str) {
     let mut vm = compile(&ast).expect("it should compile successfuly");
 
     let mut printed = Vec::new();
-    vm.run(&mut printed).expect("no runtime error");
+    let mut rng = SmallRng::from_seed([123; 16]);
+    vm.run(&mut printed, &mut rng).expect("no runtime error");
 
     let printed = ::std::str::from_utf8(&printed).unwrap();
 

@@ -3,6 +3,8 @@ use std::io;
 use std::io::prelude::*;
 use std::path::PathBuf;
 
+use rand::rngs::SmallRng;
+use rand::FromEntropy;
 use structopt::StructOpt;
 
 mod ast;
@@ -52,7 +54,9 @@ fn run(source: &str, opt: &Opt) -> Result<(), InterpreterError> {
         vm.disassemble(stdout.lock());
     }
 
-    vm.run(stdout.lock())?;
+    let mut rng = SmallRng::from_entropy();
+
+    vm.run(stdout.lock(), &mut rng)?;
 
     Ok(())
 }

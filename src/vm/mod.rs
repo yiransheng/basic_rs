@@ -7,6 +7,7 @@ use std::mem;
 
 use int_hash::IntHashMap;
 use num_traits::{FromPrimitive, ToPrimitive};
+use rand::Rng;
 
 use crate::ast::function::Func;
 use crate::ast::*;
@@ -166,8 +167,12 @@ impl VM {
     }
 
     #[inline]
-    pub fn run<W: io::Write>(&mut self, out: W) -> Result<(), RuntimeError> {
-        match self.exec(out) {
+    pub fn run<W: io::Write, R: Rng>(
+        &mut self,
+        out: W,
+        rng: &mut R,
+    ) -> Result<(), RuntimeError> {
+        match self.exec(out, rng) {
             Ok(_) => Ok(()),
             Err(err) => {
                 let ip = *self.get_ip() - 1;
@@ -182,7 +187,11 @@ impl VM {
             }
         }
     }
-    fn exec<W: io::Write>(&mut self, out: W) -> Result<(), ExecError> {
+    fn exec<W: io::Write, R: Rng>(
+        &mut self,
+        out: W,
+        rng: &mut R,
+    ) -> Result<(), ExecError> {
         assert!(self.chunk.len() > 0, "Empty chunk");
 
         let mut printer = Printer::new_buffered(out);
@@ -271,7 +280,13 @@ impl VM {
                 }
                 OpCode::CallNative => {
                     let func: Func = self.read_inline_operand()?;
-                    let x = self.pop_number()?;
+                    // BASIC RND function does not actually take
+                    // arguments, `RND(X)` is only a syntactic requirement
+                    let x = if func != Func::Rnd {
+                        self.pop_number()?
+                    } else {
+                        0.0
+                    };
                     let y = match func {
                         Func::Sin => x.sin(),
                         Func::Cos => x.cos(),
@@ -281,7 +296,7 @@ impl VM {
                         Func::Abs => x.abs(),
                         Func::Log => x.ln(),
                         Func::Sqr => x.sqrt(),
-                        Func::Rnd => unimplemented!(),
+                        Func::Rnd => rng.gen(),
                         Func::Int => x.trunc(),
                         _ => unreachable!("Compiler bug"),
                     };

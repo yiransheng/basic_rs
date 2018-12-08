@@ -86,8 +86,12 @@ mod tests {
 
         let mut vm = compile(&ast).unwrap();
 
+        use rand::rngs::SmallRng;
+        use rand::SeedableRng;
+
         let mut output = Vec::new();
-        vm.run(&mut output).expect("no runtime error");
+        let mut rng = SmallRng::from_seed([123; 16]);
+        vm.run(&mut output, &mut rng).expect("no runtime error");
 
         assert_eq!(::std::str::from_utf8(&output), Ok(printed));
     }
