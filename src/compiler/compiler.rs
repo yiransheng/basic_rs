@@ -646,7 +646,10 @@ where
             }
             Expression::Var(v) => self.visit_lvalue(v),
             Expression::Call(func, arg) => {
-                self.visit_expr(arg)?;
+                // RND takes no argument
+                if *func != Func::Rnd {
+                    self.visit_expr(arg)?;
+                }
 
                 if func.is_native() {
                     self.emit_instruction(InstructionKind::CallNative(*func))
