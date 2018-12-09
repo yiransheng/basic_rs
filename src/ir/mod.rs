@@ -52,6 +52,10 @@ pub enum InstructionKind {
     GetGlobalArray2d(Variable),
     SetGlobalArray2d(Variable),
 
+    ReadGlobal(Variable),
+    ReadGlobalArray(Variable),
+    ReadGlobalArray2d(Variable),
+
     DefineLocal(Variable),
     SetLocal(Variable),
     GetLocal(Variable),

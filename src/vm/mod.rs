@@ -384,6 +384,47 @@ impl VM {
                         _ => return Err(ExecError::TypeError("not a function")),
                     }
                 }
+                OpCode::ReadGlobal => {
+                    let var: Variable = self.read_inline_operand()?;
+                    let value = self.read_number()?;
+                    self.globals.insert(var, value);
+                }
+                OpCode::ReadGlobalArray => {
+                    let var: Variable = self.read_inline_operand()?;
+                    let i: u8 = match self.pop_number() {
+                        Ok(x) => x
+                            .to_u8()
+                            .ok_or_else(|| ExecError::IndexError(var, x))?,
+                        Err(e) => return Err(e),
+                    };
+                    let v = self.read_number()?;
+                    let list = self
+                        .global_lists
+                        .get_mut(&var)
+                        .ok_or_else(|| ExecError::ListNotFound(var))?;
+                    list.set(i, v)?;
+                }
+                OpCode::ReadGlobalArray2d => {
+                    let var: Variable = self.read_inline_operand()?;
+                    let i: u8 = match self.pop_number() {
+                        Ok(x) => x
+                            .to_u8()
+                            .ok_or_else(|| ExecError::IndexError(var, x))?,
+                        Err(e) => return Err(e),
+                    };
+                    let j: u8 = match self.pop_number() {
+                        Ok(x) => x
+                            .to_u8()
+                            .ok_or_else(|| ExecError::IndexError(var, x))?,
+                        Err(e) => return Err(e),
+                    };
+                    let v = self.read_number()?;
+                    let table = self
+                        .global_tables
+                        .get_mut(&var)
+                        .ok_or_else(|| ExecError::TableNotFound(var))?;
+                    table.set([i, j], v)?;
+                }
                 OpCode::GetGlobal => {
                     let var: Variable = self.read_inline_operand()?;
                     let v = self.globals.get(&var).cloned().unwrap_or(0.0);
@@ -559,13 +600,15 @@ impl VM {
                     self.push_value(value);
                 }
                 OpCode::LoopTest => {
-                    let target = self.pop_number()?;
                     let current = self.pop_number()?;
-                    let step = self.pop_number()?;
+                    let step = self.peek_number(0)?;
+                    let target = self.peek_number(1)?;
 
                     if (step > 0.0 && current > target)
                         || (step < 0.0 && current < target)
                     {
+                        let _ = self.pop_value();
+                        let _ = self.pop_value();
                         self.push_value(Value::true_value());
                     } else {
                         self.push_value(Value::false_value());
@@ -648,11 +691,22 @@ impl VM {
         match self.pop_value() {
             Ok(Variant::Number(v)) => Ok(v),
             Ok(_) => Err(ExecError::TypeError("not a number")),
-            Err(ExecError::EmptyStack) => {
-                let chunk = self.current_chunk()?;
-                chunk.pop_data().ok_or_else(|| ExecError::NoData)
-            }
             Err(e) => Err(e),
+        }
+    }
+
+    fn read_number(&mut self) -> Result<Number, ExecError> {
+        let chunk = self.current_chunk()?;
+        let n = chunk.pop_data().ok_or_else(|| ExecError::NoData)?;
+
+        Ok(n)
+    }
+
+    fn peek_number(&self, distance: usize) -> Result<Number, ExecError> {
+        match self.peek(distance).map(Variant::from) {
+            Some(Variant::Number(n)) => Ok(n),
+            Some(_) => Err(ExecError::TypeError("not a number")),
+            None => Err(ExecError::EmptyStack),
         }
     }
 
@@ -664,9 +718,10 @@ impl VM {
             .ok_or_else(|| ExecError::EmptyStack)
     }
 
+    #[inline(always)]
     fn peek(&self, distance: usize) -> Option<Value> {
         let n = self.stack.len();
-        let index = n - 1 - distance;
+        let index = n.saturating_sub(distance + 1);
 
         self.stack.get(index).cloned()
     }

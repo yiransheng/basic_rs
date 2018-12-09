@@ -14,6 +14,10 @@ pub enum OpCode {
     Stop,
 
     Pop,
+    ReadGlobal,
+    ReadGlobalArray,
+    ReadGlobalArray2d,
+
     SetFunc,
     GetFunc,
     GetGlobal,
@@ -71,6 +75,10 @@ impl OpCode {
             CallNative => "call.na",
             Call => "call",
             Stop => "stop",
+
+            ReadGlobal => "read.var",
+            ReadGlobalArray => "read.arr",
+            ReadGlobalArray2d => "read.mat",
 
             Pop => "pop",
             SetFunc => "set.fn",

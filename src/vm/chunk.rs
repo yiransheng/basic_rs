@@ -324,6 +324,18 @@ pub mod from_ir {
                     self.chunk.write_opcode(OpCode::SetLocal, line_no);
                     self.chunk.add_inline_operand(var, line_no);
                 }
+                ReadGlobal(var) => {
+                    self.chunk.write_opcode(OpCode::ReadGlobal, line_no);
+                    self.chunk.add_inline_operand(var, line_no);
+                }
+                ReadGlobalArray(var) => {
+                    self.chunk.write_opcode(OpCode::ReadGlobalArray, line_no);
+                    self.chunk.add_inline_operand(var, line_no);
+                }
+                ReadGlobalArray2d(var) => {
+                    self.chunk.write_opcode(OpCode::ReadGlobalArray2d, line_no);
+                    self.chunk.add_inline_operand(var, line_no);
+                }
                 GetLocal(var) => {
                     self.chunk.write_opcode(OpCode::GetLocal, line_no);
                     self.chunk.add_inline_operand(var, line_no);
