@@ -384,6 +384,47 @@ impl VM {
                         _ => return Err(ExecError::TypeError("not a function")),
                     }
                 }
+                OpCode::ReadGlobal => {
+                    let var: Variable = self.read_inline_operand()?;
+                    let value = self.read_number()?;
+                    self.globals.insert(var, value);
+                }
+                OpCode::ReadGlobalArray => {
+                    let var: Variable = self.read_inline_operand()?;
+                    let i: u8 = match self.pop_number() {
+                        Ok(x) => x
+                            .to_u8()
+                            .ok_or_else(|| ExecError::IndexError(var, x))?,
+                        Err(e) => return Err(e),
+                    };
+                    let v = self.read_number()?;
+                    let list = self
+                        .global_lists
+                        .get_mut(&var)
+                        .ok_or_else(|| ExecError::ListNotFound(var))?;
+                    list.set(i, v)?;
+                }
+                OpCode::ReadGlobalArray2d => {
+                    let var: Variable = self.read_inline_operand()?;
+                    let i: u8 = match self.pop_number() {
+                        Ok(x) => x
+                            .to_u8()
+                            .ok_or_else(|| ExecError::IndexError(var, x))?,
+                        Err(e) => return Err(e),
+                    };
+                    let j: u8 = match self.pop_number() {
+                        Ok(x) => x
+                            .to_u8()
+                            .ok_or_else(|| ExecError::IndexError(var, x))?,
+                        Err(e) => return Err(e),
+                    };
+                    let v = self.read_number()?;
+                    let table = self
+                        .global_tables
+                        .get_mut(&var)
+                        .ok_or_else(|| ExecError::TableNotFound(var))?;
+                    table.set([i, j], v)?;
+                }
                 OpCode::GetGlobal => {
                     let var: Variable = self.read_inline_operand()?;
                     let v = self.globals.get(&var).cloned().unwrap_or(0.0);
@@ -650,12 +691,15 @@ impl VM {
         match self.pop_value() {
             Ok(Variant::Number(v)) => Ok(v),
             Ok(_) => Err(ExecError::TypeError("not a number")),
-            Err(ExecError::EmptyStack) => {
-                let chunk = self.current_chunk()?;
-                chunk.pop_data().ok_or_else(|| ExecError::NoData)
-            }
             Err(e) => Err(e),
         }
+    }
+
+    fn read_number(&mut self) -> Result<Number, ExecError> {
+        let chunk = self.current_chunk()?;
+        let n = chunk.pop_data().ok_or_else(|| ExecError::NoData)?;
+
+        Ok(n)
     }
 
     fn peek_number(&self, distance: usize) -> Result<Number, ExecError> {

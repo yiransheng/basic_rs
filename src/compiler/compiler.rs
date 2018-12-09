@@ -20,8 +20,15 @@ pub struct CompileError {
     pub line_no: usize,
 }
 
+#[derive(Copy, Clone, Eq, PartialEq)]
+enum AssignState {
+    Assign,
+    Read,
+    Eval,
+}
+
 struct CompileState {
-    assign: bool,
+    assign: AssignState,
     line: LineNo,
     line_label: Option<Label>,
     local_pool: LocalVarPool,
@@ -187,22 +194,12 @@ where
             .map_err(|e| e.into())
     }
 
-    fn assigning<T, F>(&mut self, mut f: F) -> T
+    fn with_assigning_state<T, F>(&mut self, s: AssignState, mut f: F) -> T
     where
         F: FnMut(&mut Self) -> T,
     {
         let prev_assign = self.state.assign;
-        self.state.assign = true;
-        let ret = f(self);
-        self.state.assign = prev_assign;
-        ret
-    }
-    fn evaluating<T, F>(&mut self, mut f: F) -> T
-    where
-        F: FnMut(&mut Self) -> T,
-    {
-        let prev_assign = self.state.assign;
-        self.state.assign = false;
+        self.state.assign = s;
         let ret = f(self);
         self.state.assign = prev_assign;
         ret
@@ -238,7 +235,7 @@ where
                 functions,
             },
             state: CompileState {
-                assign: false,
+                assign: AssignState::Eval,
                 line: 0,
                 line_label: None,
                 label_id_gen: LabelIdGen::new(),
@@ -345,12 +342,16 @@ where
     }
 
     fn visit_let(&mut self, stmt: &LetStmt) -> Result {
-        self.evaluating(|this| this.visit_expr(&stmt.expr))?;
-        self.assigning(|this| this.visit_lvalue(&stmt.var))
+        self.with_assigning_state(AssignState::Eval, |this| {
+            this.visit_expr(&stmt.expr)
+        })?;
+        self.with_assigning_state(AssignState::Assign, |this| {
+            this.visit_lvalue(&stmt.var)
+        })
     }
 
     fn visit_read(&mut self, stmt: &ReadStmt) -> Result {
-        self.assigning(|this| {
+        self.with_assigning_state(AssignState::Read, |this| {
             for var in &stmt.vars {
                 match this.visit_lvalue(var) {
                     Ok(_) => {}
@@ -464,7 +465,9 @@ where
         }
         self.visit_expr(&stmt.from)?;
         self.emit_instruction(InstructionKind::Dup)?;
-        self.assigning(|this| this.visit_variable(&stmt.var))?;
+        self.with_assigning_state(AssignState::Assign, |this| {
+            this.visit_variable(&stmt.var)
+        })?;
 
         // value stack: [to, step, current]
 
@@ -505,7 +508,9 @@ where
         self.emit_instruction(InstructionKind::Add)?;
         self.emit_instruction(InstructionKind::Dup)?;
 
-        self.assigning(|this| this.visit_variable(&stmt.var))?;
+        self.with_assigning_state(AssignState::Assign, |this| {
+            this.visit_variable(&stmt.var)
+        })?;
 
         // value stack: [to, step, current]
         self.emit_labeled_instruction(
@@ -579,46 +584,61 @@ where
         let is_local = self.state.local_pool.is_in_use(var);
 
         match (self.state.assign, is_local) {
-            (true, true) => {
+            (AssignState::Assign, true) => {
                 self.emit_instruction(InstructionKind::SetLocal(*var))
             }
-            (true, false) => {
+            (AssignState::Assign, false) => {
                 self.emit_instruction(InstructionKind::SetGlobal(*var))
             }
-            (false, true) => {
+            (AssignState::Eval, true) => {
                 self.emit_instruction(InstructionKind::GetLocal(*var))
             }
-            (false, false) => {
+            (AssignState::Eval, false) => {
                 self.emit_instruction(InstructionKind::GetGlobal(*var))
             }
+            (AssignState::Read, false) => {
+                self.emit_instruction(InstructionKind::ReadGlobal(*var))
+            }
+            (AssignState::Read, true) => unreachable!(),
         }
     }
 
     fn visit_list(&mut self, list: &List) -> Result {
-        self.evaluating(|this| this.visit_expr(&list.subscript))?;
+        self.with_assigning_state(AssignState::Eval, |this| {
+            this.visit_expr(&list.subscript)
+        })?;
 
-        if self.state.assign {
-            self.emit_instruction(InstructionKind::SetGlobalArray(list.var))
-        } else {
-            self.emit_instruction(InstructionKind::GetGlobalArray(list.var))
+        match self.state.assign {
+            AssignState::Assign => {
+                self.emit_instruction(InstructionKind::SetGlobalArray(list.var))
+            }
+            AssignState::Eval => {
+                self.emit_instruction(InstructionKind::GetGlobalArray(list.var))
+            }
+            AssignState::Read => self
+                .emit_instruction(InstructionKind::ReadGlobalArray(list.var)),
         }
     }
 
     fn visit_table(&mut self, table: &Table) -> Result {
-        self.evaluating(|this| {
+        self.with_assigning_state(AssignState::Eval, |this| {
             this.visit_expr(&table.subscript.0)
                 .and_then(|_| this.visit_expr(&table.subscript.1))
         })?;
 
-        if self.state.assign {
-            self.emit_instruction(InstructionKind::SetGlobalArray2d(table.var))
-        } else {
-            self.emit_instruction(InstructionKind::GetGlobalArray2d(table.var))
+        match self.state.assign {
+            AssignState::Assign => self
+                .emit_instruction(InstructionKind::SetGlobalArray2d(table.var)),
+            AssignState::Eval => self
+                .emit_instruction(InstructionKind::GetGlobalArray2d(table.var)),
+            AssignState::Read => self.emit_instruction(
+                InstructionKind::ReadGlobalArray2d(table.var),
+            ),
         }
     }
 
     fn visit_expr(&mut self, expr: &Expression) -> Result {
-        if self.state.assign {
+        if self.state.assign != AssignState::Eval {
             // this in theory should not happen... parser should've taken
             // care of it, if observed, probably a compiler bug
             return Err(CompileErrorInner::CannotAssignTo(expr.to_string()));
