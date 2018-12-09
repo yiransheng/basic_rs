@@ -464,6 +464,7 @@ where
         let step_var = self.state.local_pool.get_local();
         let to_var = self.state.local_pool.get_local();
 
+        self.visit_expr(&stmt.to)?;
         match stmt.step {
             Some(ref step_expr) => {
                 self.visit_expr(step_expr)?;
@@ -472,17 +473,11 @@ where
                 self.emit_instruction(InstructionKind::Constant(1.0))?;
             }
         }
-        self.emit_instruction(InstructionKind::Dup)?;
-        self.assigning(|this| this.visit_variable(&step_var))?;
-
         self.visit_expr(&stmt.from)?;
         self.emit_instruction(InstructionKind::Dup)?;
         self.assigning(|this| this.visit_variable(&stmt.var))?;
 
-        self.visit_expr(&stmt.to)?;
-        self.emit_instruction(InstructionKind::Dup)?;
-        self.assigning(|this| this.visit_variable(&to_var))?;
-        // value stack: [step, current, to]
+        // value stack: [to, step, current]
 
         let start_label = self.state.label_id_gen.next_id();
         let next_label = self.state.label_id_gen.next_id();
@@ -514,8 +509,7 @@ where
         let to_var = for_state.to;
         let loop_start = for_state.loop_start;
 
-        self.visit_variable(&step_var)?;
-
+        // [to, step]
         self.emit_instruction(InstructionKind::Dup)?;
         self.visit_variable(&stmt.var)?;
 
@@ -523,9 +517,8 @@ where
         self.emit_instruction(InstructionKind::Dup)?;
 
         self.assigning(|this| this.visit_variable(&stmt.var))?;
-        self.visit_variable(&to_var)?;
 
-        // value stack: [step, current, to]
+        // value stack: [to, step, current]
         self.emit_labeled_instruction(
             for_state.next_label,
             InstructionKind::LoopTest,

@@ -559,13 +559,15 @@ impl VM {
                     self.push_value(value);
                 }
                 OpCode::LoopTest => {
-                    let target = self.pop_number()?;
                     let current = self.pop_number()?;
-                    let step = self.pop_number()?;
+                    let step = self.peek_number(0)?;
+                    let target = self.peek_number(1)?;
 
                     if (step > 0.0 && current > target)
                         || (step < 0.0 && current < target)
                     {
+                        let _ = self.pop_value();
+                        let _ = self.pop_value();
                         self.push_value(Value::true_value());
                     } else {
                         self.push_value(Value::false_value());
@@ -656,6 +658,14 @@ impl VM {
         }
     }
 
+    fn peek_number(&self, distance: usize) -> Result<Number, ExecError> {
+        match self.peek(distance).map(Variant::from) {
+            Some(Variant::Number(n)) => Ok(n),
+            Some(_) => Err(ExecError::TypeError("not a number")),
+            None => Err(ExecError::EmptyStack),
+        }
+    }
+
     #[inline(always)]
     fn pop_value(&mut self) -> Result<Variant, ExecError> {
         self.stack
@@ -664,9 +674,10 @@ impl VM {
             .ok_or_else(|| ExecError::EmptyStack)
     }
 
+    #[inline(always)]
     fn peek(&self, distance: usize) -> Option<Value> {
         let n = self.stack.len();
-        let index = n - 1 - distance;
+        let index = n.saturating_sub(distance + 1);
 
         self.stack.get(index).cloned()
     }
