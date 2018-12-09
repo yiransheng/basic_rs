@@ -71,30 +71,6 @@ impl LocalVarPool {
         }
     }
 }
-// Scoping of mask_global is implemented as a macro.
-//
-// Implemeting a method on `LocalVarPool` to take a closure
-// is obviously better, however, that requires self to be borrowed
-// mutablely for the entire lifetime of the closure, which
-// will block compiler method calls inside (all requires exclusive
-// &mut self ref). This macro ensures make/unmask is always done
-// in pairs. A similar macro is defined for function compile scope.
-//
-// The other solution is to store an `Option<LocalVarPool>` in `Compiler`,
-// and use `take()` (or mem::replace), however, I think that
-// adds a lot of noise and detracts from the main logic of underlying
-// code.
-macro_rules! mask_global {
-    ($pool: expr, $var: expr, $body: expr) => {{
-        $pool.mask_global($var);
-
-        let r = $body;
-
-        $pool.unmask_global($var)?;
-
-        r
-    }};
-}
 
 pub struct Target<T> {
     main: FuncId,
@@ -123,18 +99,6 @@ where
             Err(CompileErrorInner::Custom("Unenclosed function"))
         }
     }
-}
-
-macro_rules! function {
-    ($tgt: expr, $body: expr) => {{
-        let func_id = $tgt.new_function();
-
-        $body?;
-
-        $tgt.restore(func_id)?;
-
-        func_id
-    }};
 }
 
 impl<T: IRVisitor> IRVisitor for Target<T>
@@ -243,6 +207,15 @@ where
         self.state.assign = prev_assign;
         ret
     }
+
+    fn mask_global<F>(&mut self, var: Variable, mut f: F) -> Result
+    where
+        F: FnMut(&mut Self) -> Result,
+    {
+        self.state.local_pool.mask_global(var);
+        f(self)?;
+        self.state.local_pool.unmask_global(var)
+    }
 }
 impl<V: IRVisitor + Default> Compiler<Target<V>>
 where
@@ -294,6 +267,22 @@ where
                 inner: err,
                 line_no,
             })
+    }
+
+    fn compile_function<F>(
+        &mut self,
+        mut f: F,
+    ) -> ::std::result::Result<FuncId, CompileErrorInner>
+    where
+        F: FnMut(&mut Self) -> Result,
+    {
+        let func_id = self.ir_visitor.new_function();
+
+        f(self)?;
+
+        self.ir_visitor.restore(func_id)?;
+
+        Ok(func_id)
     }
 }
 
@@ -536,14 +525,15 @@ where
         let func = stmt.func;
         let expr = &stmt.expr;
 
-        mask_global!(self.state.local_pool, var, {
-            let func_id = function!(self.ir_visitor, {
-                self.emit_instruction(InstructionKind::DefineLocal(var))?;
-                self.emit_instruction(InstructionKind::SetLocal(var))?;
-                self.visit_expr(expr)?;
-                self.emit_instruction(InstructionKind::Return)
-            });
-            self.emit_instruction(InstructionKind::MapFunc(func, func_id))
+        self.mask_global(var, |this| {
+            let func_id = this.compile_function(|this| {
+                this.emit_instruction(InstructionKind::DefineLocal(var))?;
+                this.emit_instruction(InstructionKind::SetLocal(var))?;
+                this.visit_expr(expr)?;
+                this.emit_instruction(InstructionKind::Return)
+            })?;
+
+            this.emit_instruction(InstructionKind::MapFunc(func, func_id))
         })
     }
 
