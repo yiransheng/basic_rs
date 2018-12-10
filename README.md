@@ -124,4 +124,4 @@ It is only 3~4 times slower than `python`, and ~150 times slower than native `ru
 
 
 
-There are some minor penalties to node and js versions due to communicating via stdin/stdout. However, the pattern still holds if iteration is increased from 1000 to 1000_000 and without IO barrier. Only difference is, on my machine, nodejs gets significantly faster and outperforms rust code, as the javaScript JIT is particularly suitable for optimizing this type of code.
+There are some minor penalties to node and js versions due to communicating via stdin/stdout. However, the pattern still holds if iteration is increased from 1000 to 1000_000 and without IO barrier (Note nodejs version is faster than rust, as V8 JIT is particularly good for this type of code).
