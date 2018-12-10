@@ -16,6 +16,7 @@ pub mod value;
 
 mod array;
 mod chunk;
+mod data;
 mod line_mapping;
 mod opcode;
 mod print;
@@ -164,6 +165,28 @@ impl VM {
             let mut fn_chunk = Disassembler::new(chunk, &mut out);
             fn_chunk.disassemble();
         }
+    }
+
+    pub fn reset(&mut self) {
+        self.chunk.reset();
+        for c in self.user_fns.values_mut() {
+            c.reset();
+        }
+        self.globals.clear();
+        self.global_lists.clear();
+        self.global_tables.clear();
+        self.functions.clear();
+        self.stack.clear();
+        self.call_stack.clear();
+
+        let call_frame = CallFrame {
+            depth: 0,
+            ip: 0,
+            context: None,
+            locals: FxHashMap::default(),
+        };
+
+        self.call_stack.push_back(call_frame);
     }
 
     #[inline]

@@ -7,17 +7,19 @@ use rand::{Rng, SeedableRng};
 
 use basic_rs::*;
 
-fn run_basic_program(prog: &str) -> String {
+fn compile_basic_program(prog: &str) -> VM {
     let scanner = Scanner::new(prog);
     let ast = Parser::new(scanner).parse().unwrap();
 
-    let mut vm = compile(&ast).expect("it should compile successfuly");
+    let vm = compile(&ast).expect("it should compile successfuly");
 
+    vm
+}
+
+fn run_basic_program(vm: &mut VM) {
     let mut printed = Vec::new();
     let mut rng = SmallRng::from_seed([123; 16]);
     vm.run(&mut printed, &mut rng).expect("no runtime error");
-
-    String::from_utf8(printed).unwrap()
 }
 
 fn pi_native() -> f64 {
@@ -53,7 +55,22 @@ fn create_js_command() -> Command {
 fn bench_pi_bas(c: &mut Criterion) {
     c.bench_function("interpreter:pi.bas", |b| {
         b.iter(|| {
-            run_basic_program(include_str!("../sample_programs/pi.bas"));
+            let mut vm = compile_basic_program(include_str!(
+                "../sample_programs/pi.bas"
+            ));
+            run_basic_program(&mut vm);
+        });
+    });
+}
+
+fn bench_pi_bas_bytecode(c: &mut Criterion) {
+    let mut vm =
+        compile_basic_program(include_str!("../sample_programs/pi.bas"));
+
+    c.bench_function("interpreter:pi.bas (bytecode)", move |b| {
+        b.iter(|| {
+            vm.reset();
+            run_basic_program(&mut vm);
         });
     });
 }
@@ -93,8 +110,9 @@ fn bench_pi_rs(c: &mut Criterion) {
 }
 
 criterion_group!(basic, bench_pi_bas);
+criterion_group!(basic_compiled, bench_pi_bas_bytecode);
 criterion_group!(python, bench_pi_py);
 criterion_group!(js, bench_pi_node);
 criterion_group!(rust, bench_pi_rs);
 
-criterion_main!(basic, python, js, rust);
+criterion_main!(basic, basic_compiled, python, js, rust);
