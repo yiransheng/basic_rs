@@ -36,8 +36,6 @@ struct CompileState {
 }
 
 struct ForState {
-    step: Variable,
-    to: Variable,
     loop_start: Label,
     next_label: Label,
 }
@@ -451,9 +449,6 @@ where
     }
 
     fn visit_for(&mut self, stmt: &ForStmt) -> Result {
-        let step_var = self.state.local_pool.get_local();
-        let to_var = self.state.local_pool.get_local();
-
         self.visit_expr(&stmt.to)?;
         match stmt.step {
             Some(ref step_expr) => {
@@ -476,8 +471,6 @@ where
         self.emit_instruction(InstructionKind::Jump(next_label))?;
 
         let for_state = ForState {
-            step: step_var,
-            to: to_var,
             loop_start: start_label,
             next_label,
         };
@@ -497,8 +490,6 @@ where
             .remove(&stmt.var)
             .ok_or(CompileErrorInner::NextWithoutFor)?;
 
-        let step_var = for_state.step;
-        let to_var = for_state.to;
         let loop_start = for_state.loop_start;
 
         // [to, step]
@@ -518,9 +509,6 @@ where
             InstructionKind::LoopTest,
         )?;
         self.emit_instruction(InstructionKind::JumpFalse(loop_start))?;
-
-        self.state.local_pool.reclaim_local(step_var);
-        self.state.local_pool.reclaim_local(to_var);
 
         Ok(())
     }
