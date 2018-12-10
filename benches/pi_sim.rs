@@ -109,10 +109,13 @@ fn bench_pi_rs(c: &mut Criterion) {
     });
 }
 
-criterion_group!(basic, bench_pi_bas);
-criterion_group!(basic_compiled, bench_pi_bas_bytecode);
-criterion_group!(python, bench_pi_py);
-criterion_group!(js, bench_pi_node);
-criterion_group!(rust, bench_pi_rs);
+criterion_group!(
+    pi_benches,
+    bench_pi_bas,
+    bench_pi_bas_bytecode,
+    bench_pi_py,
+    bench_pi_node,
+    bench_pi_rs
+);
 
-criterion_main!(basic, basic_compiled, python, js, rust);
+criterion_main!(pi_benches);
