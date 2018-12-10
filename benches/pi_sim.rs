@@ -1,7 +1,7 @@
 use std::process::Command;
 use std::process::Stdio;
 
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use rand::rngs::SmallRng;
 use rand::{Rng, SeedableRng};
 
@@ -22,9 +22,8 @@ fn run_basic_program(vm: &mut VM) {
     vm.run(&mut printed, &mut rng).expect("no runtime error");
 }
 
-fn pi_native() -> f64 {
+fn pi_native(n: u64) -> f64 {
     let mut inside = 0;
-    let n = 1000;
     let mut rng = SmallRng::from_seed([1; 16]);
     for _ in 0..n {
         let x: f64 = rng.gen();
@@ -104,7 +103,8 @@ fn bench_pi_node(c: &mut Criterion) {
 fn bench_pi_rs(c: &mut Criterion) {
     c.bench_function("rust:pi", |b| {
         b.iter(|| {
-            pi_native();
+            let n = black_box(1000);
+            pi_native(n);
         });
     });
 }
