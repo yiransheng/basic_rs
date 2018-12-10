@@ -6,6 +6,14 @@ use crate::compiler::compile;
 use crate::parser::{ErrorInner, Parser};
 use crate::scanner::{Error as ScannerError, Scanner, SourceLoc};
 
+macro_rules! test_bas {
+    ( $($x:expr),* ) => {{
+	$(
+            test_correct_program($x, include_str!($x));
+        )*
+    }};
+}
+
 fn test_correct_program(name: &str, prog_and_output: &str) {
     println!("Running test for: {}", name);
 
@@ -39,14 +47,6 @@ fn parse_error(prog: &str) -> ErrorInner {
 fn parse_error_source_loc(prog: &str) -> SourceLoc {
     let scanner = Scanner::new(prog);
     Parser::new(scanner).parse().unwrap_err().loc
-}
-
-macro_rules! test_bas {
-    ( $($x:expr),* ) => {{
-	$(
-            test_correct_program($x, include_str!($x));
-        )*
-    }};
 }
 
 #[test]

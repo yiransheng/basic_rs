@@ -212,7 +212,7 @@ impl Chunk {
 }
 
 pub mod from_ir {
-    use int_hash::IntHashMap;
+    use rustc_hash::FxHashMap;
 
     use super::*;
     use crate::ir::*;
@@ -222,14 +222,14 @@ pub mod from_ir {
     pub struct WriteError;
 
     pub struct ChunkWriter {
-        jp_label_map: IntHashMap<Label, JumpPoint>,
+        jp_label_map: FxHashMap<Label, JumpPoint>,
         jp_indices: Vec<(u16, Label)>,
         chunk: Chunk,
     }
     impl Default for ChunkWriter {
         fn default() -> Self {
             ChunkWriter {
-                jp_label_map: IntHashMap::default(),
+                jp_label_map: FxHashMap::default(),
                 jp_indices: Vec::new(),
                 chunk: Chunk::new(),
             }
