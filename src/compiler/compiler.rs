@@ -1,5 +1,5 @@
 use either::Either;
-use int_hash::{IntHashMap, IntHashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::ast::*;
 use crate::ir::{
@@ -43,8 +43,8 @@ struct ForState {
 }
 
 struct LocalVarPool {
-    free: IntHashSet<Variable>,
-    in_use: IntHashSet<Variable>,
+    free: FxHashSet<Variable>,
+    in_use: FxHashSet<Variable>,
     var_gen: AnonVarGen,
 }
 impl LocalVarPool {
@@ -83,7 +83,7 @@ pub struct Target<T> {
     main: FuncId,
     current: FuncId,
     func_id_gen: FuncIdGen,
-    functions: IntHashMap<FuncId, T>,
+    functions: FxHashMap<FuncId, T>,
 }
 impl<T: IRVisitor + Default> Target<T>
 where
@@ -112,14 +112,14 @@ impl<T: IRVisitor> IRVisitor for Target<T>
 where
     T::Error: Into<CompileErrorInner>,
 {
-    type Output = (FuncId, IntHashMap<FuncId, T::Output>);
+    type Output = (FuncId, FxHashMap<FuncId, T::Output>);
     type Error = CompileErrorInner;
 
     fn finish(mut self) -> ::std::result::Result<Self::Output, Self::Error> {
         let main = self.main;
         let n = self.functions.len();
 
-        let outputs: IntHashMap<_, _> = self
+        let outputs: FxHashMap<_, _> = self
             .functions
             .drain()
             .filter_map(|(func_id, t)| t.finish().map(|x| (func_id, x)).ok())
@@ -150,8 +150,8 @@ where
 
 pub struct Compiler<V> {
     state: CompileState,
-    for_states: IntHashMap<Variable, ForState>,
-    label_mapping: IntHashMap<LineNo, Label>,
+    for_states: FxHashMap<Variable, ForState>,
+    label_mapping: FxHashMap<LineNo, Label>,
     ir_visitor: V,
 }
 
@@ -222,7 +222,7 @@ where
         let mut func_id_gen = FuncIdGen::new();
         let main_id = func_id_gen.next_id();
 
-        let mut functions = IntHashMap::default();
+        let mut functions = FxHashMap::default();
         let main = V::default();
 
         functions.insert(main_id, main);
@@ -240,20 +240,20 @@ where
                 line_label: None,
                 label_id_gen: LabelIdGen::new(),
                 local_pool: LocalVarPool {
-                    free: IntHashSet::default(),
-                    in_use: IntHashSet::default(),
+                    free: FxHashSet::default(),
+                    in_use: FxHashSet::default(),
                     var_gen: AnonVarGen::new(),
                 },
             },
-            for_states: IntHashMap::default(),
-            label_mapping: IntHashMap::default(),
+            for_states: FxHashMap::default(),
+            label_mapping: FxHashMap::default(),
         }
     }
     pub fn compile(
         mut self,
         prog: &Program,
     ) -> ::std::result::Result<
-        (FuncId, IntHashMap<FuncId, V::Output>),
+        (FuncId, FxHashMap<FuncId, V::Output>),
         CompileError,
     > {
         let line_no = self.state.line;

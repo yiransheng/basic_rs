@@ -5,9 +5,9 @@ use std::fmt;
 use std::io;
 use std::mem;
 
-use int_hash::IntHashMap;
 use num_traits::{FromPrimitive, ToPrimitive};
 use rand::Rng;
+use rustc_hash::FxHashMap;
 
 use crate::ast::function::Func;
 use crate::ast::*;
@@ -16,6 +16,7 @@ pub mod value;
 
 mod array;
 mod chunk;
+mod data;
 mod line_mapping;
 mod opcode;
 mod print;
@@ -35,17 +36,17 @@ pub struct CallFrame {
     depth: usize,
     ip: usize,
     context: Option<FuncId>,
-    locals: IntHashMap<Variable, Number>,
+    locals: FxHashMap<Variable, Number>,
 }
 
 pub struct VM {
     chunk: Chunk,
-    user_fns: IntHashMap<FuncId, Chunk>,
+    user_fns: FxHashMap<FuncId, Chunk>,
 
-    globals: IntHashMap<Variable, Number>,
-    functions: IntHashMap<Func, FuncId>,
-    global_lists: IntHashMap<Variable, Array<u8>>,
-    global_tables: IntHashMap<Variable, Array<[u8; 2]>>,
+    globals: FxHashMap<Variable, Number>,
+    functions: FxHashMap<Func, FuncId>,
+    global_lists: FxHashMap<Variable, Array<u8>>,
+    global_tables: FxHashMap<Variable, Array<[u8; 2]>>,
 
     stack: VecDeque<Value>,
     call_stack: VecDeque<CallFrame>,
@@ -128,7 +129,7 @@ impl From<PrintError> for ExecError {
 }
 
 impl VM {
-    pub fn new(main_id: FuncId, mut chunks: IntHashMap<FuncId, Chunk>) -> Self {
+    pub fn new(main_id: FuncId, mut chunks: FxHashMap<FuncId, Chunk>) -> Self {
         let chunk = chunks.remove(&main_id).unwrap();
 
         let mut call_stack = VecDeque::with_capacity(16);
@@ -136,17 +137,17 @@ impl VM {
             depth: 0,
             ip: 0,
             context: None,
-            locals: IntHashMap::default(),
+            locals: FxHashMap::default(),
         };
         call_stack.push_back(call_frame);
         VM {
             chunk,
             user_fns: chunks,
 
-            globals: IntHashMap::default(),
-            functions: IntHashMap::default(),
-            global_lists: IntHashMap::default(),
-            global_tables: IntHashMap::default(),
+            globals: FxHashMap::default(),
+            functions: FxHashMap::default(),
+            global_lists: FxHashMap::default(),
+            global_tables: FxHashMap::default(),
             stack: VecDeque::with_capacity(256),
 
             call_stack,
@@ -164,6 +165,28 @@ impl VM {
             let mut fn_chunk = Disassembler::new(chunk, &mut out);
             fn_chunk.disassemble();
         }
+    }
+
+    pub fn reset(&mut self) {
+        self.chunk.reset();
+        for c in self.user_fns.values_mut() {
+            c.reset();
+        }
+        self.globals.clear();
+        self.global_lists.clear();
+        self.global_tables.clear();
+        self.functions.clear();
+        self.stack.clear();
+        self.call_stack.clear();
+
+        let call_frame = CallFrame {
+            depth: 0,
+            ip: 0,
+            context: None,
+            locals: FxHashMap::default(),
+        };
+
+        self.call_stack.push_back(call_frame);
     }
 
     #[inline]
@@ -325,7 +348,7 @@ impl VM {
                     let new_frame = CallFrame {
                         depth: current_depth + 1,
                         context: Some(func),
-                        locals: IntHashMap::default(),
+                        locals: FxHashMap::default(),
                         ip: 0,
                     };
                     self.call_stack.push_back(new_frame);
@@ -337,7 +360,7 @@ impl VM {
                     // transfer locals to subroutine callframe
                     let locals = mem::replace(
                         &mut current_frame.locals,
-                        IntHashMap::default(),
+                        FxHashMap::default(),
                     );
 
                     let new_frame = CallFrame {

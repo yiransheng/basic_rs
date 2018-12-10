@@ -1,5 +1,5 @@
 use either::Either;
-use int_hash::IntHashMap;
+use rustc_hash::FxHashMap;
 
 use super::error::CompileError;
 use crate::ast::variable::Variable;
@@ -14,8 +14,8 @@ enum ArrayType {
 
 pub struct ArrayDims<V> {
     ir_visitor: V,
-    types: IntHashMap<Variable, ArrayType>,
-    globals: IntHashMap<Variable, LineNo>,
+    types: FxHashMap<Variable, ArrayType>,
+    globals: FxHashMap<Variable, LineNo>,
     local: Option<Variable>,
     line: LineNo,
 }
@@ -23,8 +23,8 @@ pub struct ArrayDims<V> {
 impl<V: IRVisitor> ArrayDims<V> {
     pub fn new(ir_visitor: V) -> Self {
         ArrayDims {
-            types: IntHashMap::default(),
-            globals: IntHashMap::default(),
+            types: FxHashMap::default(),
+            globals: FxHashMap::default(),
             local: None,
             ir_visitor,
             line: 0,

@@ -3,6 +3,7 @@ use std::collections::VecDeque;
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use num_traits::{FromPrimitive, ToPrimitive};
 
+use super::data::DataStack;
 use super::line_mapping::LineMapping;
 use super::opcode::OpCode;
 use super::value::FuncId;
@@ -115,7 +116,7 @@ impl Operand for String {
 pub struct Chunk {
     code: Vec<u8>,
 
-    data: VecDeque<f64>,
+    data: DataStack<f64>,
     constants: Vec<f64>,
 
     jump_points: Vec<JumpPoint>,
@@ -128,13 +129,17 @@ impl Chunk {
         Chunk {
             code: Vec::new(),
 
-            data: VecDeque::new(),
+            data: DataStack::new(),
             constants: Vec::new(),
 
             jump_points: Vec::new(),
             strings: Vec::new(),
             line_map: LineMapping::new(),
         }
+    }
+
+    pub fn reset(&mut self) {
+        self.data.reset();
     }
 
     pub fn len(&self) -> usize {
@@ -212,7 +217,7 @@ impl Chunk {
 }
 
 pub mod from_ir {
-    use int_hash::IntHashMap;
+    use rustc_hash::FxHashMap;
 
     use super::*;
     use crate::ir::*;
@@ -222,14 +227,14 @@ pub mod from_ir {
     pub struct WriteError;
 
     pub struct ChunkWriter {
-        jp_label_map: IntHashMap<Label, JumpPoint>,
+        jp_label_map: FxHashMap<Label, JumpPoint>,
         jp_indices: Vec<(u16, Label)>,
         chunk: Chunk,
     }
     impl Default for ChunkWriter {
         fn default() -> Self {
             ChunkWriter {
-                jp_label_map: IntHashMap::default(),
+                jp_label_map: FxHashMap::default(),
                 jp_indices: Vec::new(),
                 chunk: Chunk::new(),
             }

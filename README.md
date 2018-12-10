@@ -73,31 +73,7 @@ Some sample disassembler output. (Source of this program is `sample_programs/fun
  |    0028      get.var  Y1
  |    0031      prt.expr
  |    0032    prt.end   
-40    0033    fn         <compiled function 3>
- |    0036    set.fn     FNA
-45    0039    const      10
- |    0042    get.fn     FNA
- |    0045    call      
- |    0046    set.var    Y2
-50    0049    prt       
- |    0050      prt.lab  "FNA(10) ="
- |    0053      prt;    
- |    0054      get.var  Y2
- |    0057      prt.expr
- |    0058    prt.end   
-60    0059    get.var    Y1
- |    0062    get.var    Y2
- |    0065    eq        
- |    0066    not       
- |    0067    jmp.t      76
-70    0070    prt       
- |    0071      prt.lab  "FAILED"
- |    0074    prt.end   
-80    0075    stop      
-100   0076    prt       
- |    0077      prt.lab  "Ok"
- |    0080    prt.end   
-110   0081    stop      
+ ...
  |    0082    stop      
 
 Chunk: <compiled function 1>
@@ -118,9 +94,34 @@ Chunk: <compiled function 3>
 
 40    0000    set.loc    X
  |    0003    get.loc    X
- |    0006    get.fn     FNZ
- |    0009    call      
- |    0010    const      1
- |    0013    sub       
- |    0014    ret      
+...    
 ```
+
+
+
+## Performance
+
+A simple BASIC program using `RND` to estimate PI via Monte Carlo method is used for benchmarking (using 1000 iterations), and compared to three implementations:
+
+* `python`  (benches/pi.py)
+
+* `nodejs` (benches/pi.js)
+
+* `rust` (`fn` embedded in benchmark file)
+
+
+Here are the results:
+
+```
+interpreter:pi.bas      time:   [745.17 us 748.59 us 752.91 us]                               
+extern:pi.py            time:   [214.18 us 217.63 us 221.79 us]                         
+
+extern:pi.js            time:   [18.813 ns 19.191 ns 19.649 ns]                          
+rust:pi                 time:   [5.0268 us 5.0673 us 5.1122 us]                     
+```
+
+It is only 3~4 times slower than `python`, and ~150 times slower than native `rust` implementation.
+
+
+
+There are some minor penalties to node and js versions due to communicating via stdin/stdout. However, the pattern still holds if iteration is increased from 1000 to 1000_000 and without IO barrier. Only difference is, on my machine, nodejs gets significantly faster and outperforms rust code, as the javaScript JIT is particularly suitable for optimizing this type of code.

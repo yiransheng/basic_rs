@@ -1,18 +1,18 @@
-use int_hash::IntHashMap;
+use rustc_hash::FxHashMap;
 
 use super::error::CompileError;
 use crate::ast::*;
 use crate::ir::{Label, LabelIdGen};
 
 pub struct IrLabels<'a> {
-    label_mapping: &'a mut IntHashMap<LineNo, Label>,
+    label_mapping: &'a mut FxHashMap<LineNo, Label>,
     id_gen: &'a mut LabelIdGen,
 }
 
 impl<'a> IrLabels<'a> {
     pub fn new(
         id_gen: &'a mut LabelIdGen,
-        label_mapping: &'a mut IntHashMap<LineNo, Label>,
+        label_mapping: &'a mut FxHashMap<LineNo, Label>,
     ) -> Self {
         IrLabels {
             id_gen,
