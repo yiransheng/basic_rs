@@ -498,6 +498,7 @@ pub mod disassembler {
                     FnConstant => self.disassemble_function_id(),
 
                     GetGlobal | SetGlobal | GetLocal | SetLocal
+                    | ReadGlobal | ReadGlobalArray | ReadGlobalArray2d
                     | GetGlobalArray | SetGlobalArray | GetGlobalArray2d
                     | SetGlobalArray2d | InitArray | InitArray2d
                     | SetArrayBound | SetArrayBound2d => {
