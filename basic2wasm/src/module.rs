@@ -65,25 +65,6 @@ impl WasmModule {
             init_expr,
         );
     }
-    fn set_global(&mut self, var: Variable) -> Result<(), WasmError> {
-        match self.prev_instr {
-            InstructionKind::Dup => {
-                let expr = self.pop_expr()?;
-                let set_op = self.module.set_global(var.to_string(), expr);
-                self.push_expr(set_op);
-                let get_op =
-                    self.module.get_global(var.to_string(), ValueTy::F64);
-                self.push_expr(get_op);
-                Ok(())
-            }
-            _ => {
-                let expr = self.pop_expr()?;
-                let set_op = self.module.set_global(var.to_string(), expr);
-                self.push_expr(set_op);
-                Ok(())
-            }
-        }
-    }
     fn pop_expr(&mut self) -> Result<Expr, WasmError> {
         match self.exprs.pop_back() {
             Some(Either::Right(expr)) => Ok(expr),
@@ -163,6 +144,7 @@ impl IRVisitor for WasmModule {
     }
 
     fn visit_instruction(&mut self, instr: Instr) -> Result<(), Self::Error> {
+        println!("Inst: {:?}", instr);
         let Instr { kind, label, .. } = instr;
 
         if let Some(label) = label {
@@ -181,10 +163,15 @@ impl IRVisitor for WasmModule {
                     self.jumps.push((prev_block, label, None));
                 }
             }
+
             self.exprs.push_back(Either::Left(label));
         }
 
         match kind {
+            InstructionKind::Noop => {
+                let nop = self.module.nop();
+                self.push_expr(nop);
+            }
             InstructionKind::DefineGlobal(var) => {
                 self.define_global(var);
             }
@@ -197,7 +184,16 @@ impl IRVisitor for WasmModule {
                 self.push_expr(expr);
             }
             InstructionKind::SetGlobal(var) => {
-                self.set_global(var)?;
+                let expr = self.pop_expr()?;
+                let set_op = self.module.set_global(var.to_string(), expr);
+                self.push_expr(set_op);
+            }
+            InstructionKind::Dup => {
+                let expr = self.pop_expr()?;
+                let expr = self.module.tee_local(0, expr);
+                self.push_expr(expr);
+                let expr = self.module.get_local(0, ValueTy::F64);
+                self.push_expr(expr);
             }
             // f64 binary ops
             InstructionKind::Add => {
@@ -278,6 +274,48 @@ impl IRVisitor for WasmModule {
                 let from_block = self.pop_block()?;
                 self.jumps.push((from_block, to_label, Some(cond)));
             }
+
+            InstructionKind::LoopTest => {
+                const STEP_INDEX: u32 = 1;
+                const TARGET_INDEX: u32 = 2;
+
+                let current = self.pop_expr()?;
+                let step = self.pop_expr()?;
+                let target = self.pop_expr()?;
+
+                let step = self.module.tee_local(STEP_INDEX, step);
+                let target = self.module.tee_local(TARGET_INDEX, target);
+
+                let dir = self.module.binary(
+                    BinaryOp::CopySignF64,
+                    self.module.const_(Literal::F64(1.0)),
+                    step,
+                );
+                let dist =
+                    self.module.binary(BinaryOp::SubF64, current, target);
+                let dist = self.module.binary(BinaryOp::MulF64, dist, dir);
+                let zero = self.module.const_(Literal::F64(0.0));
+                let done = self.module.binary(BinaryOp::GtF64, dist, zero);
+
+                let restore_ops = vec![
+                    self.module.get_local(TARGET_INDEX, ValueTy::F64),
+                    self.module.get_local(STEP_INDEX, ValueTy::F64),
+                    self.module.const_(Literal::I32(0)),
+                ];
+                let restore_ops = self.module.block::<&'static str, _>(
+                    None,
+                    restore_ops,
+                    None,
+                );
+
+                let expr = self.module.if_(
+                    done,
+                    self.module.const_(Literal::I32(1)),
+                    Some(restore_ops),
+                );
+                self.push_expr(expr);
+            }
+
             InstructionKind::Stop => {
                 let ret = self.module.return_(None);
                 self.push_expr(ret);
@@ -291,6 +329,13 @@ impl IRVisitor for WasmModule {
                 self.push_expr(expr);
             }
             _ => unimplemented!(),
+        }
+
+        for e in self.exprs.iter() {
+            match e {
+                Either::Left(label) => println!("Label({})", label),
+                Either::Right(expr) => expr.print(),
+            }
         }
 
         self.prev_instr = kind;
