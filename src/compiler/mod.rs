@@ -8,6 +8,7 @@ mod ir_labels;
 mod line_order;
 
 pub use self::compiler::{CompileError, Compiler, Target};
+pub use self::error::CompileError as CompileErrorInner;
 
 use crate::ast;
 use crate::vm::from_ir::{ChunkWriter, WriteError};
