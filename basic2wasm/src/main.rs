@@ -13,6 +13,8 @@ fn main() {
 
     let wasm = modules.remove(&main_id).unwrap();
 
+    wasm.optimize();
+
     // Ok(VM::new(main_id, chunks))
     wasm.print();
 }

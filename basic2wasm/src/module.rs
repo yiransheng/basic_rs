@@ -5,8 +5,8 @@ use either::Either;
 use rustc_hash::FxHashMap;
 
 use basic_rs::{
-    CompileErrorInner, IRVisitor, Instruction as Instr, InstructionKind, Label,
-    Variable,
+    CompileErrorInner, Func, IRVisitor, Instruction as Instr, InstructionKind,
+    Label, Variable,
 };
 
 type StackItem = Either<Label, Expr>;
@@ -30,6 +30,7 @@ pub struct WasmModule {
     blocks: FxHashMap<Label, PlainBlock>,
     jumps: Vec<(PlainBlock, Label, Option<Expr>)>,
     prev_instr: InstructionKind,
+    prev_block_id: Option<PlainBlock>,
 }
 
 impl Default for WasmModule {
@@ -45,6 +46,7 @@ impl Default for WasmModule {
             blocks: FxHashMap::default(),
             jumps: vec![],
             prev_instr: InstructionKind::Noop,
+            prev_block_id: None,
         }
     }
 }
@@ -55,7 +57,7 @@ impl WasmModule {
         self.exprs.push_back(Either::Right(value));
     }
     fn define_global(&mut self, var: Variable) {
-        let init_expr = self.module.const_(Literal::F64(1.0));
+        let init_expr = self.module.const_(Literal::F64(0.0));
         self.module.add_global(
             var.to_string(),
             ValueTy::F64,
@@ -115,6 +117,8 @@ impl WasmModule {
             self.entry_id = Some(block_id);
         }
 
+        self.prev_block_id = Some(block_id);
+
         Ok(block_id)
     }
 }
@@ -124,13 +128,25 @@ impl IRVisitor for WasmModule {
     type Error = WasmError;
 
     fn finish(mut self) -> Result<Self::Output, Self::Error> {
+        let print_api =
+            self.module
+                .add_fn_type(None::<&str>, &[ValueTy::F64], Ty::None);
+        let rand_api = self.module.add_fn_type(None::<&str>, &[], Ty::F64);
+
+        self.module
+            .add_fn_import("print", "env", "print", &print_api);
+
+        self.module.add_fn_import("rand", "env", "rand", &rand_api);
+
         let entry_id = match self.entry_id {
             Some(id) => id,
             None => self.pop_block()?,
         };
         for (from_block, to_label, cond) in self.jumps.drain(..) {
-            let to_block =
-                self.blocks.get(&to_label).ok_or(WasmError::CompileError)?;
+            let to_block = self
+                .blocks
+                .get(&to_label)
+                .ok_or_else(|| WasmError::CompileError)?;
             self.relooper
                 .add_branch(from_block, to_block.clone(), cond, None);
         }
@@ -152,8 +168,14 @@ impl IRVisitor for WasmModule {
         if let Some(label) = label {
             match self.prev_instr {
                 InstructionKind::Jump(_) => {}
-                InstructionKind::JumpTrue(_) => {}
-                InstructionKind::JumpFalse(_) => {}
+                InstructionKind::JumpTrue(_) => {
+                    let prev_block = self.prev_block_id.unwrap();
+                    self.jumps.push((prev_block, label, None));
+                }
+                InstructionKind::JumpFalse(_) => {
+                    let prev_block = self.prev_block_id.unwrap();
+                    self.jumps.push((prev_block, label, None));
+                }
                 _ => {
                     let prev_block = self.pop_block()?;
                     self.jumps.push((prev_block, label, None));
@@ -232,6 +254,14 @@ impl IRVisitor for WasmModule {
                 let value = self.module.unary(UnaryOp::EqZI32, value);
                 self.push_expr(value);
             }
+            // native fns
+            InstructionKind::CallNative(func) => match func {
+                Func::Rnd => {
+                    let value = self.module.call("rand", None, Ty::F64);
+                    self.push_expr(value);
+                }
+                _ => unimplemented!(),
+            },
             // control flow
             InstructionKind::Jump(to_label) => {
                 let from_block = self.pop_block()?;
@@ -252,6 +282,13 @@ impl IRVisitor for WasmModule {
                 let ret = self.module.return_(None);
                 self.push_expr(ret);
                 self.pop_block()?;
+            }
+            InstructionKind::PrintStart => {}
+            InstructionKind::PrintEnd => {}
+            InstructionKind::PrintExpr => {
+                let value = self.pop_expr()?;
+                let expr = self.module.call("print", Some(value), Ty::None);
+                self.push_expr(expr);
             }
             _ => unimplemented!(),
         }
