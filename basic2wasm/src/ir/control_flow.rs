@@ -20,11 +20,13 @@ type CompileResult<T> = Result<T, CompileError>;
 
 struct IRCompiler<Ev> {
     builder: IRBuilder,
+
     labels: Vec<Label>,
     line_index: usize,
     line_indices: FxHashMap<LineNo, usize>,
     line_no: LineNo,
     for_states: FxHashMap<Variable, ForConf>,
+
     expr_visitor: PhantomData<Ev>,
 }
 
@@ -91,6 +93,7 @@ where
         step: IRExpression,
         target: IRExpression,
     ) {
+        let sym_index = self.builder.sym_global(var);
         let sym_step = self.builder.sym_local();
         let sym_target = self.builder.sym_local();
 
@@ -107,6 +110,15 @@ where
         let target = IRExpression::Get(sym_target);
 
         let loop_cond = self.builder.create_block();
+
+        self.builder.add_statement(
+            loop_cond,
+            IRStatement::Logical(IRExpression::LoopCondition(Box::new([
+                IRExpression::Get(sym_step),
+                IRExpression::Get(sym_target),
+                IRExpression::Get(sym_index),
+            ]))),
+        );
 
         self.for_states.insert(
             var,

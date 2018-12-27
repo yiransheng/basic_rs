@@ -11,6 +11,8 @@ new_key_type! { pub struct Label; }
 pub enum SymbolKind {
     Global(ast::Variable),
     Local(usize),
+    // Function(usize)
+    // Subroutine(usize)
 }
 
 #[derive(Debug)]
@@ -36,7 +38,9 @@ pub enum Expression {
     Get(Symbol),
     Binary(BinaryOp, Box<Expression>, Box<Expression>),
     Unary(UnaryOp, Box<Expression>),
-    // Call
+    // step, target, current,
+    LoopCondition(Box<[Expression; 3]>),
+    // Call(Symbol, Box<Expression>)
 }
 
 #[derive(Debug)]
