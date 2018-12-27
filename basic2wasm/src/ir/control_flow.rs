@@ -54,9 +54,17 @@ where
     fn next_line(&self) -> Label {
         unimplemented!()
     }
-
     fn lookup_line(&self, line_no: LineNo) -> Label {
         unimplemented!()
+    }
+
+    fn branch_to_next_line(&mut self) {
+        let from = self.current_line();
+        let to = self.next_line();
+
+        if from != to {
+            self.builder.add_branch(JumpKind::Jmp, from, to);
+        }
     }
 
     fn add_for(
@@ -93,6 +101,9 @@ where
 
         self.builder
             .add_branch(JumpKind::Jmp, self.current_line(), loop_cond);
+
+        self.builder
+            .add_branch(JumpKind::JmpZ, loop_cond, self.next_line());
     }
 
     fn pop_for(&mut self, var: Variable) -> CompileResult<ForConf> {
@@ -134,6 +145,8 @@ where
             IRStatement::Assign(symbol, expr),
         );
 
+        self.branch_to_next_line();
+
         Ok(())
     }
 
@@ -146,6 +159,8 @@ where
     }
 
     fn visit_print(&mut self, stmt: &PrintStmt) -> Result<(), CompileError> {
+        self.branch_to_next_line();
+
         Ok(())
     }
 
@@ -173,6 +188,8 @@ where
         let to = self.lookup_line(stmt.then);
 
         self.builder.add_branch(JumpKind::JmpNZ, from, to);
+        self.builder
+            .add_branch(JumpKind::JmpZ, from, self.next_line());
 
         Ok(())
     }
@@ -189,7 +206,7 @@ where
     }
 
     fn visit_next(&mut self, stmt: &NextStmt) -> Result<(), CompileError> {
-        let ForConf { step, target, body } = self.pop_for(stmt.var)?;
+        let ForConf { step, body, .. } = self.pop_for(stmt.var)?;
 
         let sym = self.builder.sym_global(stmt.var);
         let expr = IRExpression::Binary(
@@ -218,6 +235,8 @@ where
     }
 
     fn visit_rem(&mut self) -> Result<(), CompileError> {
+        self.branch_to_next_line();
+
         Ok(())
     }
 
