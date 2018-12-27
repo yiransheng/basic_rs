@@ -1,10 +1,11 @@
-mod ast;
 mod compiler;
 mod error_print;
 mod ir;
 mod parser;
 mod scanner;
 mod vm;
+
+pub mod ast;
 
 pub use crate::ast::{Func, Variable};
 pub use crate::compiler::{

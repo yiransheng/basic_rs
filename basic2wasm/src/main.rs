@@ -1,3 +1,4 @@
+mod ir;
 mod module;
 
 use crate::module::WasmModule;
