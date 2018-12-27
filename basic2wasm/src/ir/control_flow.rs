@@ -21,6 +21,9 @@ type CompileResult<T> = Result<T, CompileError>;
 struct IRCompiler<Ev> {
     builder: IRBuilder,
     labels: Vec<Label>,
+    line_index: usize,
+    line_indices: FxHashMap<LineNo, usize>,
+    line_no: LineNo,
     for_states: FxHashMap<Variable, ForConf>,
     expr_visitor: PhantomData<Ev>,
 }
@@ -36,26 +39,41 @@ where
     Ev: for<'b> From<&'b mut IRBuilder>
         + AstVisitor<CompileResult<IRExpression>>,
 {
-    fn init_labels<'a>(&'a mut self, program: &'a Program) {
+    fn init<'a>(&'a mut self, program: &'a Program) {
         let marker = LineMarker {
             builder: &mut self.builder,
             program,
         };
 
         self.labels = marker.mark();
+
+        let end_label = self.builder.create_block();
+        self.labels.push(end_label);
+
+        debug_assert!(self.labels.len() == program.statements.len() + 1);
+
+        // TODO: no need to track every line, use a scan
+        // (also switch to BTreeMap?)
+        self.line_indices = program
+            .statements
+            .iter()
+            .enumerate()
+            .map(|(i, stmt)| (stmt.line_no, i))
+            .collect();
     }
 
     fn current_line(&self) -> Label {
-        unimplemented!()
+        self.labels[self.line_index]
     }
     fn current_line_no(&self) -> LineNo {
-        unimplemented!()
+        self.line_no
     }
     fn next_line(&self) -> Label {
-        unimplemented!()
+        self.labels[self.line_index + 1]
     }
     fn lookup_line(&self, line_no: LineNo) -> Label {
-        unimplemented!()
+        let line_index = *self.line_indices.get(&line_no).unwrap();
+        self.labels[line_index]
     }
 
     fn branch_to_next_line(&mut self) {
@@ -127,7 +145,13 @@ where
         + AstVisitor<CompileResult<IRExpression>>,
 {
     fn visit_program(&mut self, prog: &Program) -> Result<(), CompileError> {
-        self.init_labels(prog);
+        self.init(prog);
+
+        for (i, stmt) in prog.statements.iter().enumerate() {
+            self.line_index = i;
+            self.line_no = stmt.line_no;
+            self.visit_statement(stmt)?;
+        }
 
         Ok(())
     }
