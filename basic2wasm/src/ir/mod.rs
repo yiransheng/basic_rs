@@ -10,7 +10,7 @@ new_key_type! { pub struct Label; }
 #[derive(Debug, Copy, Clone)]
 pub enum SymbolKind {
     Global(ast::Variable),
-    Local,
+    Local(usize),
 }
 
 #[derive(Debug)]

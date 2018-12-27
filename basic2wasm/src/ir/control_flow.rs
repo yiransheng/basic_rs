@@ -1,11 +1,254 @@
 use std::collections::VecDeque;
+use std::marker::PhantomData;
 
-use basic_rs::ast::*;
+use basic_rs::ast::{Visitor as AstVisitor, *};
 use rustc_hash::FxHashMap;
 use slotmap::SlotMap;
 
 use super::builder::IRBuilder;
-use super::{Label, Statement as IRStatement};
+use super::{
+    BinaryOp, Expression as IRExpression, JumpKind, Label,
+    Statement as IRStatement,
+};
+
+enum CompileError {
+    Unsupported,
+    Custom(LineNo, &'static str),
+}
+
+type CompileResult<T> = Result<T, CompileError>;
+
+struct IRCompiler<Ev> {
+    builder: IRBuilder,
+    labels: Vec<Label>,
+    for_states: FxHashMap<Variable, ForConf>,
+    expr_visitor: PhantomData<Ev>,
+}
+
+struct ForConf {
+    step: IRExpression,
+    target: IRExpression,
+    body: Label,
+}
+
+impl<Ev> IRCompiler<Ev>
+where
+    Ev: for<'b> From<&'b mut IRBuilder>
+        + AstVisitor<CompileResult<IRExpression>>,
+{
+    fn init_labels<'a>(&'a mut self, program: &'a Program) {
+        let marker = LineMarker {
+            builder: &mut self.builder,
+            program,
+        };
+
+        self.labels = marker.mark();
+    }
+
+    fn current_line(&self) -> Label {
+        unimplemented!()
+    }
+    fn current_line_no(&self) -> LineNo {
+        unimplemented!()
+    }
+    fn next_line(&self) -> Label {
+        unimplemented!()
+    }
+
+    fn lookup_line(&self, line_no: LineNo) -> Label {
+        unimplemented!()
+    }
+
+    fn add_for(
+        &mut self,
+        var: Variable,
+        step: IRExpression,
+        target: IRExpression,
+    ) {
+        let sym_step = self.builder.sym_local();
+        let sym_target = self.builder.sym_local();
+
+        self.builder.add_statement(
+            self.current_line(),
+            IRStatement::Assign(sym_step, step),
+        );
+        self.builder.add_statement(
+            self.current_line(),
+            IRStatement::Assign(sym_target, target),
+        );
+
+        let step = IRExpression::Get(sym_step);
+        let target = IRExpression::Get(sym_target);
+
+        let loop_cond = self.builder.create_block();
+
+        self.for_states.insert(
+            var,
+            ForConf {
+                step,
+                target,
+                body: loop_cond,
+            },
+        );
+
+        self.builder
+            .add_branch(JumpKind::Jmp, self.current_line(), loop_cond);
+    }
+
+    fn pop_for(&mut self, var: Variable) -> CompileResult<ForConf> {
+        self.for_states.remove(&var).ok_or_else(|| {
+            CompileError::Custom(self.current_line_no(), "Next without for")
+        })
+    }
+
+    fn compile_expr(
+        &mut self,
+        expr: &Expression,
+    ) -> CompileResult<IRExpression> {
+        let mut expr_visitor = Ev::from(&mut self.builder);
+        expr_visitor.visit_expr(expr)
+    }
+}
+
+impl<Ev> AstVisitor<Result<(), CompileError>> for IRCompiler<Ev>
+where
+    Ev: for<'b> From<&'b mut IRBuilder>
+        + AstVisitor<CompileResult<IRExpression>>,
+{
+    fn visit_program(&mut self, prog: &Program) -> Result<(), CompileError> {
+        self.init_labels(prog);
+
+        Ok(())
+    }
+
+    fn visit_let(&mut self, stmt: &LetStmt) -> Result<(), CompileError> {
+        let var = match stmt.var {
+            LValue::Variable(var) => var,
+            _ => return Err(CompileError::Unsupported),
+        };
+        let expr = self.compile_expr(&stmt.expr)?;
+        let symbol = self.builder.sym_global(var);
+
+        self.builder.add_statement(
+            self.current_line(),
+            IRStatement::Assign(symbol, expr),
+        );
+
+        Ok(())
+    }
+
+    fn visit_read(&mut self, stmt: &ReadStmt) -> Result<(), CompileError> {
+        Err(CompileError::Unsupported)
+    }
+
+    fn visit_data(&mut self, stmt: &DataStmt) -> Result<(), CompileError> {
+        Err(CompileError::Unsupported)
+    }
+
+    fn visit_print(&mut self, stmt: &PrintStmt) -> Result<(), CompileError> {
+        Ok(())
+    }
+
+    fn visit_goto(&mut self, stmt: &GotoStmt) -> Result<(), CompileError> {
+        let from = self.current_line();
+        let to = self.lookup_line(stmt.goto);
+
+        self.builder.add_branch(JumpKind::Jmp, from, to);
+
+        Ok(())
+    }
+
+    fn visit_gosub(&mut self, stmt: &GosubStmt) -> Result<(), CompileError> {
+        Err(CompileError::Unsupported)
+    }
+
+    fn visit_if(&mut self, stmt: &IfStmt) -> Result<(), CompileError> {
+        let mut expr_visitor = Ev::from(&mut self.builder);
+        let cond = expr_visitor.visit_if(stmt)?;
+
+        self.builder
+            .add_statement(self.current_line(), IRStatement::Logical(cond));
+
+        let from = self.current_line();
+        let to = self.lookup_line(stmt.then);
+
+        self.builder.add_branch(JumpKind::JmpNZ, from, to);
+
+        Ok(())
+    }
+
+    fn visit_for(&mut self, stmt: &ForStmt) -> Result<(), CompileError> {
+        let step = match stmt.step {
+            Some(ref expr) => self.compile_expr(expr)?,
+            _ => IRExpression::Const(1.0),
+        };
+        let target = self.compile_expr(&stmt.to)?;
+        self.add_for(stmt.var, step, target);
+
+        Ok(())
+    }
+
+    fn visit_next(&mut self, stmt: &NextStmt) -> Result<(), CompileError> {
+        let ForConf { step, target, body } = self.pop_for(stmt.var)?;
+
+        let sym = self.builder.sym_global(stmt.var);
+        let expr = IRExpression::Binary(
+            BinaryOp::Add,
+            Box::new(IRExpression::Get(sym)),
+            Box::new(step),
+        );
+
+        self.builder
+            .add_statement(self.current_line(), IRStatement::Assign(sym, expr));
+        self.builder
+            .add_branch(JumpKind::Jmp, self.current_line(), body);
+
+        self.builder
+            .add_branch(JumpKind::JmpNZ, body, self.next_line());
+
+        Ok(())
+    }
+
+    fn visit_def(&mut self, stmt: &DefStmt) -> Result<(), CompileError> {
+        Err(CompileError::Unsupported)
+    }
+
+    fn visit_dim(&mut self, stmt: &DimStmt) -> Result<(), CompileError> {
+        Err(CompileError::Unsupported)
+    }
+
+    fn visit_rem(&mut self) -> Result<(), CompileError> {
+        Ok(())
+    }
+
+    fn visit_end(&mut self) -> Result<(), CompileError> {
+        Ok(())
+    }
+
+    fn visit_stop(&mut self) -> Result<(), CompileError> {
+        Ok(())
+    }
+
+    fn visit_return(&mut self) -> Result<(), CompileError> {
+        Err(CompileError::Unsupported)
+    }
+
+    fn visit_variable(&mut self, lval: &Variable) -> Result<(), CompileError> {
+        Ok(())
+    }
+
+    fn visit_list(&mut self, list: &List) -> Result<(), CompileError> {
+        Err(CompileError::Unsupported)
+    }
+
+    fn visit_table(&mut self, table: &Table) -> Result<(), CompileError> {
+        Err(CompileError::Unsupported)
+    }
+
+    fn visit_expr(&mut self, table: &Expression) -> Result<(), CompileError> {
+        Ok(())
+    }
+}
 
 struct LineMarker<'a> {
     builder: &'a mut IRBuilder,
@@ -24,7 +267,7 @@ impl<'a> LineMarker<'a> {
         let unreachable_label = self.builder.create_block();
         let entry_label = self.builder.create_block();
 
-        // NOTE: unreachable_label is just another block
+        // NOTE: unreachable_label is just another block label
         // defer to binaryen for deadcode elimination
         let mut labels: Vec<Label> = vec![unreachable_label; n];
 
@@ -145,6 +388,7 @@ impl<'a> LineMarker<'a> {
     }
 }
 
+//TODO: this could be cached
 fn find_line_index(program: &Program, line_no: &LineNo) -> Option<usize> {
     program
         .statements
