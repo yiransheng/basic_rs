@@ -49,7 +49,9 @@ impl IRCompiler {
     }
     pub fn compile(mut self, program: &Program) -> CompileResult<IR> {
         self.visit_program(program)?;
-        Ok(self.builder.build())
+        let ir = self.builder.build();
+
+        Ok(ir)
     }
 
     fn init<'a>(&'a mut self, program: &'a Program) {
@@ -144,7 +146,7 @@ impl IRCompiler {
             .add_branch(JumpKind::Jmp, self.current_line(), loop_cond);
 
         self.builder
-            .add_branch(JumpKind::JmpZ, loop_cond, self.next_line());
+            .add_branch(JumpKind::Jmp, loop_cond, self.next_line());
     }
 
     fn pop_for(&mut self, var: Variable) -> CompileResult<ForConf> {
@@ -172,6 +174,9 @@ impl AstVisitor<Result<(), CompileError>> for IRCompiler {
         self.init(prog);
 
         for (i, stmt) in prog.statements.iter().enumerate() {
+            if i == 0 {
+                self.builder.set_entry_block(self.labels[0]);
+            }
             self.line_index = i;
             self.line_no = stmt.line_no;
             self.visit_statement(stmt)?;
@@ -207,6 +212,19 @@ impl AstVisitor<Result<(), CompileError>> for IRCompiler {
     }
 
     fn visit_print(&mut self, stmt: &PrintStmt) -> Result<(), CompileError> {
+        for part in &stmt.parts {
+            match part {
+                Printable::Expr(expr) => {
+                    let expr = self.compile_expr(expr)?;
+                    self.builder.add_statement(
+                        self.current_line(),
+                        IRStatement::Print(expr),
+                    );
+                }
+                _ => {}
+            }
+        }
+
         self.branch_to_next_line();
 
         Ok(())
@@ -539,178 +557,3 @@ mod tests {
         assert_ne!(labels[7], labels[8]); // 80-90
     }
 }
-
-/*
- * #[derive(Debug, Copy, Clone)]
- * enum LineRole {
- *     BasicBlock(Label),
- *     BasicBlockEnd(Label),
- *     LoopStart(Label, Label), // header, condition
- *     LoopEnd(Label),
- * }
- *
- * struct ControlFlow {
- *     line_roles: FxHashMap<ast::LineNo, LineRole>,
- *     blocks: SlotMap<Label, Vec<IRStatement>>,
- *     current_line: ast::LineNo,
- *     prev_line: Option<ast::LineNo>,
- * }
- *
- * impl ControlFlow {
- *     fn new_block(&mut self) -> Label {
- *         self.blocks.insert(vec![])
- *     }
- *     fn prev_line_role(&self) -> Option<LineRole> {
- *         self.prev_line.and_then(|line_no| {
- *             self.line_roles.get(line_no)
- *         })
- *     }
- *     fn assgin_block(&mut self) {
- *
- *         if self.line_roles.contains_key(&self.current_line) {
- *             return;
- *         }
- *
- *         let current_line_role = match self.prev_line_role() {
- *             Some(BasicBlock(label)) => {
- *                 LineRole::BasicBlock(label)
- *             }
- *             _ => {
- *                 let label = self.new_block();
- *                 LineRole::BasicBlock(label)
- *             }
- *         };
- *
- *         self.line_roles.insert(self.current_line, current_line_role);
- *     }
- *     fn assign_block_end(&mut self) {
- *         let current_line_role = match self.prev_line_role() {
- *             Some(BasicBlock(label)) => {
- *                 LineRole::BasicBlockEnd(label)
- *             }
- *             _ => {
- *                 let label = self.new_block();
- *                 LineRole::BasicBlockEnd(label)
- *             }
- *         };
- *
- *         self.line_roles.insert(self.current_line, current_line_role);
- *     }
- * }
- *
- * impl trait Visitor<T> for ControlFlow {
- *     fn visit_program(&mut self, prog: &Program) -> T {
- *         for stmt in prog.iter() {
- *             self.current_line = stmt.line_no;
- *             self.visit_statement(stmt);
- *             self.prev_line = Some(stmt.line_no);
- *         }
- *     }
- *
- *     fn visit_statement(&mut self, stmt: &Statement) -> T {
- *         match &stmt.statement {
- *             Stmt::Let(s) => self.visit_let(s),
- *             Stmt::Read(s) => self.visit_read(s),
- *             Stmt::Data(s) => self.visit_data(s),
- *             Stmt::Print(s) => self.visit_print(s),
- *             Stmt::Goto(s) => self.visit_goto(s),
- *             Stmt::Gosub(s) => self.visit_gosub(s),
- *             Stmt::If(s) => self.visit_if(s),
- *             Stmt::For(s) => self.visit_for(s),
- *             Stmt::Next(s) => self.visit_next(s),
- *             Stmt::Def(s) => self.visit_def(s),
- *             Stmt::Dim(s) => self.visit_dim(s),
- *             Stmt::End => self.visit_end(),
- *             Stmt::Rem => self.visit_rem(),
- *             Stmt::Stop => self.visit_stop(),
- *             Stmt::Return => self.visit_return(),
- *         }
- *     }
- *
- *     fn visit_let(&mut self, stmt: &LetStmt) -> T {
- *         self.assign_block();
- *     }
- *
- *     fn visit_read(&mut self, stmt: &ReadStmt) -> T;
- *
- *     fn visit_data(&mut self, stmt: &DataStmt) -> T;
- *
- *     fn visit_print(&mut self, stmt: &PrintStmt) -> T {
- *         self.assign_block();
- *     }
- *
- *     fn visit_goto(&mut self, stmt: &GotoStmt) -> T {
- *         self.assign_block_end();
- *
- *         if self.blocks.contains(stmt.goto) {
- *             return;
- *         }
- *         let label = self.new_block();
- *         self.line_roles.insert(*stmt.goto, LineRole::BasicBlock(label));
- *
- *     }
- *
- *     fn visit_gosub(&mut self, stmt: &GosubStmt) -> T;
- *
- *     fn visit_if(&mut self, stmt: &IfStmt) -> T {
- *         self.assign_block_end();
- *
- *         if self.blocks.contains(stmt.then) {
- *             return;
- *         }
- *         let label = self.new_block();
- *         self.line_roles.insert(*stmt.then, LineRole::BasicBlock(label));
- *     }
- *
- *     fn visit_for(&mut self, stmt: &ForStmt) -> T {
- *         let header_label = self.new_block();
- *         let cond_label = self.new_block();
- *         self.line_roles.insert(*self.current_line, LoopStart(header_label, cond_label));
- *     }
- *
- *     fn visit_next(&mut self, stmt: &NextStmt) -> T {
- *         let prev_line = self.prev_line.unwrap();
- *
- *         if let Some(BasicBlock(label)) = self.prev_line_role()  {
- *             self.line_roles.insert(prev_line, LineRole::BasicBlockEnd(label));
- *         }
- *
- *         let label = self.new_block();
- *         self.line_roles.insert(*self.current_line, LoopEnd(label));
- *     }
- *
- *     fn visit_def(&mut self, stmt: &DefStmt) -> T;
- *
- *     fn visit_dim(&mut self, stmt: &DimStmt) -> T;
- *
- *     fn visit_rem(&mut self) -> T {
- *         self.assign_block();
- *     }
- *
- *     fn visit_end(&mut self) -> T {
- *         self.assign_block_end();
- *     }
- *
- *     fn visit_stop(&mut self) -> T {
- *         self.assign_block_end();
- *     }
- *
- *     fn visit_return(&mut self) -> T;
- *
- *     fn visit_lvalue(&mut self, lval: &LValue) -> T {
- *         match lval {
- *             LValue::Variable(var) => self.visit_variable(var),
- *             LValue::List(list) => self.visit_list(list),
- *             LValue::Table(table) => self.visit_table(table),
- *         }
- *     }
- *
- *     fn visit_variable(&mut self, lval: &Variable) -> T;
- *
- *     fn visit_list(&mut self, list: &List) -> T;
- *
- *     fn visit_table(&mut self, table: &Table) -> T;
- *
- *     fn visit_expr(&mut self, table: &Expression) -> T;
- * }
- */

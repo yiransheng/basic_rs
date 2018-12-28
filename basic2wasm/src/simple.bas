@@ -1,4 +1,4 @@
-10 LET X = RND(Y)
+10 LET X = 2
 20 FOR I = 0 TO X*10
 30   PRINT I
 40 NEXT I

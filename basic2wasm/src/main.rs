@@ -1,7 +1,6 @@
 mod ir;
-mod module;
 
-use crate::module::WasmModule;
+use crate::ir::compile;
 use basic_rs::{CompileError, Compiler, Parser, Scanner, Target};
 
 fn main() {
@@ -9,10 +8,7 @@ fn main() {
     let scanner = Scanner::new(source);
     let ast = Parser::new(scanner).parse().unwrap();
 
-    let compiler: Compiler<Target<WasmModule>> = Compiler::new();
-    let (main_id, mut modules) = compiler.compile(&ast).unwrap();
-
-    let wasm = modules.remove(&main_id).unwrap();
+    let wasm = compile(&ast).unwrap();
 
     wasm.optimize();
 

@@ -27,6 +27,27 @@ impl CodeGen {
     pub fn generate(mut self) -> Module {
         let labels: Vec<_> = self.ir.blocks.keys().collect();
 
+        let mut local_count = 0; // 0 as logical register
+        for sym_kind in self.ir.symbols.values() {
+            match sym_kind {
+                SymbolKind::Global(var) => {
+                    let init_expr = self.module.const_(Literal::F64(0.0));
+
+                    self.module.add_global(
+                        var.to_string(),
+                        ValueTy::F64,
+                        true,
+                        init_expr,
+                    );
+                }
+                SymbolKind::Local(index) => {
+                    if *index > local_count {
+                        local_count = *index;
+                    }
+                }
+            }
+        }
+
         for label in &labels {
             self.block(*label);
         }
@@ -47,9 +68,10 @@ impl CodeGen {
         let entry_id = self.blocks.get(&self.ir.entry_block).unwrap();
         let body = self.relooper.render(entry_id.clone(), 0);
 
-        let params = &[];
-        let main_ty = self.module.add_fn_type(Some("main"), params, Ty::None);
-        let _main = self.module.add_fn("main", &main_ty, &[], body);
+        let locals = vec![ValueTy::F64; local_count + 1];
+
+        let main_ty = self.module.add_fn_type(Some("main"), &[], Ty::None);
+        let _main = self.module.add_fn("main", &main_ty, &locals, body);
 
         self.module.add_fn_export("main", "main");
 
@@ -66,15 +88,22 @@ impl CodeGen {
             .flat_map(Branches::iter)
             .map(|&(jump_kind, to)| (jump_kind, self.blocks.get(&to).unwrap()))
             .for_each(|(jump_kind, to_block)| {
+                let cond_expr = match self
+                    .ir
+                    .code
+                    .get(label)
+                    .into_iter()
+                    .flat_map(|stmts| stmts.iter())
+                    .last()
+                {
+                    Some(Statement::Logical(ref expr)) => Some(self.expr(expr)),
+                    _ => None,
+                };
                 let cond = match jump_kind {
                     JumpKind::Jmp => None,
-                    JumpKind::JmpZ => Some(self.module.unary(
-                        UnaryOp::EqZI32,
-                        self.module.get_local(0, ValueTy::I32),
-                    )),
-                    JumpKind::JmpNZ => {
-                        Some(self.module.get_local(0, ValueTy::I32))
-                    }
+                    JumpKind::JmpZ => cond_expr
+                        .map(|expr| self.module.unary(UnaryOp::EqZI32, expr)),
+                    JumpKind::JmpNZ => cond_expr,
                 };
 
                 self.relooper.add_branch(
@@ -121,12 +150,27 @@ impl CodeGen {
                     self.module.get_global(var.to_string(), ValueTy::F64)
                 }
                 SymbolKind::Local(index) => {
-                    // local=0 used for conditional
-                    // TODO: more explicit
-                    self.module.get_local(index as u32 + 1, ValueTy::F64)
+                    self.module.get_local(index as u32, ValueTy::F64)
                 }
             },
-            Expression::LoopCondition(_) => unimplemented!(),
+            Expression::LoopCondition(exprs) => {
+                let step = self.expr(&exprs[0]);
+                let target = self.expr(&exprs[1]);
+                let current = self.expr(&exprs[2]);
+
+                let dir = self.module.binary(
+                    BinaryOp::CopySignF64,
+                    self.module.const_(Literal::F64(1.0)),
+                    step,
+                );
+                let dist =
+                    self.module.binary(BinaryOp::SubF64, current, target);
+                let dist = self.module.binary(BinaryOp::MulF64, dist, dir);
+                let zero = self.module.const_(Literal::F64(0.0));
+                let done = self.module.binary(BinaryOp::GtF64, dist, zero);
+
+                done
+            }
         }
     }
     fn statement(&self, stmt: &Statement) -> Expr {
@@ -136,12 +180,10 @@ impl CodeGen {
                     self.module.set_global(var.to_string(), self.expr(expr))
                 }
                 SymbolKind::Local(index) => {
-                    self.module.set_local(index as u32 + 1, self.expr(expr))
+                    self.module.set_local(index as u32, self.expr(expr))
                 }
             },
-            Statement::Logical(expr) => {
-                self.module.set_local(0, self.expr(expr))
-            }
+            Statement::Logical(_) => self.module.nop(),
             Statement::Print(expr) => {
                 self.module.call("print", Some(self.expr(expr)), Ty::None)
             }
