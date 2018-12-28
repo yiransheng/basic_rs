@@ -153,6 +153,8 @@ impl CodeGen {
                     self.module.get_local(index as u32, ValueTy::F64)
                 }
             },
+            Expression::Load(..) => unimplemented!(),
+            Expression::Load2d(..) => unimplemented!(),
             Expression::LoopCondition(exprs) => {
                 let step = self.expr(&exprs[0]);
                 let target = self.expr(&exprs[1]);
@@ -187,6 +189,8 @@ impl CodeGen {
             Statement::Print(expr) => {
                 self.module.call("print", Some(self.expr(expr)), Ty::None)
             }
+            Statement::Store(..) => unimplemented!(),
+            Statement::Store2d(..) => unimplemented!(),
         }
     }
 }

@@ -54,6 +54,8 @@ pub enum BinaryOp {
 pub enum Expression {
     Const(f64),
     Get(Symbol),
+    Load(Symbol, Box<Expression>),
+    Load2d(Symbol, Box<Expression>, Box<Expression>),
     Binary(BinaryOp, Box<Expression>, Box<Expression>),
     Unary(UnaryOp, Box<Expression>),
     // step, target, current,
@@ -64,6 +66,8 @@ pub enum Expression {
 #[derive(Debug)]
 pub enum Statement {
     Assign(Symbol, Expression),
+    Store(Symbol, Expression, Expression),
+    Store2d(Symbol, Expression, Expression, Expression),
     Logical(Expression),
     Print(Expression),
 }
