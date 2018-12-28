@@ -197,7 +197,7 @@ mod tests {
         let ir = builder.build();
         let module = CodeGen::new(ir).generate();
 
-        module.print();
-        assert!(false);
+        // above step should not panic
+        assert!(true);
     }
 }
