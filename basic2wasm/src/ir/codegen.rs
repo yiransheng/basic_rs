@@ -171,3 +171,33 @@ impl Into<BinaryOp> for IRBinaryOp {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::super::builder::IRBuilder;
+    use super::*;
+
+    #[test]
+    fn test_gen() {
+        let mut builder = IRBuilder::new();
+        let block1 = builder.create_block();
+        let cond = Expression::Binary(
+            IRBinaryOp::Less,
+            Box::new(Expression::Const(0.0)),
+            Box::new(Expression::Const(1.0)),
+        );
+        builder.add_statement(block1, Statement::Logical(cond));
+
+        let block2 = builder.create_block();
+        let block3 = builder.create_block();
+        builder.add_branch(JumpKind::JmpNZ, block1, block2);
+        builder.add_branch(JumpKind::Jmp, block1, block3);
+        builder.set_entry_block(block1);
+
+        let ir = builder.build();
+        let module = CodeGen::new(ir).generate();
+
+        module.print();
+        assert!(false);
+    }
+}
