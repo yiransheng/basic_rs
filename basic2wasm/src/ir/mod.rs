@@ -1,6 +1,6 @@
 mod builder;
 mod codegen;
-mod control_flow;
+mod compiler;
 
 use basic_rs::ast;
 use slotmap::{new_key_type, SecondaryMap, SlotMap};

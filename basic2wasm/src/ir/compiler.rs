@@ -8,17 +8,18 @@ use slotmap::SlotMap;
 use super::builder::IRBuilder;
 use super::{
     BinaryOp, Expression as IRExpression, JumpKind, Label,
-    Statement as IRStatement,
+    Statement as IRStatement, IR,
 };
 
-enum CompileError {
+#[derive(Debug)]
+pub enum CompileError {
     Unsupported,
     Custom(LineNo, &'static str),
 }
 
 type CompileResult<T> = Result<T, CompileError>;
 
-struct IRCompiler<Ev> {
+pub struct IRCompiler<Ev> {
     builder: IRBuilder,
 
     labels: Vec<Label>,
@@ -41,6 +42,22 @@ where
     Ev: for<'b> From<&'b mut IRBuilder>
         + AstVisitor<CompileResult<IRExpression>>,
 {
+    pub fn new() -> Self {
+        IRCompiler {
+            builder: IRBuilder::new(),
+            labels: vec![],
+            line_index: 0,
+            line_indices: FxHashMap::default(),
+            line_no: 0,
+            for_states: FxHashMap::default(),
+            expr_visitor: PhantomData,
+        }
+    }
+    pub fn compile(mut self, program: &Program) -> IR {
+        self.visit_program(program);
+        self.builder.build()
+    }
+
     fn init<'a>(&'a mut self, program: &'a Program) {
         let marker = LineMarker {
             builder: &mut self.builder,
@@ -225,7 +242,7 @@ where
 
         self.builder.add_branch(JumpKind::JmpNZ, from, to);
         self.builder
-            .add_branch(JumpKind::JmpZ, from, self.next_line());
+            .add_branch(JumpKind::Jmp, from, self.next_line());
 
         Ok(())
     }
