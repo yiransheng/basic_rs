@@ -1,10 +1,26 @@
 mod builder;
 mod codegen;
 mod compiler;
+mod expr_compiler;
 
 use basic_rs::ast;
+use binaryen::Module;
 use slotmap::{new_key_type, SecondaryMap, SlotMap};
 use smallvec::SmallVec;
+
+use self::builder::IRBuilder;
+use self::codegen::CodeGen;
+use self::compiler::IRCompiler;
+use self::expr_compiler::ExprCompiler;
+
+pub use self::compiler::CompileError;
+
+pub fn compile(program: &ast::Program) -> Result<Module, CompileError> {
+    let compiler: IRCompiler = IRCompiler::new();
+    let ir = compiler.compile(program)?;
+
+    Ok(CodeGen::new(ir).generate())
+}
 
 new_key_type! { pub struct Symbol; }
 new_key_type! { pub struct Label; }

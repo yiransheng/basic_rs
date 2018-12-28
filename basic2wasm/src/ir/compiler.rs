@@ -6,6 +6,7 @@ use rustc_hash::FxHashMap;
 use slotmap::SlotMap;
 
 use super::builder::IRBuilder;
+use super::expr_compiler::ExprCompiler;
 use super::{
     BinaryOp, Expression as IRExpression, JumpKind, Label,
     Statement as IRStatement, IR,
@@ -19,7 +20,7 @@ pub enum CompileError {
 
 type CompileResult<T> = Result<T, CompileError>;
 
-pub struct IRCompiler<Ev> {
+pub struct IRCompiler {
     builder: IRBuilder,
 
     labels: Vec<Label>,
@@ -27,8 +28,6 @@ pub struct IRCompiler<Ev> {
     line_indices: FxHashMap<LineNo, usize>,
     line_no: LineNo,
     for_states: FxHashMap<Variable, ForConf>,
-
-    expr_visitor: PhantomData<Ev>,
 }
 
 struct ForConf {
@@ -37,11 +36,7 @@ struct ForConf {
     body: Label,
 }
 
-impl<Ev> IRCompiler<Ev>
-where
-    Ev: for<'b> From<&'b mut IRBuilder>
-        + AstVisitor<CompileResult<IRExpression>>,
-{
+impl IRCompiler {
     pub fn new() -> Self {
         IRCompiler {
             builder: IRBuilder::new(),
@@ -50,12 +45,11 @@ where
             line_indices: FxHashMap::default(),
             line_no: 0,
             for_states: FxHashMap::default(),
-            expr_visitor: PhantomData,
         }
     }
-    pub fn compile(mut self, program: &Program) -> IR {
-        self.visit_program(program);
-        self.builder.build()
+    pub fn compile(mut self, program: &Program) -> CompileResult<IR> {
+        self.visit_program(program)?;
+        Ok(self.builder.build())
     }
 
     fn init<'a>(&'a mut self, program: &'a Program) {
@@ -163,16 +157,17 @@ where
         &mut self,
         expr: &Expression,
     ) -> CompileResult<IRExpression> {
-        let mut expr_visitor = Ev::from(&mut self.builder);
+        let mut expr_visitor = ExprCompiler::from(&mut self.builder);
         expr_visitor.visit_expr(expr)
+    }
+
+    fn compile_if(&mut self, expr: &IfStmt) -> CompileResult<IRExpression> {
+        let mut expr_visitor = ExprCompiler::from(&mut self.builder);
+        expr_visitor.visit_if(expr)
     }
 }
 
-impl<Ev> AstVisitor<Result<(), CompileError>> for IRCompiler<Ev>
-where
-    Ev: for<'b> From<&'b mut IRBuilder>
-        + AstVisitor<CompileResult<IRExpression>>,
-{
+impl AstVisitor<Result<(), CompileError>> for IRCompiler {
     fn visit_program(&mut self, prog: &Program) -> Result<(), CompileError> {
         self.init(prog);
 
@@ -231,8 +226,7 @@ where
     }
 
     fn visit_if(&mut self, stmt: &IfStmt) -> Result<(), CompileError> {
-        let mut expr_visitor = Ev::from(&mut self.builder);
-        let cond = expr_visitor.visit_if(stmt)?;
+        let cond = self.compile_if(stmt)?;
 
         self.builder
             .add_statement(self.current_line(), IRStatement::Logical(cond));
