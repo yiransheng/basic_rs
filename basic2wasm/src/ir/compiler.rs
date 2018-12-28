@@ -265,6 +265,13 @@ impl AstVisitor<Result<(), CompileError>> for IRCompiler {
             _ => IRExpression::Const(1.0),
         };
         let target = self.compile_expr(&stmt.to)?;
+        let from = self.compile_expr(&stmt.from)?;
+        let sym_index = self.builder.sym_global(stmt.var);
+
+        self.builder.add_statement(
+            self.current_line(),
+            IRStatement::Assign(sym_index, from),
+        );
         self.add_for(stmt.var, step, target);
 
         Ok(())
