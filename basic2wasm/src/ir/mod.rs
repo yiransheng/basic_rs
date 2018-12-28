@@ -1,4 +1,5 @@
 mod builder;
+mod codegen;
 mod control_flow;
 
 use basic_rs::ast;
@@ -16,13 +17,13 @@ pub enum SymbolKind {
     // Subroutine(usize)
 }
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub enum UnaryOp {
     Neg,
     EqZ, // Not
 }
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub enum BinaryOp {
     Add,
     Sub,
@@ -51,7 +52,7 @@ pub enum Statement {
     Print(Expression),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub enum JumpKind {
     Jmp,
     JmpZ,
@@ -71,12 +72,22 @@ impl Branches {
     fn add_branch(&mut self, j_kind: JumpKind, to: Label) {
         self.to.push((j_kind, to));
     }
+    fn iter(&self) -> impl Iterator<Item = &(JumpKind, Label)> {
+        self.to.iter()
+    }
 }
 
 #[derive(Debug)]
 pub struct IR {
+    entry_block: Label,
     symbols: SlotMap<Symbol, SymbolKind>,
     blocks: SlotMap<Label, ()>,
     code: SecondaryMap<Label, Vec<Statement>>,
     branches: SecondaryMap<Label, Branches>,
+}
+
+impl IR {
+    pub fn symbol_kind(&self, sym: Symbol) -> SymbolKind {
+        *self.symbols.get(sym).unwrap()
+    }
 }

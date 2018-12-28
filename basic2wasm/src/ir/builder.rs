@@ -5,6 +5,7 @@ use slotmap::{SecondaryMap, SlotMap};
 use super::*;
 
 pub struct IRBuilder {
+    entry_block: Option<Label>,
     blocks: SlotMap<Label, ()>,
     code: SecondaryMap<Label, Vec<Statement>>,
     branches: SecondaryMap<Label, Branches>,
@@ -17,6 +18,7 @@ pub struct IRBuilder {
 impl IRBuilder {
     pub fn new() -> Self {
         IRBuilder {
+            entry_block: None,
             blocks: SlotMap::with_key(),
             code: SecondaryMap::new(),
             branches: SecondaryMap::new(),
@@ -32,15 +34,21 @@ impl IRBuilder {
             symbols,
             code,
             branches,
+            entry_block,
             ..
         } = self;
 
         IR {
+            entry_block: entry_block.unwrap(),
             symbols,
             blocks,
             code,
             branches,
         }
+    }
+
+    pub fn set_entry_block(&mut self, label: Label) {
+        self.entry_block = Some(label);
     }
 
     pub fn create_block(&mut self) -> Label {
