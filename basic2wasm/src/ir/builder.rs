@@ -1,33 +1,77 @@
 use basic_rs::ast;
 use rustc_hash::FxHashMap;
-use slotmap::SlotMap;
+use slotmap::{SecondaryMap, SlotMap};
 
 use super::*;
 
 pub struct IRBuilder {
-    blocks: SlotMap<Label, usize>,
-    // symbols: SlotMap<Symbol, SymbolKind>,
+    blocks: SlotMap<Label, ()>,
+    code: SecondaryMap<Label, Vec<Statement>>,
+    branches: SecondaryMap<Label, Branches>,
 
-    // variables: FxHashMap<ast::Variable, Symbol>,
+    symbols: SlotMap<Symbol, SymbolKind>,
+    variables: FxHashMap<ast::Variable, Symbol>,
+    local_counter: usize,
 }
 
 impl IRBuilder {
     pub fn new() -> Self {
         IRBuilder {
             blocks: SlotMap::with_key(),
+            code: SecondaryMap::new(),
+            branches: SecondaryMap::new(),
+
+            symbols: SlotMap::with_key(),
+            variables: FxHashMap::default(),
+            local_counter: 0,
+        }
+    }
+    pub fn build(self) -> IR {
+        let IRBuilder {
+            blocks,
+            symbols,
+            code,
+            branches,
+            ..
+        } = self;
+
+        IR {
+            symbols,
+            blocks,
+            code,
+            branches,
         }
     }
 
     pub fn create_block(&mut self) -> Label {
-        self.blocks.insert(0)
+        let label = self.blocks.insert(());
+
+        self.code.insert(label, Vec::new());
+        self.branches.insert(label, Branches::new());
+
+        label
     }
     pub fn sym_global(&mut self, var: ast::Variable) -> Symbol {
-        unimplemented!()
+        match self.variables.get(&var) {
+            Some(sym) => *sym,
+            _ => {
+                let sym = self.symbols.insert(SymbolKind::Global(var));
+                self.variables.insert(var, sym);
+                sym
+            }
+        }
     }
     pub fn sym_local(&mut self) -> Symbol {
-        unimplemented!()
+        let sym = self.symbols.insert(SymbolKind::Local(self.local_counter));
+        self.local_counter += 1;
+        sym
     }
-    pub fn add_statement(&mut self, label: Label, statement: Statement) {}
+    pub fn add_statement(&mut self, label: Label, statement: Statement) {
+        self.code.get_mut(label).unwrap().push(statement);
+    }
 
-    pub fn add_branch(&mut self, j_kind: JumpKind, from: Label, to: Label) {}
+    pub fn add_branch(&mut self, j_kind: JumpKind, from: Label, to: Label) {
+        let branches = self.branches.get_mut(from).unwrap();
+        branches.add_branch(j_kind, to);
+    }
 }

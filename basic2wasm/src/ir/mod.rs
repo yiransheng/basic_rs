@@ -2,7 +2,8 @@ mod builder;
 mod control_flow;
 
 use basic_rs::ast;
-use slotmap::{new_key_type, SlotMap};
+use slotmap::{new_key_type, SecondaryMap, SlotMap};
+use smallvec::SmallVec;
 
 new_key_type! { pub struct Symbol; }
 new_key_type! { pub struct Label; }
@@ -58,15 +59,24 @@ pub enum JumpKind {
 }
 
 #[derive(Debug)]
-pub struct Jump {
-    pub from: Label,
-    pub to: Label,
-    pub kind: JumpKind,
+pub struct Branches {
+    to: SmallVec<[(JumpKind, Label); 2]>,
+}
+impl Branches {
+    fn new() -> Self {
+        Branches {
+            to: SmallVec::new(),
+        }
+    }
+    fn add_branch(&mut self, j_kind: JumpKind, to: Label) {
+        self.to.push((j_kind, to));
+    }
 }
 
 #[derive(Debug)]
 pub struct IR {
     symbols: SlotMap<Symbol, SymbolKind>,
-    blocks: SlotMap<Label, usize>,
-    jumps: Vec<Jump>,
+    blocks: SlotMap<Label, ()>,
+    code: SecondaryMap<Label, Vec<Statement>>,
+    branches: SecondaryMap<Label, Branches>,
 }
