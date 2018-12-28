@@ -66,6 +66,8 @@ pub enum Expression {
 #[derive(Debug)]
 pub enum Statement {
     Assign(Symbol, Expression),
+    Alloc(Symbol, Expression),
+    Alloc2d(Symbol, Expression, Expression),
     Store(Symbol, Expression, Expression),
     Store2d(Symbol, Expression, Expression, Expression),
     Logical(Expression),

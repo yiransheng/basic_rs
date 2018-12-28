@@ -5,6 +5,15 @@ use super::{
 use binaryen::*;
 use rustc_hash::FxHashMap;
 
+// static MODULE_BASE: &'static [u8] = include_bytes!("../runtime.wasm");
+
+const ALLOC1d_INDEX: u32 = 1;
+const ALLOC2d_INDEX: u32 = 2;
+const LOAD1d_INDEX: u32 = 3;
+const LOAD2d_INDEX: u32 = 4;
+const STORE1d_INDEX: u32 = 5;
+const STORE2d_INDEX: u32 = 6;
+
 pub struct CodeGen {
     module: Module,
     relooper: Relooper,
@@ -71,6 +80,18 @@ impl CodeGen {
         let locals = vec![ValueTy::F64; local_count + 1];
 
         let main_ty = self.module.add_fn_type(Some("main"), &[], Ty::None);
+
+        let _ = self.module.add_fn_type(
+            Some("i32_to_i32"),
+            &[ValueTy::I32],
+            Ty::I32,
+        );
+        let _ = self.module.add_fn_type(
+            Some("i32_i32_to_i32"),
+            &[ValueTy::I32, ValueTy::I32],
+            Ty::I32,
+        );
+
         let _main = self.module.add_fn("main", &main_ty, &locals, body);
 
         self.module.add_fn_export("main", "main");
@@ -153,7 +174,24 @@ impl CodeGen {
                     self.module.get_local(index as u32, ValueTy::F64)
                 }
             },
-            Expression::Load(..) => unimplemented!(),
+            Expression::Load(sym, index) => {
+                let index = self.expr(index);
+                let index = self.module.unary(UnaryOp::TruncUF64ToI32, index);
+
+                let sym_kind = self.ir.symbols.get(*sym).unwrap();
+                let ptr = match sym_kind {
+                    SymbolKind::Local(index) => {
+                        self.module.get_local(*index as u32, ValueTy::I32)
+                    }
+                    _ => panic!("bad symbol"),
+                };
+
+                self.module.call_indirect(
+                    self.module.const_(Literal::I32(LOAD1d_INDEX)),
+                    vec![ptr, index],
+                    "i32_i32_to_i32",
+                )
+            }
             Expression::Load2d(..) => unimplemented!(),
             Expression::LoopCondition(exprs) => {
                 let step = self.expr(&exprs[0]);
@@ -191,6 +229,46 @@ impl CodeGen {
             }
             Statement::Store(..) => unimplemented!(),
             Statement::Store2d(..) => unimplemented!(),
+            Statement::Alloc(sym, size) => {
+                let size = self.expr(size);
+                let size = self.module.unary(UnaryOp::TruncUF64ToI32, size);
+
+                let ptr = self.module.call_indirect(
+                    self.module.const_(Literal::I32(ALLOC1d_INDEX)),
+                    vec![size],
+                    "i32_to_i32",
+                );
+                let sym_kind = self.ir.symbols.get(*sym).unwrap();
+                match sym_kind {
+                    SymbolKind::Local(index) => {
+                        self.module.set_local(*index as u32, ptr)
+                    }
+                    _ => panic!("bad symbol"),
+                }
+            }
+            Statement::Alloc2d(sym, row_size, col_size) => {
+                let row_size = self.expr(row_size);
+                let row_size =
+                    self.module.unary(UnaryOp::TruncUF64ToI32, row_size);
+
+                let col_size = self.expr(col_size);
+                let col_size =
+                    self.module.unary(UnaryOp::TruncUF64ToI32, col_size);
+
+                let ptr = self.module.call_indirect(
+                    self.module.const_(Literal::I32(ALLOC2d_INDEX)),
+                    vec![row_size, col_size],
+                    "i32_i32_to_i32",
+                );
+
+                let sym_kind = self.ir.symbols.get(*sym).unwrap();
+                match sym_kind {
+                    SymbolKind::Local(index) => {
+                        self.module.set_local(*index as u32, ptr)
+                    }
+                    _ => panic!("bad symbol"),
+                }
+            }
         }
     }
 }

@@ -59,6 +59,9 @@ impl IRBuilder {
 
         label
     }
+    pub fn sym_array(&mut self, var: ast::Variable) -> Symbol {
+        unimplemented!()
+    }
     pub fn sym_global(&mut self, var: ast::Variable) -> Symbol {
         match self.variables.get(&var) {
             Some(sym) => *sym,
