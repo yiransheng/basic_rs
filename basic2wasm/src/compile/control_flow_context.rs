@@ -23,6 +23,7 @@ pub struct CfCtx {
 pub enum CfError {
     MissingLine(LineNo),
     JumpInsideSubroutine(LineNo),
+    UnreachableCode(LineNo),
 }
 
 impl CfCtx {
@@ -86,15 +87,14 @@ impl CfCtx {
 
                         cf_ctx.set_label(to_index, label);
                         let _ = cf_ctx.set_func(to_index, func);
+
+                        stack.push_front(to_index);
                     }
                 }
                 Stmt::Def(_) => {
-                    assert!(!labeled!(i));
-
                     let func = func_gen.insert(());
 
                     cf_ctx.functions.insert(func, i);
-                    stack.push_front(i);
                 }
                 Stmt::If(stmt) => {
                     let to_index = cf_ctx
@@ -107,11 +107,7 @@ impl CfCtx {
                     }
                 }
                 Stmt::Data(..) => {}
-                _ => {
-                    if !labeled!(i) {
-                        stack.push_front(i);
-                    }
-                }
+                _ => {}
             }
         }
 
@@ -121,6 +117,8 @@ impl CfCtx {
         cf_ctx.set_func(0, main_func)?;
         cf_ctx.functions.insert(main_func, 0);
 
+        stack.push_back(0);
+
         loop {
             if stack.is_empty() {
                 break;
@@ -129,8 +127,14 @@ impl CfCtx {
             let index = stack.pop_back().unwrap();
             let next_line_index = index + 1;
 
-            let current_label = cf_ctx.get_label(index).unwrap();
-            let current_func = cf_ctx.get_func(index).unwrap();
+            let current_label = cf_ctx.get_label(index).ok_or_else(|| {
+                let line_no = cf_ctx.find_line_no(index);
+                CfError::UnreachableCode(line_no)
+            })?;
+            let current_func = cf_ctx.get_func(index).ok_or_else(|| {
+                let line_no = cf_ctx.find_line_no(index);
+                CfError::UnreachableCode(line_no)
+            })?;
 
             let stmt = &statements[index];
 
@@ -200,7 +204,6 @@ impl CfCtx {
                         stack.push_back(next_line_index);
                     }
                 }
-                Stmt::Def(_) => {}
             }
         }
 

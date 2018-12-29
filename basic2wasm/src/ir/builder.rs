@@ -4,6 +4,7 @@ use slotmap::{SecondaryMap, SlotMap};
 
 use super::*;
 
+#[derive(Debug)]
 pub struct Builder {
     functions: Vec<Function>,
     main: Option<FunctionName>,

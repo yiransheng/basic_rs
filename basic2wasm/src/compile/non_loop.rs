@@ -298,4 +298,49 @@ mod tests {
         assert!(r.is_ok());
     }
 
+    #[test]
+    fn test_simple_goto() {
+        let program = indoc!(
+            "
+            10 REM Comment
+            20 GOTO 40
+            30 PRINT \"Ok\"
+            40 GOTO 30"
+        );
+        let scanner = Scanner::new(program);
+        let ast = Parser::new(scanner).parse().unwrap();
+
+        let mut builder = Builder::new();
+        let cf_ctx = CfCtx::from_program(&ast).unwrap();
+
+        let mut pass = NonLoopPass::new(&cf_ctx, &mut builder);
+
+        let r = pass.visit_program(&ast);
+
+        assert!(r.is_ok());
+    }
+
+    #[test]
+    fn test_detect_subroutine() {
+        let program = indoc!(
+            "
+            10 LET X = 1
+            20 GOSUB 70
+            30 GOSUB 70
+            40 END
+            70 LET X = X + 1
+            99 RETURN"
+        );
+        let scanner = Scanner::new(program);
+        let ast = Parser::new(scanner).parse().unwrap();
+
+        let mut builder = Builder::new();
+        let cf_ctx = CfCtx::from_program(&ast).unwrap();
+
+        let mut pass = NonLoopPass::new(&cf_ctx, &mut builder);
+
+        let r = pass.visit_program(&ast);
+
+        assert!(r.is_ok());
+    }
 }
