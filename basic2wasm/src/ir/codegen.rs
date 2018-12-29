@@ -27,11 +27,20 @@ impl CodeGen {
     pub fn new(ir: Program) -> Self {
         let module = Module::new();
         let main_type = module.add_fn_type(Some("main"), &[], Ty::None);
+        let mut func_names = SecondaryMap::new();
+
+        for (i, function) in ir.functions.iter().enumerate() {
+            if function.name == ir.main {
+                func_names.insert(function.name, String::from("main"));
+            } else {
+                func_names.insert(function.name, format!("fn${}", i));
+            }
+        }
 
         CodeGen {
             module,
             ir,
-            func_names: SecondaryMap::new(),
+            func_names,
             main_type,
         }
     }
@@ -52,20 +61,11 @@ impl CodeGen {
             }
         }
 
-        let main_name = self.ir.main;
-
-        for (i, function) in self.ir.functions.iter().enumerate() {
-            if function.name == main_name {
-                self.func_names.insert(function.name, String::from("main"));
-            } else {
-                self.func_names.insert(function.name, format!("fn${}", i));
-            }
-        }
         let functions = ::std::mem::replace(&mut self.ir.functions, vec![]);
 
         for function in &functions {
-            let name: &str = &*self.func_names.remove(function.name).unwrap();
-            self.gen_function(name, function);
+            let name = self.func_names.get(function.name).cloned().unwrap();
+            self.gen_function(&name, function);
         }
 
         let print_api =
@@ -89,7 +89,7 @@ impl CodeGen {
             Ty::I32,
         );
 
-        // self.module.add_fn_export("main", "main");
+        self.module.add_fn_export("main", "main");
 
         self.module
     }

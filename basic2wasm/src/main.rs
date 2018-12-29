@@ -36,6 +36,12 @@ fn main() {
         Err(err) => return eprintln!("{}", err),
     };
 
+    let conf = CodegenConfig {
+        shrink_level: 1,
+        optimization_level: 3,
+    };
+    set_global_codegen_config(&conf);
+
     let scanner = Scanner::new(&source);
     let ast = Parser::new(scanner).parse().unwrap();
 
