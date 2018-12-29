@@ -41,9 +41,11 @@ mod tests {
             "
             10 REM Comment
             20 FOR I = 1 TO 10 STEP 2
-            30   PRINT I
+            30   GOSUB 60
             40 NEXT I
-            99 END"
+            50 END
+            60 PRINT I 
+            70 RETURN"
         );
 
         let scanner = Scanner::new(program);
@@ -51,7 +53,7 @@ mod tests {
 
         let ir = compile(&ast).unwrap();
 
-        println!("{:?}", ir);
+        println!("{}", ir);
 
         assert!(false);
     }
