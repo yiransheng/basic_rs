@@ -21,9 +21,9 @@ pub enum GlobalKind {
 
 #[derive(Debug)]
 pub struct Program {
-    globals: Vec<GlobalKind>,
-    functions: Vec<Function>,
-    main: FunctionName,
+    pub globals: Vec<GlobalKind>,
+    pub functions: Vec<Function>,
+    pub main: FunctionName,
 }
 
 #[derive(Debug)]

@@ -340,7 +340,9 @@ mod tests {
         let mut pass = NonLoopPass::new(&cf_ctx, &mut builder);
 
         let r = pass.visit_program(&ast);
+        let program = builder.build();
 
         assert!(r.is_ok());
+        assert_eq!(program.functions.len(), 2);
     }
 }

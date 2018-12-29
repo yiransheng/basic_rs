@@ -1,5 +1,5 @@
 use basic_rs::ast;
-use rustc_hash::FxHashMap;
+use rustc_hash::FxHashSet;
 use slotmap::{SecondaryMap, SlotMap};
 
 use super::*;
@@ -8,6 +8,9 @@ use super::*;
 pub struct Builder {
     functions: Vec<Function>,
     main: Option<FunctionName>,
+    vars: FxHashSet<ast::Variable>,
+    arrs: FxHashSet<ast::Variable>,
+    fns: FxHashSet<ast::Func>,
 }
 
 impl Builder {
@@ -15,7 +18,36 @@ impl Builder {
         Builder {
             functions: vec![],
             main: None,
+            vars: FxHashSet::default(),
+            arrs: FxHashSet::default(),
+            fns: FxHashSet::default(),
         }
+    }
+    pub fn build(self) -> Program {
+        let mut globals: Vec<_> = self
+            .vars
+            .iter()
+            .map(|var| GlobalKind::Variable(*var))
+            .collect();
+
+        globals.extend(self.arrs.iter().map(|var| GlobalKind::ArrPtr(*var)));
+        globals.extend(self.fns.iter().map(|func| GlobalKind::FnPtr(*func)));
+
+        Program {
+            globals,
+            functions: self.functions,
+            main: self.main.unwrap(),
+        }
+    }
+
+    pub fn define_global(&mut self, var: ast::Variable) {
+        self.vars.insert(var);
+    }
+    pub fn define_array(&mut self, var: ast::Variable) {
+        self.arrs.insert(var);
+    }
+    pub fn define_function(&mut self, func: ast::Func) {
+        self.fns.insert(func);
     }
 
     pub fn set_main(&mut self, main: FunctionName) -> Result<(), FunctionName> {
