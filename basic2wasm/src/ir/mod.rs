@@ -42,6 +42,7 @@ pub struct Program {
 #[derive(Debug)]
 pub struct Function {
     name: FunctionName,
+    local_count: usize,
     entry: Label,
     blocks: SecondaryMap<Label, BasicBlock>,
 }
@@ -78,7 +79,7 @@ pub enum Offset {
 pub enum Expr {
     RandF64,
     Const(f64),
-    LVal(Box<LValue>),
+    Get(Box<LValue>),
     Binary(BinaryOp, Box<Expr>, Box<Expr>),
     Unary(UnaryOp, Box<Expr>),
     Call(Box<LValue>, Box<Expr>),
