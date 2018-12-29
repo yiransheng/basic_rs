@@ -72,11 +72,17 @@ impl CodeGen {
             self.module
                 .add_fn_type(None::<&str>, &[ValueTy::F64], Ty::None);
         let rand_api = self.module.add_fn_type(None::<&str>, &[], Ty::F64);
+        let pow_api = self.module.add_fn_type(
+            None::<&str>,
+            &[ValueTy::F64, ValueTy::F64],
+            Ty::F64,
+        );
 
         self.module
             .add_fn_import("print", "env", "print", &print_api);
 
         self.module.add_fn_import("rand", "env", "rand", &rand_api);
+        self.module.add_fn_import("pow", "env", "pow", &pow_api);
 
         let _ = self.module.add_fn_type(
             Some("i32_to_i32"),
@@ -168,14 +174,18 @@ impl CodeGen {
             IRExpr::RandF64 => self.module.call("rand", None, Ty::F64),
             IRExpr::Unary(op, rhs) => {
                 let rhs = self.expr(rhs);
-
                 self.module.unary((*op).into(), rhs)
             }
             IRExpr::Binary(op, lhs, rhs) => {
                 let lhs = self.expr(lhs);
                 let rhs = self.expr(rhs);
 
-                self.module.binary((*op).into(), lhs, rhs)
+                match op {
+                    IRBinaryOp::Pow => {
+                        self.module.call("pow", vec![lhs, rhs], Ty::F64)
+                    }
+                    _ => self.module.binary((*op).into(), lhs, rhs),
+                }
             }
             IRExpr::Get(lval) => match lval.deref() {
                 LValue::Global(var) => {
@@ -242,35 +252,5 @@ impl Into<BinaryOp> for IRBinaryOp {
             IRBinaryOp::CopySign => BinaryOp::CopySignF64,
             _ => panic!("unsupported op"),
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::super::builder::IRBuilder;
-    use super::*;
-
-    #[test]
-    fn test_gen() {
-        let mut builder = IRBuilder::new();
-        let block1 = builder.create_block();
-        let cond = Expression::Binary(
-            IRBinaryOp::Less,
-            Box::new(Expression::Const(0.0)),
-            Box::new(Expression::Const(1.0)),
-        );
-        builder.add_statement(block1, Statement::Logical(cond));
-
-        let block2 = builder.create_block();
-        let block3 = builder.create_block();
-        builder.add_branch(JumpKind::JmpNZ, block1, block2);
-        builder.add_branch(JumpKind::Jmp, block1, block3);
-        builder.set_entry_block(block1);
-
-        let ir = builder.build();
-        let module = CodeGen::new(ir).generate();
-
-        // above step should not panic
-        assert!(true);
     }
 }
