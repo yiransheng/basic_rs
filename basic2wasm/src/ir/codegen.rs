@@ -1,9 +1,12 @@
 use super::{
-    BinaryOp as IRBinaryOp, Branches, Expression, JumpKind, Label, Statement,
-    SymbolKind, UnaryOp as IRUnaryOp, IR,
+    BasicBlock, BinaryOp as IRBinaryOp, BlockExit, Expr as IRExpr, Function,
+    FunctionName, GlobalKind, LValue, Label, Program, Statement,
+    UnaryOp as IRUnaryOp,
 };
+
 use binaryen::*;
 use rustc_hash::FxHashMap;
+use slotmap::SecondaryMap;
 
 // static MODULE_BASE: &'static [u8] = include_bytes!("../runtime.wasm");
 
@@ -16,30 +19,27 @@ const STORE2d_INDEX: u32 = 6;
 
 pub struct CodeGen {
     module: Module,
-    relooper: Relooper,
-    ir: IR,
-    blocks: FxHashMap<Label, PlainBlock>,
+    ir: Program,
+    func_names: SecondaryMap<FunctionName, String>,
+    main_type: FnType,
 }
 
 impl CodeGen {
-    pub fn new(ir: IR) -> Self {
+    pub fn new(ir: Program) -> Self {
         let module = Module::new();
-        let relooper = module.relooper();
+        let main_type = module.add_fn_type(Some("main"), &[], Ty::None);
 
         CodeGen {
             module,
-            relooper,
             ir,
-            blocks: FxHashMap::default(),
+            func_names: SecondaryMap::new(),
+            main_type,
         }
     }
     pub fn generate(mut self) -> Module {
-        let labels: Vec<_> = self.ir.blocks.keys().collect();
-
-        let mut local_count = 0; // 0 as logical register
-        for sym_kind in self.ir.symbols.values() {
-            match sym_kind {
-                SymbolKind::Global(var) => {
+        for kind in &self.ir.globals {
+            match kind {
+                GlobalKind::Variable(var) => {
                     let init_expr = self.module.const_(Literal::F64(0.0));
 
                     self.module.add_global(
@@ -49,19 +49,18 @@ impl CodeGen {
                         init_expr,
                     );
                 }
-                SymbolKind::Local(index) => {
-                    if *index > local_count {
-                        local_count = *index;
-                    }
-                }
+                _ => unimplemented!(),
             }
         }
 
-        for label in &labels {
-            self.block(*label);
-        }
-        for label in &labels {
-            self.branch(*label);
+        let main_name = self.ir.main;
+
+        for (i, function) in self.ir.functions.iter().enumerate() {
+            if function.name == main_name {
+                self.func_names.insert(function.name, String::from("main"));
+            } else {
+                self.func_names.insert(function.name, format!("fn${}", i));
+            }
         }
 
         let print_api =
@@ -74,12 +73,7 @@ impl CodeGen {
 
         self.module.add_fn_import("rand", "env", "rand", &rand_api);
 
-        let entry_id = self.blocks.get(&self.ir.entry_block).unwrap();
-        let body = self.relooper.render(entry_id.clone(), 0);
-
-        let locals = vec![ValueTy::F64; local_count + 1];
-
-        let main_ty = self.module.add_fn_type(Some("main"), &[], Ty::None);
+        let main_ty = self.module.add_fn_type(Some("proc"), &[], Ty::None);
 
         let _ = self.module.add_fn_type(
             Some("i32_to_i32"),
@@ -92,183 +86,124 @@ impl CodeGen {
             Ty::I32,
         );
 
-        let _main = self.module.add_fn("main", &main_ty, &locals, body);
-
         self.module.add_fn_export("main", "main");
 
         self.module
     }
 
-    fn branch(&mut self, label: Label) {
-        let from_block = *self.blocks.get(&label).unwrap();
+    fn gen_function(&mut self, name: &str, function: &Function) {
+        // TODO: def function with ty: f64 -> f64
 
-        self.ir
-            .branches
-            .get(label)
-            .into_iter()
-            .flat_map(Branches::iter)
-            .map(|&(jump_kind, to)| (jump_kind, self.blocks.get(&to).unwrap()))
-            .for_each(|(jump_kind, to_block)| {
-                let cond_expr = match self
-                    .ir
-                    .code
-                    .get(label)
-                    .into_iter()
-                    .flat_map(|stmts| stmts.iter())
-                    .last()
-                {
-                    Some(Statement::Logical(ref expr)) => Some(self.expr(expr)),
-                    _ => None,
-                };
-                let cond = match jump_kind {
-                    JumpKind::Jmp => None,
-                    JumpKind::JmpZ => cond_expr
-                        .map(|expr| self.module.unary(UnaryOp::EqZI32, expr)),
-                    JumpKind::JmpNZ => cond_expr,
-                };
+        let mut relooper = self.module.relooper();
+        let mut plain_blocks: SecondaryMap<Label, PlainBlock> =
+            SecondaryMap::new();
 
-                self.relooper.add_branch(
-                    from_block.clone(),
-                    to_block.clone(),
-                    cond,
-                    None,
-                );
-            });
+        for (label, block) in function.blocks.iter() {
+            let block_expr = self.gen_block(block);
+            let plain_block = relooper.add_block(block_expr);
+            plain_blocks.insert(label, plain_block);
+        }
+        for (label, block) in function.blocks.iter() {
+            let from_block = plain_blocks.get(label).unwrap().clone();
+            match &block.exit {
+                BlockExit::Jump(label) => {
+                    let to_block = plain_blocks.get(*label).unwrap().clone();
+                    relooper.add_branch(from_block, to_block, None, None);
+                }
+                BlockExit::Switch(cond, true_br, None) => {
+                    let to_block = plain_blocks.get(*true_br).unwrap().clone();
+                    let cond = self.expr(&cond);
+                    relooper.add_branch(from_block, to_block, Some(cond), None);
+
+                    let ret = self.module.return_(None);
+                    let ret_block = relooper.add_block(ret);
+
+                    relooper.add_branch(from_block, ret_block, None, None);
+                }
+                BlockExit::Switch(cond, true_br, Some(false_br)) => {
+                    let to_block = plain_blocks.get(*true_br).unwrap().clone();
+                    let cond = self.expr(&cond);
+                    relooper.add_branch(from_block, to_block, Some(cond), None);
+                    let to_block = plain_blocks.get(*false_br).unwrap().clone();
+                    relooper.add_branch(from_block, to_block, None, None);
+                }
+                _ => panic!(),
+            };
+        }
+
+        let entry_block = plain_blocks.get(function.entry).unwrap().clone();
+        let body = relooper.render(entry_block, 0);
+
+        self.module.add_fn(name, &self.main_type, &[], body);
     }
-    fn block(&mut self, label: Label) {
-        let exprs = self
-            .ir
-            .code
-            .get(label)
-            .unwrap()
+    fn gen_block(&self, block: &BasicBlock) -> Expr {
+        for statement in &block.statements {
+            let expr = self.statement(statement);
+        }
+        let statements = block
+            .statements
             .iter()
-            .map(|stmt| self.statement(stmt));
+            .map(|stmt| self.statement(stmt))
+            .chain(match &block.exit {
+                BlockExit::Return(None) => Some(self.module.return_(None)),
+                BlockExit::Return(Some(expr)) => {
+                    let expr = self.expr(&expr);
+                    Some(self.module.return_(Some(expr)))
+                }
+                _ => None,
+            });
 
-        let block_expr =
-            self.module.block::<&'static str, _>(None, exprs, None);
-
-        let block_id = self.relooper.add_block(block_expr);
-
-        self.blocks.insert(label, block_id);
+        self.module.block::<&'static str, _>(None, statements, None)
     }
 
-    fn expr(&self, expr: &Expression) -> Expr {
+    fn expr(&self, expr: &IRExpr) -> Expr {
+        use std::ops::Deref;
+
         match expr {
-            Expression::Const(v) => self.module.const_(Literal::F64(*v)),
-            Expression::Unary(op, rhs) => {
+            IRExpr::Const(v) => self.module.const_(Literal::F64(*v)),
+            IRExpr::RandF64 => self.module.call("rand", None, Ty::F64),
+            IRExpr::Unary(op, rhs) => {
                 let rhs = self.expr(rhs);
 
                 self.module.unary((*op).into(), rhs)
             }
-            Expression::Binary(op, lhs, rhs) => {
+            IRExpr::Binary(op, lhs, rhs) => {
                 let lhs = self.expr(lhs);
                 let rhs = self.expr(rhs);
 
                 self.module.binary((*op).into(), lhs, rhs)
             }
-            Expression::Get(sym) => match self.ir.symbol_kind(*sym) {
-                SymbolKind::Global(var) => {
+            IRExpr::Get(lval) => match lval.deref() {
+                LValue::Global(var) => {
                     self.module.get_global(var.to_string(), ValueTy::F64)
                 }
-                SymbolKind::Local(index) => {
-                    self.module.get_local(index as u32, ValueTy::F64)
+                LValue::Local(index) => {
+                    self.module.get_local(*index as u32, ValueTy::F64)
                 }
+                _ => unimplemented!(),
             },
-            Expression::Load(sym, index) => {
-                let index = self.expr(index);
-                let index = self.module.unary(UnaryOp::TruncUF64ToI32, index);
-
-                let sym_kind = self.ir.symbols.get(*sym).unwrap();
-                let ptr = match sym_kind {
-                    SymbolKind::Local(index) => {
-                        self.module.get_local(*index as u32, ValueTy::I32)
-                    }
-                    _ => panic!("bad symbol"),
-                };
-
-                self.module.call_indirect(
-                    self.module.const_(Literal::I32(LOAD1d_INDEX)),
-                    vec![ptr, index],
-                    "i32_i32_to_i32",
-                )
-            }
-            Expression::Load2d(..) => unimplemented!(),
-            Expression::LoopCondition(exprs) => {
-                let step = self.expr(&exprs[0]);
-                let target = self.expr(&exprs[1]);
-                let current = self.expr(&exprs[2]);
-
-                let dir = self.module.binary(
-                    BinaryOp::CopySignF64,
-                    self.module.const_(Literal::F64(1.0)),
-                    step,
-                );
-                let dist =
-                    self.module.binary(BinaryOp::SubF64, current, target);
-                let dist = self.module.binary(BinaryOp::MulF64, dist, dir);
-                let zero = self.module.const_(Literal::F64(0.0));
-                let done = self.module.binary(BinaryOp::GtF64, dist, zero);
-
-                done
-            }
+            _ => unimplemented!(),
         }
     }
     fn statement(&self, stmt: &Statement) -> Expr {
         match stmt {
-            Statement::Assign(sym, expr) => match self.ir.symbol_kind(*sym) {
-                SymbolKind::Global(var) => {
+            Statement::Assign(lval, expr) => match lval {
+                LValue::Global(var) => {
                     self.module.set_global(var.to_string(), self.expr(expr))
                 }
-                SymbolKind::Local(index) => {
-                    self.module.set_local(index as u32, self.expr(expr))
+                LValue::Local(index) => {
+                    self.module.set_local(*index as u32, self.expr(expr))
                 }
+                _ => unimplemented!(),
             },
-            Statement::Logical(_) => self.module.nop(),
             Statement::Print(expr) => {
                 self.module.call("print", Some(self.expr(expr)), Ty::None)
             }
-            Statement::Store(..) => unimplemented!(),
-            Statement::Store2d(..) => unimplemented!(),
-            Statement::Alloc(sym, size) => {
-                let size = self.expr(size);
-                let size = self.module.unary(UnaryOp::TruncUF64ToI32, size);
-
-                let ptr = self.module.call_indirect(
-                    self.module.const_(Literal::I32(ALLOC1d_INDEX)),
-                    vec![size],
-                    "i32_to_i32",
-                );
-                let sym_kind = self.ir.symbols.get(*sym).unwrap();
-                match sym_kind {
-                    SymbolKind::Local(index) => {
-                        self.module.set_local(*index as u32, ptr)
-                    }
-                    _ => panic!("bad symbol"),
-                }
+            Statement::CallSub(name) => {
+                let name: &str = &*self.func_names.get(*name).unwrap();
+                self.module.call(name, None, Ty::None)
             }
-            Statement::Alloc2d(sym, row_size, col_size) => {
-                let row_size = self.expr(row_size);
-                let row_size =
-                    self.module.unary(UnaryOp::TruncUF64ToI32, row_size);
-
-                let col_size = self.expr(col_size);
-                let col_size =
-                    self.module.unary(UnaryOp::TruncUF64ToI32, col_size);
-
-                let ptr = self.module.call_indirect(
-                    self.module.const_(Literal::I32(ALLOC2d_INDEX)),
-                    vec![row_size, col_size],
-                    "i32_i32_to_i32",
-                );
-
-                let sym_kind = self.ir.symbols.get(*sym).unwrap();
-                match sym_kind {
-                    SymbolKind::Local(index) => {
-                        self.module.set_local(*index as u32, ptr)
-                    }
-                    _ => panic!("bad symbol"),
-                }
-            }
+            _ => unimplemented!(),
         }
     }
 }
@@ -277,7 +212,11 @@ impl Into<UnaryOp> for IRUnaryOp {
     fn into(self) -> UnaryOp {
         match self {
             IRUnaryOp::Neg => UnaryOp::NegF64,
-            IRUnaryOp::EqZ => UnaryOp::EqZI32,
+            IRUnaryOp::Not => UnaryOp::EqZI32,
+            IRUnaryOp::Abs => UnaryOp::AbsF64,
+            IRUnaryOp::Sqr => UnaryOp::SqrtF64,
+            IRUnaryOp::Trunc => UnaryOp::TruncF64,
+            _ => panic!("unsupported op"),
         }
     }
 }
@@ -292,6 +231,8 @@ impl Into<BinaryOp> for IRBinaryOp {
             IRBinaryOp::Less => BinaryOp::LtF64,
             IRBinaryOp::Greater => BinaryOp::GtF64,
             IRBinaryOp::Equal => BinaryOp::EqF64,
+            IRBinaryOp::CopySign => BinaryOp::CopySignF64,
+            _ => panic!("unsupported op"),
         }
     }
 }
