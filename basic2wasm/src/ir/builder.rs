@@ -11,6 +11,7 @@ pub struct Builder {
     vars: FxHashSet<ast::Variable>,
     arrs: FxHashSet<ast::Variable>,
     fns: FxHashSet<ast::Func>,
+    data: Vec<f64>,
 }
 
 impl Builder {
@@ -21,9 +22,10 @@ impl Builder {
             vars: FxHashSet::default(),
             arrs: FxHashSet::default(),
             fns: FxHashSet::default(),
+            data: vec![],
         }
     }
-    pub fn build(self) -> Program {
+    pub fn build(mut self) -> Program {
         let mut globals: Vec<_> = self
             .vars
             .iter()
@@ -33,10 +35,13 @@ impl Builder {
         globals.extend(self.arrs.iter().map(|var| GlobalKind::ArrPtr(*var)));
         globals.extend(self.fns.iter().map(|func| GlobalKind::FnPtr(*func)));
 
+        self.data.reverse();
+
         Program {
             globals,
             functions: self.functions,
             main: self.main.unwrap(),
+            data: self.data,
         }
     }
 
@@ -48,6 +53,9 @@ impl Builder {
     }
     pub fn define_function(&mut self, func: ast::Func) {
         self.fns.insert(func);
+    }
+    pub fn add_data<I: IntoIterator<Item = f64>>(&mut self, data: I) {
+        self.data.extend(data);
     }
 
     pub fn set_main(&mut self, main: FunctionName) -> Result<(), FunctionName> {

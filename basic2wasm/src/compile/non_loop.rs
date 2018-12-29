@@ -5,7 +5,7 @@ use super::control_flow_context::CfCtx;
 use super::error::CompileError;
 use super::expr_compiler::ExprCompiler;
 use crate::ir::{
-    BasicBlock, Builder, Function, FunctionName, LValue as LV, Label,
+    BasicBlock, Builder, Expr, Function, FunctionName, LValue as LV, Label,
     Statement as IRStatement,
 };
 
@@ -94,6 +94,21 @@ impl<'a> AstVisitor<Result<(), CompileError>> for NonLoopPass<'a> {
             self.line_index = i;
             self.visit_statement(stmt)?;
         }
+
+        Ok(())
+    }
+
+    fn visit_read(&mut self, stmt: &ReadStmt) -> Result<(), CompileError> {
+        let mut expr_compiler = ExprCompiler::new();
+        for var in &stmt.vars {
+            let lval = expr_compiler.lvalue(var)?;
+            self.add_statement(IRStatement::Assign(lval, Expr::ReadData))?;
+        }
+
+        Ok(())
+    }
+    fn visit_data(&mut self, stmt: &DataStmt) -> Result<(), CompileError> {
+        self.builder.add_data(stmt.vals.iter().map(|v| *v));
 
         Ok(())
     }

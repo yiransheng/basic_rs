@@ -35,6 +35,7 @@ pub struct Program {
     pub globals: Vec<GlobalKind>,
     pub functions: Vec<Function>,
     pub main: FunctionName,
+    pub data: Vec<f64>,
 }
 
 impl fmt::Display for Program {
@@ -180,6 +181,7 @@ pub enum Offset {
 #[derive(Debug)]
 pub enum Expr {
     RandF64,
+    ReadData,
     Const(f64),
     Get(Box<LValue>),
     Binary(BinaryOp, Box<Expr>, Box<Expr>),
@@ -189,6 +191,7 @@ pub enum Expr {
 impl fmt::Display for Expr {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         match self {
+            Expr::ReadData => write!(f, "<read>"),
             Expr::RandF64 => write!(f, "<random>"),
             Expr::Const(n) => write!(f, "{}", n),
             Expr::Get(lval) => lval.fmt(f),
