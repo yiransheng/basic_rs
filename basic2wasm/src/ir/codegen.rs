@@ -5,7 +5,6 @@ use super::{
 };
 
 use binaryen::*;
-use rustc_hash::FxHashMap;
 use slotmap::SecondaryMap;
 
 // static MODULE_BASE: &'static [u8] = include_bytes!("../runtime.wasm");
@@ -62,6 +61,12 @@ impl CodeGen {
                 self.func_names.insert(function.name, format!("fn${}", i));
             }
         }
+        let functions = ::std::mem::replace(&mut self.ir.functions, vec![]);
+
+        for function in &functions {
+            let name: &str = &*self.func_names.remove(function.name).unwrap();
+            self.gen_function(name, function);
+        }
 
         let print_api =
             self.module
@@ -72,8 +77,6 @@ impl CodeGen {
             .add_fn_import("print", "env", "print", &print_api);
 
         self.module.add_fn_import("rand", "env", "rand", &rand_api);
-
-        let main_ty = self.module.add_fn_type(Some("proc"), &[], Ty::None);
 
         let _ = self.module.add_fn_type(
             Some("i32_to_i32"),
@@ -86,7 +89,7 @@ impl CodeGen {
             Ty::I32,
         );
 
-        self.module.add_fn_export("main", "main");
+        // self.module.add_fn_export("main", "main");
 
         self.module
     }
@@ -127,14 +130,15 @@ impl CodeGen {
                     let to_block = plain_blocks.get(*false_br).unwrap().clone();
                     relooper.add_branch(from_block, to_block, None, None);
                 }
-                _ => panic!(),
+                _ => {}
             };
         }
 
         let entry_block = plain_blocks.get(function.entry).unwrap().clone();
         let body = relooper.render(entry_block, 0);
 
-        self.module.add_fn(name, &self.main_type, &[], body);
+        let locals = vec![ValueTy::F64; function.local_count];
+        self.module.add_fn(name, &self.main_type, &locals, body);
     }
     fn gen_block(&self, block: &BasicBlock) -> Expr {
         for statement in &block.statements {
@@ -203,7 +207,11 @@ impl CodeGen {
                 let name: &str = &*self.func_names.get(*name).unwrap();
                 self.module.call(name, None, Ty::None)
             }
-            _ => unimplemented!(),
+            Statement::PrintNewline => self.module.nop(),
+            x @ _ => {
+                println!("{:?}", x);
+                unimplemented!()
+            }
         }
     }
 }

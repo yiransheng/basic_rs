@@ -10,5 +10,6 @@ binaryen = "0.5.0"
 smallvec = "0.6.7"
 slotmap = "0.3.0"
 either = "1.5.0"
+structopt = "0.2.13"
 rustc-hash = "1.0.1"
 basic_rs = { path = "../" }

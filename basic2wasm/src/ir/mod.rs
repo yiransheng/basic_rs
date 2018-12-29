@@ -2,6 +2,7 @@ mod builder;
 mod codegen;
 
 pub use self::builder::Builder;
+pub use self::codegen::CodeGen;
 
 use std::fmt;
 
