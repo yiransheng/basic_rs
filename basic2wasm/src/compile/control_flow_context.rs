@@ -17,6 +17,7 @@ pub struct CfCtx {
     lines: Vec<LineCtx>,
     functions: SecondaryMap<FunctionName, usize>,
     index_cache: RefCell<BTreeMap<LineNo, usize>>,
+    labels: SlotMap<Label, ()>,
 }
 
 #[derive(Debug)]
@@ -29,7 +30,6 @@ pub enum CfError {
 impl CfCtx {
     pub fn from_program(program: &Program) -> Result<Self, CfError> {
         let mut cf_ctx = Self::empty_from_program(program);
-        let mut label_gen: SlotMap<Label, ()> = SlotMap::with_key();
         let mut func_gen: SlotMap<FunctionName, ()> = SlotMap::with_key();
 
         let statements = &program.statements;
@@ -70,7 +70,7 @@ impl CfCtx {
                         .ok_or_else(|| CfError::MissingLine(stmt.goto))?;
 
                     if !labeled!(to_index) {
-                        let label = label_gen.insert(());
+                        let label = cf_ctx.add_label();
                         cf_ctx.set_label(to_index, label);
                     }
                 }
@@ -80,7 +80,7 @@ impl CfCtx {
                         .ok_or_else(|| CfError::MissingLine(stmt.goto))?;
 
                     if !labeled!(to_index) {
-                        let label = label_gen.insert(());
+                        let label = cf_ctx.add_label();
                         let func = func_gen.insert(());
 
                         cf_ctx.functions.insert(func, to_index);
@@ -102,7 +102,7 @@ impl CfCtx {
                         .ok_or_else(|| CfError::MissingLine(stmt.then))?;
 
                     if !labeled!(to_index) {
-                        let label = label_gen.insert(());
+                        let label = cf_ctx.add_label();
                         cf_ctx.set_label(to_index, label);
                     }
                 }
@@ -111,7 +111,8 @@ impl CfCtx {
             }
         }
 
-        cf_ctx.set_label(0, label_gen.insert(()));
+        let entry_label = cf_ctx.add_label();
+        cf_ctx.set_label(0, entry_label);
 
         let main_func = func_gen.insert(());
         cf_ctx.set_func(0, main_func)?;
@@ -161,7 +162,7 @@ impl CfCtx {
                     let to_index = cf_ctx.find_line_index(stmt.then).unwrap();
 
                     if !visited!(to_index) {
-                        let new_label = label_gen.insert(());
+                        let new_label = cf_ctx.add_label();
 
                         cf_ctx.set_label(to_index, new_label);
                         cf_ctx.set_func(to_index, current_func)?;
@@ -170,7 +171,7 @@ impl CfCtx {
                     }
 
                     if !visited!(next_line_index) {
-                        let new_label = label_gen.insert(());
+                        let new_label = cf_ctx.add_label();
 
                         cf_ctx.set_label(next_line_index, new_label);
                         cf_ctx.set_func(next_line_index, current_func)?;
@@ -183,7 +184,7 @@ impl CfCtx {
                     let to_index = cf_ctx.find_line_index(stmt.goto).unwrap();
 
                     if !visited!(to_index) {
-                        let new_label = label_gen.insert(());
+                        let new_label = cf_ctx.add_label();
 
                         cf_ctx.set_label(to_index, new_label);
                         cf_ctx.set_func(to_index, current_func)?;
@@ -192,11 +193,11 @@ impl CfCtx {
                     }
                 }
                 Stmt::Next(_) | Stmt::For(_) => {
-                    let new_label = label_gen.insert(());
+                    let new_label = cf_ctx.add_label();
                     cf_ctx.set_label(index, new_label);
 
                     if !visited!(next_line_index) {
-                        let new_label = label_gen.insert(());
+                        let new_label = cf_ctx.add_label();
 
                         cf_ctx.set_label(next_line_index, new_label);
                         cf_ctx.set_func(next_line_index, current_func)?;
@@ -229,6 +230,10 @@ impl CfCtx {
         }
 
         line_index
+    }
+
+    pub fn add_label(&mut self) -> Label {
+        self.labels.insert(())
     }
 
     pub fn functions<'a>(
@@ -274,6 +279,7 @@ impl CfCtx {
         CfCtx {
             lines,
             index_cache,
+            labels: SlotMap::with_key(),
             functions: SecondaryMap::new(),
         }
     }

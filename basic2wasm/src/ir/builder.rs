@@ -81,6 +81,18 @@ impl Builder {
             Ok(())
         }
     }
+    pub fn add_local(
+        &mut self,
+        name: FunctionName,
+    ) -> Result<usize, FunctionName> {
+        self.get_function_mut(name)
+            .map(|func| {
+                let index = func.local_count;
+                func.local_count += 1;
+                index
+            })
+            .ok_or_else(|| name)
+    }
     pub fn add_block(
         &mut self,
         func: FunctionName,
@@ -115,6 +127,10 @@ impl Builder {
     }
 
     pub fn add_branch(&mut self, func: FunctionName, from: Label, to: Label) {
+        if from == to {
+            return;
+        }
+
         if let Some(block) = self
             .get_function_mut(func)
             .and_then(|func| func.blocks.get_mut(from))
