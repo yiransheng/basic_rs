@@ -115,7 +115,10 @@ impl CfCtx {
         }
 
         cf_ctx.set_label(0, label_gen.insert(()));
-        cf_ctx.set_func(0, func_gen.insert(()))?;
+
+        let main_func = func_gen.insert(());
+        cf_ctx.set_func(0, main_func)?;
+        cf_ctx.functions.insert(main_func, 0);
 
         loop {
             if stack.is_empty() {
