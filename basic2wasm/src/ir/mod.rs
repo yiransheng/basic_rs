@@ -1,12 +1,13 @@
-// mod builder;
+mod builder;
 // mod codegen;
 // mod compiler;
 // mod expr_compiler;
 
+pub use self::builder::Builder;
+
 use basic_rs::ast;
 use binaryen::Module;
 use slotmap::{new_key_type, SecondaryMap, SlotMap};
-use smallvec::SmallVec;
 
 new_key_type! { pub struct Label; }
 new_key_type! { pub struct FunctionName; }
@@ -35,16 +36,27 @@ pub struct Function {
 
 #[derive(Debug)]
 pub struct BasicBlock {
-    label: Label,
-    statements: Vec<Statement>,
-    exit: BlockExit,
+    pub label: Label,
+    pub statements: Vec<Statement>,
+    pub exit: BlockExit,
+}
+
+impl BasicBlock {
+    pub fn empty(label: Label) -> Self {
+        BasicBlock {
+            label,
+            statements: vec![],
+            exit: BlockExit::Return(None),
+        }
+    }
 }
 
 #[derive(Debug)]
 pub enum BlockExit {
-    Return,
+    Return(Option<Expr>),
     Jump(Label),
-    Switch(Expr, Label, Label),
+    // cond, true branch, false branch
+    Switch(Expr, Label, Option<Label>),
 }
 
 #[derive(Debug)]

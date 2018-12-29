@@ -1,1 +1,4 @@
-pub enum CompileError {}
+#[derive(Debug)]
+pub enum CompileError {
+    Custom(&'static str),
+}

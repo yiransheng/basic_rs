@@ -19,6 +19,7 @@ pub struct CfCtx {
     index_cache: RefCell<BTreeMap<LineNo, usize>>,
 }
 
+#[derive(Debug)]
 pub enum CfError {
     MissingLine(LineNo),
     JumpInsideSubroutine(LineNo),
@@ -206,6 +207,10 @@ impl CfCtx {
         Ok(cf_ctx)
     }
 
+    pub fn find_line_no(&self, line_index: usize) -> LineNo {
+        self.lines[line_index].line_no
+    }
+
     pub fn find_line_index(&self, line_no: LineNo) -> Option<usize> {
         if let Some(line_index) = self.index_cache.borrow().get(&line_no) {
             return Some(*line_index);
@@ -223,12 +228,32 @@ impl CfCtx {
         line_index
     }
 
+    pub fn functions<'a>(
+        &'a self,
+    ) -> impl Iterator<Item = (FunctionName, Label)> + 'a {
+        let lines = &self.lines;
+
+        self.functions
+            .iter()
+            .filter_map(move |(k, i)| match lines[*i].label {
+                Some(label) => Some((k, label)),
+                _ => None,
+            })
+    }
+
+    pub fn get_def_func(&self, index: usize) -> Option<FunctionName> {
+        self.functions
+            .iter()
+            .find(|(name, i)| **i == index)
+            .map(|(name, _)| name)
+    }
+
     pub fn get_label(&self, index: usize) -> Option<Label> {
-        self.lines[index].label
+        self.lines.get(index).and_then(|x| x.label)
     }
 
     pub fn get_func(&self, index: usize) -> Option<FunctionName> {
-        self.lines[index].func
+        self.lines.get(index).and_then(|x| x.func)
     }
 
     fn empty_from_program(program: &Program) -> Self {

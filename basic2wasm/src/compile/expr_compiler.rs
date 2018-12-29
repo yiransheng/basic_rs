@@ -32,6 +32,50 @@ impl AstVisitor<Result<Expr, CompileError>> for ExprCompiler {
         expr
     }
 
+    fn visit_if(&mut self, stmt: &IfStmt) -> Result<Expr, CompileError> {
+        match stmt.op {
+            Relop::Less => Ok(Expr::Binary(
+                BinaryOp::Less,
+                Box::new(self.visit_expr(&stmt.lhs)?),
+                Box::new(self.visit_expr(&stmt.rhs)?),
+            )),
+            Relop::LessEqual => Ok(Expr::Unary(
+                UnaryOp::Not,
+                Box::new(Expr::Binary(
+                    BinaryOp::Greater,
+                    Box::new(self.visit_expr(&stmt.lhs)?),
+                    Box::new(self.visit_expr(&stmt.rhs)?),
+                )),
+            )),
+            Relop::Greater => Ok(Expr::Binary(
+                BinaryOp::Greater,
+                Box::new(self.visit_expr(&stmt.lhs)?),
+                Box::new(self.visit_expr(&stmt.rhs)?),
+            )),
+            Relop::GreaterEqual => Ok(Expr::Unary(
+                UnaryOp::Not,
+                Box::new(Expr::Binary(
+                    BinaryOp::Less,
+                    Box::new(self.visit_expr(&stmt.lhs)?),
+                    Box::new(self.visit_expr(&stmt.rhs)?),
+                )),
+            )),
+            Relop::Equal => Ok(Expr::Binary(
+                BinaryOp::Equal,
+                Box::new(self.visit_expr(&stmt.lhs)?),
+                Box::new(self.visit_expr(&stmt.rhs)?),
+            )),
+            Relop::NotEqual => Ok(Expr::Unary(
+                UnaryOp::Not,
+                Box::new(Expr::Binary(
+                    BinaryOp::Equal,
+                    Box::new(self.visit_expr(&stmt.lhs)?),
+                    Box::new(self.visit_expr(&stmt.rhs)?),
+                )),
+            )),
+        }
+    }
+
     fn visit_variable(&mut self, var: &Variable) -> Result<Expr, CompileError> {
         let lval = match self.local {
             Some(v) if v.eq(var) => LV::Local(0),
