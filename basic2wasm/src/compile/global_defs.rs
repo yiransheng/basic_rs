@@ -38,7 +38,7 @@ impl<'a> AstVisitor<Result<(), CompileError>> for GlobalDefPass<'a> {
         Ok(())
     }
 
-    fn visit_data(&mut self, stmt: &DataStmt) -> Result<(), CompileError> {
+    fn visit_data(&mut self, _stmt: &DataStmt) -> Result<(), CompileError> {
         Ok(())
     }
 
@@ -52,11 +52,11 @@ impl<'a> AstVisitor<Result<(), CompileError>> for GlobalDefPass<'a> {
         Ok(())
     }
 
-    fn visit_goto(&mut self, stmt: &GotoStmt) -> Result<(), CompileError> {
+    fn visit_goto(&mut self, _stmt: &GotoStmt) -> Result<(), CompileError> {
         Ok(())
     }
 
-    fn visit_gosub(&mut self, stmt: &GosubStmt) -> Result<(), CompileError> {
+    fn visit_gosub(&mut self, _stmt: &GosubStmt) -> Result<(), CompileError> {
         Ok(())
     }
 

@@ -328,7 +328,7 @@ impl CodeGen {
     }
     fn gen_block(&self, block: &BasicBlock) -> Expr {
         for statement in &block.statements {
-            let expr = self.statement(statement);
+            let _expr = self.statement(statement);
         }
         let statements = block
             .statements

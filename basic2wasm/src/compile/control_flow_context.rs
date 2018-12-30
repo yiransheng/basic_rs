@@ -252,7 +252,7 @@ impl CfCtx {
     pub fn get_def_func(&self, index: usize) -> Option<FunctionName> {
         self.functions
             .iter()
-            .find(|(name, i)| **i == index)
+            .find(|(_name, i)| **i == index)
             .map(|(name, _)| name)
     }
 

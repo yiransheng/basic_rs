@@ -223,11 +223,11 @@ impl<'a> AstVisitor<Result<(), CompileError>> for NonLoopPass<'a> {
         Ok(())
     }
 
-    fn visit_for(&mut self, stmt: &ForStmt) -> Result<(), CompileError> {
+    fn visit_for(&mut self, _stmt: &ForStmt) -> Result<(), CompileError> {
         Ok(())
     }
 
-    fn visit_next(&mut self, stmt: &NextStmt) -> Result<(), CompileError> {
+    fn visit_next(&mut self, _stmt: &NextStmt) -> Result<(), CompileError> {
         Ok(())
     }
 
