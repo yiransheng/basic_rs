@@ -336,7 +336,7 @@ impl CodeGen {
                     match offset {
                         Offset::OneD(index) => {
                             let index = self.module.unary(
-                                UnaryOp::TruncSF64ToI32,
+                                UnaryOp::TruncUF64ToI32,
                                 self.expr(index),
                             );
                             self.module.call_indirect(
@@ -348,10 +348,10 @@ impl CodeGen {
                         Offset::TwoD(i, j) => {
                             let i = self
                                 .module
-                                .unary(UnaryOp::TruncSF64ToI32, self.expr(i));
+                                .unary(UnaryOp::TruncUF64ToI32, self.expr(i));
                             let j = self
                                 .module
-                                .unary(UnaryOp::TruncSF64ToI32, self.expr(j));
+                                .unary(UnaryOp::TruncUF64ToI32, self.expr(j));
 
                             self.module.call_indirect(
                                 self.module.const_(Literal::I32(LOAD2D_INDEX)),
@@ -381,7 +381,7 @@ impl CodeGen {
                     match offset {
                         Offset::OneD(index) => {
                             let index = self.module.unary(
-                                UnaryOp::TruncSF64ToI32,
+                                UnaryOp::TruncUF64ToI32,
                                 self.expr(index),
                             );
                             self.module.call_indirect(
@@ -393,10 +393,10 @@ impl CodeGen {
                         Offset::TwoD(i, j) => {
                             let i = self
                                 .module
-                                .unary(UnaryOp::TruncSF64ToI32, self.expr(i));
+                                .unary(UnaryOp::TruncUF64ToI32, self.expr(i));
                             let j = self
                                 .module
-                                .unary(UnaryOp::TruncSF64ToI32, self.expr(j));
+                                .unary(UnaryOp::TruncUF64ToI32, self.expr(j));
 
                             self.module.call_indirect(
                                 self.module.const_(Literal::I32(STORE2D_INDEX)),
@@ -416,7 +416,7 @@ impl CodeGen {
                 let arr_start = array_memory_start(&self.ir);
                 let arr_start = self.module.const_(Literal::I32(arr_start));
                 let size =
-                    self.module.unary(UnaryOp::TruncSF64ToI32, self.expr(size));
+                    self.module.unary(UnaryOp::TruncUF64ToI32, self.expr(size));
 
                 let ptr = self.module.call_indirect(
                     self.module.const_(Literal::I32(ALLOC1D_INDEX)),
@@ -434,9 +434,9 @@ impl CodeGen {
                 let arr_start = array_memory_start(&self.ir);
                 let arr_start = self.module.const_(Literal::I32(arr_start));
                 let nrow =
-                    self.module.unary(UnaryOp::TruncSF64ToI32, self.expr(nrow));
+                    self.module.unary(UnaryOp::TruncUF64ToI32, self.expr(nrow));
                 let ncol =
-                    self.module.unary(UnaryOp::TruncSF64ToI32, self.expr(ncol));
+                    self.module.unary(UnaryOp::TruncUF64ToI32, self.expr(ncol));
                 let ptr = self.module.call_indirect(
                     self.module.const_(Literal::I32(ALLOC2D_INDEX)),
                     vec![arr_start, nrow, ncol],
