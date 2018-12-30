@@ -31,6 +31,9 @@ struct Opt {
 
     #[structopt(short = "p", long = "print")]
     print: bool,
+
+    #[structopt(short = "d", long = "dry-run")]
+    dry_run: bool,
 }
 
 impl Opt {
@@ -87,14 +90,15 @@ fn main() {
         wasm.print();
     }
 
-    let code = wasm.write();
+    if !opt.dry_run {
+        let code = wasm.write();
+        let mut buffer = File::create(opt.wasm_path()).unwrap();
+        buffer.write(&code).expect("failed to write");
 
-    let mut buffer = File::create(opt.wasm_path()).unwrap();
-    buffer.write(&code).expect("failed to write");
+        let mut buffer = File::create(opt.js_path()).unwrap();
+        buffer.write(JS.as_bytes()).expect("failed to write");
 
-    let mut buffer = File::create(opt.js_path()).unwrap();
-    buffer.write(JS.as_bytes()).expect("failed to write");
-
-    let mut buffer = File::create(opt.html_path()).unwrap();
-    buffer.write(HTML.as_bytes()).expect("failed to write");
+        let mut buffer = File::create(opt.html_path()).unwrap();
+        buffer.write(HTML.as_bytes()).expect("failed to write");
+    }
 }
