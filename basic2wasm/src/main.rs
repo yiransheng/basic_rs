@@ -51,4 +51,9 @@ fn main() {
     wasm.optimize();
 
     wasm.print();
+
+    let mut buffer = File::create("main.wasm").unwrap();
+    let code = wasm.write();
+
+    buffer.write(&code).expect("failed to write");
 }

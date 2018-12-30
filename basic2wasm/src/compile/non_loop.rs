@@ -98,7 +98,16 @@ impl<'a> AstVisitor<Result<(), CompileError>> for NonLoopPass<'a> {
 
         for (i, stmt) in prog.statements.iter().enumerate() {
             self.line_index = i;
-            self.visit_statement(stmt)?;
+
+            let func = self.cf_ctx.get_func(i);
+            let label = self.cf_ctx.get_label(i);
+
+            match (func, label) {
+                (Some(_), Some(_)) => {
+                    self.visit_statement(stmt)?;
+                }
+                _ => {}
+            }
         }
 
         Ok(())
@@ -134,13 +143,14 @@ impl<'a> AstVisitor<Result<(), CompileError>> for NonLoopPass<'a> {
     }
 
     fn visit_print(&mut self, stmt: &PrintStmt) -> Result<(), CompileError> {
-        let mut newline = false;
+        let mut newline = true;
 
         for part in &stmt.parts {
             let stmt = match part {
                 Printable::Label(s) => {
                     newline = true;
-                    IRStatement::PrintLabel(s.clone())
+                    let (offset, length) = self.builder.add_string_label(&*s);
+                    IRStatement::PrintLabel(offset, length)
                 }
                 Printable::Advance3 => {
                     newline = false;

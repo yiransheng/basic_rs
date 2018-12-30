@@ -90,7 +90,7 @@ impl CfCtx {
                         cf_ctx.set_label(to_index, label);
                         let _ = cf_ctx.set_func(to_index, func);
 
-                        stack.push_front(to_index);
+                        stack.push_back(to_index);
                     }
                 }
                 Stmt::Def(_) => {
@@ -121,6 +121,8 @@ impl CfCtx {
 
         stack.push_back(0);
 
+        let unreachable = cf_ctx.add_label();
+
         loop {
             if stack.is_empty() {
                 break;
@@ -129,14 +131,11 @@ impl CfCtx {
             let index = stack.pop_back().unwrap();
             let next_line_index = index + 1;
 
-            let current_label = cf_ctx.get_label(index).ok_or_else(|| {
-                let line_no = cf_ctx.find_line_no(index);
-                CfError::UnreachableCode(line_no)
-            })?;
-            let current_func = cf_ctx.get_func(index).ok_or_else(|| {
-                let line_no = cf_ctx.find_line_no(index);
-                CfError::UnreachableCode(line_no)
-            })?;
+            let current_label = cf_ctx.get_label(index).unwrap_or_else(|| {
+                cf_ctx.set_label(index, unreachable);
+                unreachable
+            });
+            let current_func = cf_ctx.get_func(index).unwrap();
 
             let stmt = &statements[index];
 

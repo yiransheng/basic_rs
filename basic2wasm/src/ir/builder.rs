@@ -12,6 +12,7 @@ pub struct Builder {
     arrs: FxHashSet<ast::Variable>,
     fns: FxHashSet<ast::Func>,
     data: Vec<f64>,
+    labels: String,
 }
 
 impl Builder {
@@ -23,6 +24,7 @@ impl Builder {
             arrs: FxHashSet::default(),
             fns: FxHashSet::default(),
             data: vec![],
+            labels: String::new(),
         }
     }
     pub fn build(mut self) -> Program {
@@ -42,6 +44,7 @@ impl Builder {
             functions: self.functions,
             main: self.main.unwrap(),
             data: self.data,
+            labels: self.labels,
         }
     }
 
@@ -114,6 +117,11 @@ impl Builder {
                 None => Ok(()),
             })
             .unwrap_or_else(|| Err(label))
+    }
+    pub fn add_string_label(&mut self, s: &str) -> (usize, usize) {
+        let offset = self.labels.as_bytes().len();
+        self.labels.push_str(s);
+        (offset, s.as_bytes().len())
     }
 
     pub fn add_statement(

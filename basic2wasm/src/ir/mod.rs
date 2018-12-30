@@ -36,6 +36,7 @@ pub struct Program {
     pub functions: Vec<Function>,
     pub main: FunctionName,
     pub data: Vec<f64>,
+    pub labels: String,
 }
 
 impl fmt::Display for Program {
@@ -231,7 +232,8 @@ pub enum Statement {
     Alloc1d(LValue, Expr),
     Alloc2d(LValue, Expr, Expr),
     Print(Expr),
-    PrintLabel(String),
+    // offset, len in bytes
+    PrintLabel(usize, usize),
     PrintAdvance3,
     PrintAdvance15,
     PrintNewline,
@@ -264,7 +266,7 @@ impl fmt::Display for Statement {
                 write!(f, "fn_{}();", get_func_index(*name))
             }
             Statement::Print(v) => write!(f, "print({});", v),
-            Statement::PrintLabel(s) => write!(f, "print({});", s),
+            Statement::PrintLabel(..) => write!(f, "<a label>"),
             _ => Ok(()),
         }
     }

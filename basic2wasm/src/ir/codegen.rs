@@ -22,7 +22,12 @@ const STORE2D_INDEX: u32 = 5;
 const F64_SIZE: usize = 8;
 
 fn array_memory_start(ir: &Program) -> u32 {
-    (ir.data.len() * F64_SIZE) as u32
+    let data_end = ir.data.len() * F64_SIZE;
+    let labels_end = data_end + ir.labels.as_bytes().len();
+    // alignment: 8 bytes
+    let arr_start = (labels_end | 7) + 1;
+
+    arr_start as u32
 }
 
 fn array_name<V: Display>(var: V) -> String {
@@ -187,17 +192,26 @@ impl CodeGen {
         let init_expr = self.module.const_(Literal::I32(data_end as u32));
         self.module
             .add_global("data_end", ValueTy::I32, true, init_expr);
-        if data_len > 0 {
-            let mut data_bytes: Vec<u8> = Vec::with_capacity(data_end);
-            for d in &self.ir.data {
-                data_bytes.write_f64::<LittleEndian>(*d).unwrap();
-            }
 
-            let offset_expr = self.module.const_(Literal::I32(0));
-            let data_segment = Segment::new(&data_bytes, offset_expr);
-            self.module
-                .set_memory(1, 1, Some("data"), Some(data_segment));
+        // data segment + string labels
+        let mut segments = Vec::with_capacity(2);
+        let mut data_bytes: Vec<u8> = Vec::with_capacity(data_end);
+        for d in &self.ir.data {
+            data_bytes.write_f64::<LittleEndian>(*d).unwrap();
         }
+
+        let offset_expr = self.module.const_(Literal::I32(0));
+        let data_segment = Segment::new(&data_bytes, offset_expr);
+        segments.push(data_segment);
+
+        let labels_offset_expr =
+            self.module.const_(Literal::I32(data_end as u32));
+        let labels_segement =
+            Segment::new(&self.ir.labels.as_bytes(), labels_offset_expr);
+        segments.push(labels_segement);
+
+        self.module.set_memory(1, 1, Some("data"), segments);
+
         let data_end_ptr = self.module.get_global("data_end", ValueTy::I32);
         let load = self.module.load(
             F64_SIZE as u32,
@@ -488,6 +502,17 @@ impl CodeGen {
             }
             Statement::PrintNewline => {
                 self.module.call("printNewline", None, Ty::None)
+            }
+            Statement::PrintLabel(offset, length) => {
+                let data_len = self.ir.data.len();
+                let label_start = data_len * F64_SIZE + offset;
+
+                let offset =
+                    self.module.const_(Literal::I32(label_start as u32));
+                let length = self.module.const_(Literal::I32(*length as u32));
+
+                self.module
+                    .call("printLabel", vec![offset, length], Ty::None)
             }
             Statement::CallSub(name) => {
                 let name: &str = &*self.func_names.get(*name).unwrap();
