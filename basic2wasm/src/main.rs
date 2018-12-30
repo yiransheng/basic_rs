@@ -19,6 +19,36 @@ struct Opt {
     /// Input file
     #[structopt(parse(from_os_str))]
     input: PathBuf,
+
+    /// Output dir
+    #[structopt(
+        parse(from_os_str),
+        short = "o",
+        long = "out-dir",
+        default_value = "."
+    )]
+    out_dir: PathBuf,
+
+    #[structopt(short = "p", long = "print")]
+    print: bool,
+}
+
+impl Opt {
+    fn wasm_path(&self) -> PathBuf {
+        let mut path = self.out_dir.clone();
+        path.push("main.wasm");
+        path
+    }
+    fn js_path(&self) -> PathBuf {
+        let mut path = self.out_dir.clone();
+        path.push("index.js");
+        path
+    }
+    fn html_path(&self) -> PathBuf {
+        let mut path = self.out_dir.clone();
+        path.push("index.html");
+        path
+    }
 }
 
 fn read_source(opt: &Opt) -> Result<String, io::Error> {
@@ -28,6 +58,9 @@ fn read_source(opt: &Opt) -> Result<String, io::Error> {
 
     Ok(source)
 }
+
+static JS: &'static str = include_str!("web/index.js");
+static HTML: &'static str = include_str!("web/index.html");
 
 fn main() {
     let opt = Opt::from_args();
@@ -50,10 +83,18 @@ fn main() {
 
     wasm.optimize();
 
-    wasm.print();
+    if opt.print {
+        wasm.print();
+    }
 
-    let mut buffer = File::create("main.wasm").unwrap();
     let code = wasm.write();
 
+    let mut buffer = File::create(opt.wasm_path()).unwrap();
     buffer.write(&code).expect("failed to write");
+
+    let mut buffer = File::create(opt.js_path()).unwrap();
+    buffer.write(JS.as_bytes()).expect("failed to write");
+
+    let mut buffer = File::create(opt.html_path()).unwrap();
+    buffer.write(HTML.as_bytes()).expect("failed to write");
 }
