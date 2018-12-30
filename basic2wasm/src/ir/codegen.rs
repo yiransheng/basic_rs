@@ -61,6 +61,13 @@ impl CodeGen {
         let print_api =
             self.module
                 .add_fn_type(None::<&str>, &[ValueTy::F64], Ty::None);
+        let print_label_api = self.module.add_fn_type(
+            None::<&str>,
+            &[ValueTy::I32, ValueTy::I32],
+            Ty::None,
+        );
+        let print_control_api =
+            self.module.add_fn_type(None::<&str>, &[], Ty::None);
         let rand_api = self.module.add_fn_type(None::<&str>, &[], Ty::F64);
         let pow_api = self.module.add_fn_type(
             None::<&str>,
@@ -69,6 +76,30 @@ impl CodeGen {
         );
         self.module
             .add_fn_import("print", "env", "print", &print_api);
+        self.module.add_fn_import(
+            "printLabel",
+            "env",
+            "printLabel",
+            &print_label_api,
+        );
+        self.module.add_fn_import(
+            "printNewline",
+            "env",
+            "printNewline",
+            &print_control_api,
+        );
+        self.module.add_fn_import(
+            "printAdvance3",
+            "env",
+            "printAdvance3",
+            &print_control_api,
+        );
+        self.module.add_fn_import(
+            "printAdvance15",
+            "env",
+            "printAdvance15",
+            &print_control_api,
+        );
 
         self.module.add_fn_import("rand", "env", "rand", &rand_api);
         self.module.add_fn_import("pow", "env", "pow", &pow_api);
@@ -449,11 +480,19 @@ impl CodeGen {
             Statement::Print(expr) => {
                 self.module.call("print", Some(self.expr(expr)), Ty::None)
             }
+            Statement::PrintAdvance3 => {
+                self.module.call("printAdvance3", None, Ty::None)
+            }
+            Statement::PrintAdvance15 => {
+                self.module.call("printAdvance15", None, Ty::None)
+            }
+            Statement::PrintNewline => {
+                self.module.call("printNewline", None, Ty::None)
+            }
             Statement::CallSub(name) => {
                 let name: &str = &*self.func_names.get(*name).unwrap();
                 self.module.call(name, None, Ty::None)
             }
-            Statement::PrintNewline => self.module.nop(),
             x @ _ => {
                 println!("{:?}", x);
                 unimplemented!()
