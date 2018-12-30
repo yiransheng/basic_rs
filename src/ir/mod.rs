@@ -1,5 +1,7 @@
 mod visitor;
 
+use std::fmt;
+
 pub use self::visitor::Visitor;
 
 use crate::ast::{Func, LineNo, Variable};
@@ -10,6 +12,12 @@ pub struct Label(usize);
 
 pub struct LabelIdGen {
     id: usize,
+}
+
+impl fmt::Display for Label {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(f, "L{}", self.0)
+    }
 }
 
 impl LabelIdGen {
@@ -23,14 +31,14 @@ impl LabelIdGen {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Instruction {
     pub kind: InstructionKind,
     pub label: Option<Label>,
     pub line_no: LineNo,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum InstructionKind {
     Data(f64),
     Constant(f64),

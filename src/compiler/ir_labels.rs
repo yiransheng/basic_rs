@@ -7,6 +7,7 @@ use crate::ir::{Label, LabelIdGen};
 pub struct IrLabels<'a> {
     label_mapping: &'a mut FxHashMap<LineNo, Label>,
     id_gen: &'a mut LabelIdGen,
+    label_next_line: bool,
 }
 
 impl<'a> IrLabels<'a> {
@@ -17,6 +18,7 @@ impl<'a> IrLabels<'a> {
         IrLabels {
             id_gen,
             label_mapping,
+            label_next_line: true,
         }
     }
 }
@@ -24,6 +26,12 @@ impl<'a> IrLabels<'a> {
 impl<'a> Visitor<Result<(), CompileError>> for IrLabels<'a> {
     fn visit_program(&mut self, prog: &Program) -> Result<(), CompileError> {
         for s in prog.statements.iter() {
+            if self.label_next_line {
+                let label = self.id_gen.next_id();
+                self.label_mapping.insert(s.line_no, label);
+                self.label_next_line = false;
+            }
+
             self.visit_statement(s)?;
         }
 
@@ -69,6 +77,8 @@ impl<'a> Visitor<Result<(), CompileError>> for IrLabels<'a> {
             let label = self.id_gen.next_id();
             self.label_mapping.insert(stmt.then, label);
         }
+
+        self.label_next_line = true;
 
         Ok(())
     }
