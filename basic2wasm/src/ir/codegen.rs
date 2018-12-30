@@ -1,8 +1,8 @@
-use std::mem;
+use std::fmt::Display;
 
 use super::{
     BasicBlock, BinaryOp as IRBinaryOp, BlockExit, Expr as IRExpr, Function,
-    FunctionName, GlobalKind, LValue, Label, Program, Statement,
+    FunctionName, GlobalKind, LValue, Label, Offset, Program, Statement,
     UnaryOp as IRUnaryOp,
 };
 
@@ -10,19 +10,23 @@ use binaryen::*;
 use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
 use slotmap::SecondaryMap;
 
-// static MODULE_BASE: &'static [u8] = include_bytes!("../runtime.wasm");
+static MODULE_BASE: &'static [u8] = include_bytes!("../runtime.wasm");
 
-const ALLOC1D_INDEX: u32 = 1;
-const ALLOC2D_INDEX: u32 = 2;
-const LOAD1D_INDEX: u32 = 3;
-const LOAD2D_INDEX: u32 = 4;
-const STORE1D_INDEX: u32 = 5;
-const STORE2D_INDEX: u32 = 6;
+const ALLOC1D_INDEX: u32 = 0;
+const ALLOC2D_INDEX: u32 = 1;
+const LOAD1D_INDEX: u32 = 2;
+const LOAD2D_INDEX: u32 = 3;
+const STORE1D_INDEX: u32 = 4;
+const STORE2D_INDEX: u32 = 5;
 
 const F64_SIZE: usize = 8;
 
 fn array_memory_start(ir: &Program) -> u32 {
     (ir.data.len() * F64_SIZE) as u32
+}
+
+fn array_name<V: Display>(var: V) -> String {
+    format!("array_{}", var)
 }
 
 pub struct CodeGen {
@@ -34,7 +38,7 @@ pub struct CodeGen {
 
 impl CodeGen {
     pub fn new(ir: Program) -> Self {
-        let module = Module::new();
+        let module = Module::read(MODULE_BASE);
         let main_type = module.add_fn_type(Some("main"), &[], Ty::None);
         let mut func_names = SecondaryMap::new();
 
@@ -83,9 +87,56 @@ impl CodeGen {
                         init_expr,
                     );
                 }
+                GlobalKind::ArrPtr(var) => {
+                    self.module.add_global(
+                        array_name(var),
+                        ValueTy::I32,
+                        true,
+                        // TODO: init to nullptr
+                        self.module.const_(Literal::I32(0)),
+                    );
+                }
                 _ => unimplemented!(),
             }
         }
+
+        let _ = self.module.add_fn_type(
+            Some("alloc1d"),
+            // ptr, size
+            &[ValueTy::I32, ValueTy::I32],
+            Ty::I32, // ptr
+        );
+        let _ = self.module.add_fn_type(
+            Some("alloc2d"),
+            // ptr, nrow, ncol
+            &[ValueTy::I32, ValueTy::I32, ValueTy::I32],
+            Ty::I32, // ptr
+        );
+
+        let _ = self.module.add_fn_type(
+            Some("load1d"),
+            // ptr, index
+            &[ValueTy::I32, ValueTy::I32],
+            Ty::F64,
+        );
+        let _ = self.module.add_fn_type(
+            Some("load2d"),
+            // ptr, row, col
+            &[ValueTy::I32, ValueTy::I32, ValueTy::I32],
+            Ty::F64,
+        );
+        let _ = self.module.add_fn_type(
+            Some("store1d"),
+            // ptr, index
+            &[ValueTy::I32, ValueTy::I32, ValueTy::F64],
+            Ty::None,
+        );
+        let _ = self.module.add_fn_type(
+            Some("store2d"),
+            // ptr, row, col
+            &[ValueTy::I32, ValueTy::I32, ValueTy::I32, ValueTy::F64],
+            Ty::None,
+        );
 
         let functions = ::std::mem::replace(&mut self.ir.functions, vec![]);
 
@@ -93,17 +144,6 @@ impl CodeGen {
             let name = self.func_names.get(function.name).cloned().unwrap();
             self.gen_function(&name, function);
         }
-
-        let _ = self.module.add_fn_type(
-            Some("i32_to_i32"),
-            &[ValueTy::I32],
-            Ty::I32,
-        );
-        let _ = self.module.add_fn_type(
-            Some("i32_i32_to_i32"),
-            &[ValueTy::I32, ValueTy::I32],
-            Ty::I32,
-        );
 
         self.module.add_fn_export("main", "main");
 
@@ -290,6 +330,34 @@ impl CodeGen {
                 LValue::Local(index) => {
                     self.module.get_local(*index as u32, ValueTy::F64)
                 }
+                LValue::ArrPtr(var, offset) => {
+                    let ptr =
+                        self.module.get_global(array_name(var), ValueTy::I32);
+                    match offset {
+                        Offset::OneD(index) => {
+                            let index = self.expr(index);
+                            self.module.call_indirect(
+                                self.module.const_(Literal::I32(LOAD1D_INDEX)),
+                                vec![ptr, index],
+                                "load1d",
+                            )
+                        }
+                        Offset::TwoD(i, j) => {
+                            let i = self
+                                .module
+                                .unary(UnaryOp::TruncSF64ToI32, self.expr(i));
+                            let j = self
+                                .module
+                                .unary(UnaryOp::TruncSF64ToI32, self.expr(j));
+
+                            self.module.call_indirect(
+                                self.module.const_(Literal::I32(LOAD2D_INDEX)),
+                                vec![ptr, i, j],
+                                "load2d",
+                            )
+                        }
+                    }
+                }
                 _ => unimplemented!(),
             },
             _ => unimplemented!(),
@@ -304,8 +372,74 @@ impl CodeGen {
                 LValue::Local(index) => {
                     self.module.set_local(*index as u32, self.expr(expr))
                 }
+                LValue::ArrPtr(var, offset) => {
+                    let ptr =
+                        self.module.get_global(array_name(var), ValueTy::I32);
+                    match offset {
+                        Offset::OneD(index) => {
+                            let index = self.expr(index);
+                            self.module.call_indirect(
+                                self.module.const_(Literal::I32(STORE1D_INDEX)),
+                                vec![ptr, index, self.expr(expr)],
+                                "store1d",
+                            )
+                        }
+                        Offset::TwoD(i, j) => {
+                            let i = self
+                                .module
+                                .unary(UnaryOp::TruncSF64ToI32, self.expr(i));
+                            let j = self
+                                .module
+                                .unary(UnaryOp::TruncSF64ToI32, self.expr(j));
+
+                            self.module.call_indirect(
+                                self.module.const_(Literal::I32(STORE2D_INDEX)),
+                                vec![ptr, i, j, self.expr(expr)],
+                                "store2d",
+                            )
+                        }
+                    }
+                }
                 _ => unimplemented!(),
             },
+            Statement::Alloc1d(lval, size) => {
+                let arr = match lval {
+                    LValue::ArrPtr(var, _) => array_name(var),
+                    _ => panic!("type error"),
+                };
+                let arr_start = array_memory_start(&self.ir);
+                let arr_start = self.module.const_(Literal::I32(arr_start));
+                let size =
+                    self.module.unary(UnaryOp::TruncSF64ToI32, self.expr(size));
+
+                let ptr = self.module.call_indirect(
+                    self.module.const_(Literal::I32(ALLOC1D_INDEX)),
+                    vec![arr_start, size],
+                    "alloc1d",
+                );
+
+                self.module.set_global(arr, ptr)
+            }
+            Statement::Alloc2d(lval, nrow, ncol) => {
+                let arr = match lval {
+                    LValue::ArrPtr(var, _) => array_name(var),
+                    _ => panic!("type error"),
+                };
+                let arr_start = array_memory_start(&self.ir);
+                let arr_start = self.module.const_(Literal::I32(arr_start));
+                let nrow =
+                    self.module.unary(UnaryOp::TruncSF64ToI32, self.expr(nrow));
+                let ncol =
+                    self.module.unary(UnaryOp::TruncSF64ToI32, self.expr(ncol));
+                let ptr = self.module.call_indirect(
+                    self.module.const_(Literal::I32(ALLOC2D_INDEX)),
+                    vec![arr_start, nrow, ncol],
+                    "alloc2d",
+                );
+
+                self.module.set_global(arr, ptr)
+            }
+
             Statement::Print(expr) => {
                 self.module.call("print", Some(self.expr(expr)), Ty::None)
             }
