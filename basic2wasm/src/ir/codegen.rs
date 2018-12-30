@@ -335,7 +335,10 @@ impl CodeGen {
                         self.module.get_global(array_name(var), ValueTy::I32);
                     match offset {
                         Offset::OneD(index) => {
-                            let index = self.expr(index);
+                            let index = self.module.unary(
+                                UnaryOp::TruncSF64ToI32,
+                                self.expr(index),
+                            );
                             self.module.call_indirect(
                                 self.module.const_(Literal::I32(LOAD1D_INDEX)),
                                 vec![ptr, index],
@@ -377,7 +380,10 @@ impl CodeGen {
                         self.module.get_global(array_name(var), ValueTy::I32);
                     match offset {
                         Offset::OneD(index) => {
-                            let index = self.expr(index);
+                            let index = self.module.unary(
+                                UnaryOp::TruncSF64ToI32,
+                                self.expr(index),
+                            );
                             self.module.call_indirect(
                                 self.module.const_(Literal::I32(STORE1D_INDEX)),
                                 vec![ptr, index, self.expr(expr)],

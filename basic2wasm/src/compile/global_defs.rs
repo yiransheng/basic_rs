@@ -1,4 +1,5 @@
 use basic_rs::ast::{Visitor as AstVisitor, *};
+use either::Either;
 
 use super::error::CompileError;
 use crate::ir::Builder;
@@ -91,7 +92,18 @@ impl<'a> AstVisitor<Result<(), CompileError>> for GlobalDefPass<'a> {
     }
 
     fn visit_dim(&mut self, stmt: &DimStmt) -> Result<(), CompileError> {
-        unimplemented!()
+        for dim in &stmt.dims {
+            match dim {
+                Either::Left(List { var, .. }) => {
+                    self.builder.define_array(*var);
+                }
+                Either::Right(Table { var, .. }) => {
+                    self.builder.define_array(*var);
+                }
+            }
+        }
+
+        Ok(())
     }
 
     fn visit_rem(&mut self) -> Result<(), CompileError> {

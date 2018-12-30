@@ -1,4 +1,5 @@
 use basic_rs::ast::{Visitor as AstVisitor, *};
+use either::Either;
 use slotmap::SecondaryMap;
 
 use super::control_flow_context::CfCtx;
@@ -6,7 +7,7 @@ use super::error::CompileError;
 use super::expr_compiler::ExprCompiler;
 use crate::ir::{
     BasicBlock, Builder, Expr, Function, FunctionName, LValue as LV, Label,
-    Statement as IRStatement,
+    Offset, Statement as IRStatement,
 };
 
 pub struct NonLoopPass<'a> {
@@ -115,6 +116,8 @@ impl<'a> AstVisitor<Result<(), CompileError>> for NonLoopPass<'a> {
     }
     fn visit_data(&mut self, stmt: &DataStmt) -> Result<(), CompileError> {
         self.builder.add_data(stmt.vals.iter().map(|v| *v));
+
+        self.add_basic_block_branch();
 
         Ok(())
     }
@@ -229,6 +232,33 @@ impl<'a> AstVisitor<Result<(), CompileError>> for NonLoopPass<'a> {
             .add_return(func, self.current_label(), Some(expr));
 
         self.add_statement(IRStatement::DefFn(lval, func))?;
+        self.add_basic_block_branch();
+
+        Ok(())
+    }
+
+    fn visit_dim(&mut self, stmt: &DimStmt) -> Result<(), CompileError> {
+        let mut expr_compiler = ExprCompiler::new();
+
+        for dim in &stmt.dims {
+            match dim {
+                Either::Left(List { var, subscript }) => {
+                    let lval = LV::ArrPtr(*var, Offset::OneD(Expr::Const(0.0)));
+                    let size = expr_compiler.visit_expr(subscript)?;
+                    self.add_statement(IRStatement::Alloc1d(lval, size))?;
+                }
+                Either::Right(Table { var, subscript }) => {
+                    let lval = LV::ArrPtr(
+                        *var,
+                        Offset::TwoD(Expr::Const(0.0), Expr::Const(0.0)),
+                    );
+                    let nrow = expr_compiler.visit_expr(&subscript.0)?;
+                    let ncol = expr_compiler.visit_expr(&subscript.1)?;
+                    self.add_statement(IRStatement::Alloc2d(lval, nrow, ncol))?;
+                }
+            }
+        }
+
         self.add_basic_block_branch();
 
         Ok(())
