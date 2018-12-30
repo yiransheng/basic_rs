@@ -106,12 +106,11 @@ impl CodeGen {
 
     fn gen_data(&mut self) {
         let data_len = self.ir.data.len();
+        let data_end = data_len * mem::size_of::<f64>();
+        let init_expr = self.module.const_(Literal::I32(data_end as u32));
+        self.module
+            .add_global("data_ptr", ValueTy::I32, true, init_expr);
         if data_len > 0 {
-            let data_end = data_len * mem::size_of::<f64>();
-            let init_expr = self.module.const_(Literal::I32(data_end as u32));
-            self.module
-                .add_global("data_ptr", ValueTy::I32, true, init_expr);
-
             let mut data_bytes: Vec<u8> = Vec::with_capacity(data_end);
             for d in &self.ir.data {
                 data_bytes.write_f64::<LittleEndian>(*d).unwrap();
