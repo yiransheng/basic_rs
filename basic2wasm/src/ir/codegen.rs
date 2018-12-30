@@ -1,3 +1,5 @@
+use std::mem;
+
 use super::{
     BasicBlock, BinaryOp as IRBinaryOp, BlockExit, Expr as IRExpr, Function,
     FunctionName, GlobalKind, LValue, Label, Program, Statement,
@@ -5,6 +7,7 @@ use super::{
 };
 
 use binaryen::*;
+use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
 use slotmap::SecondaryMap;
 
 // static MODULE_BASE: &'static [u8] = include_bytes!("../runtime.wasm");
@@ -45,6 +48,23 @@ impl CodeGen {
         }
     }
     pub fn generate(mut self) -> Module {
+        let print_api =
+            self.module
+                .add_fn_type(None::<&str>, &[ValueTy::F64], Ty::None);
+        let rand_api = self.module.add_fn_type(None::<&str>, &[], Ty::F64);
+        let pow_api = self.module.add_fn_type(
+            None::<&str>,
+            &[ValueTy::F64, ValueTy::F64],
+            Ty::F64,
+        );
+        self.module
+            .add_fn_import("print", "env", "print", &print_api);
+
+        self.module.add_fn_import("rand", "env", "rand", &rand_api);
+        self.module.add_fn_import("pow", "env", "pow", &pow_api);
+
+        self.gen_data();
+
         for kind in &self.ir.globals {
             match kind {
                 GlobalKind::Variable(var) => {
@@ -68,22 +88,6 @@ impl CodeGen {
             self.gen_function(&name, function);
         }
 
-        let print_api =
-            self.module
-                .add_fn_type(None::<&str>, &[ValueTy::F64], Ty::None);
-        let rand_api = self.module.add_fn_type(None::<&str>, &[], Ty::F64);
-        let pow_api = self.module.add_fn_type(
-            None::<&str>,
-            &[ValueTy::F64, ValueTy::F64],
-            Ty::F64,
-        );
-
-        self.module
-            .add_fn_import("print", "env", "print", &print_api);
-
-        self.module.add_fn_import("rand", "env", "rand", &rand_api);
-        self.module.add_fn_import("pow", "env", "pow", &pow_api);
-
         let _ = self.module.add_fn_type(
             Some("i32_to_i32"),
             &[ValueTy::I32],
@@ -98,6 +102,56 @@ impl CodeGen {
         self.module.add_fn_export("main", "main");
 
         self.module
+    }
+
+    fn gen_data(&mut self) {
+        let data_len = self.ir.data.len();
+        if data_len > 0 {
+            let data_end = data_len * mem::size_of::<f64>();
+            let init_expr = self.module.const_(Literal::I32(data_end as u32));
+            self.module
+                .add_global("data_ptr", ValueTy::I32, true, init_expr);
+
+            let mut data_bytes: Vec<u8> = Vec::with_capacity(data_end);
+            for d in &self.ir.data {
+                data_bytes.write_f64::<LittleEndian>(*d).unwrap();
+            }
+
+            let offset_expr = self.module.const_(Literal::I32(0));
+            let data_segment = Segment::new(&data_bytes, offset_expr);
+            self.module
+                .set_memory(1, 1, Some("data"), Some(data_segment));
+        }
+        let data_ptr_end = self.module.get_global("data_ptr", ValueTy::I32);
+        let load = self.module.load(
+            8,
+            true,
+            0,
+            8,
+            ValueTy::F64,
+            self.module.get_global("data_ptr", ValueTy::I32),
+        );
+
+        let decr = self.module.set_global(
+            "data_ptr",
+            self.module.binary(
+                BinaryOp::SubI32,
+                self.module.get_global("data_ptr", ValueTy::I32),
+                self.module.const_(Literal::I32(8)),
+            ),
+        );
+
+        let body = self.module.if_(
+            data_ptr_end,
+            self.module.block::<&'static str, _>(
+                None,
+                vec![decr, self.module.return_(Some(load))],
+                None,
+            ),
+            Some(self.module.unreachable()),
+        );
+        let read_type = self.module.add_fn_type(Some("read"), &[], Ty::F64);
+        self.module.add_fn("read", &read_type, &[], body);
     }
 
     fn gen_function(&mut self, name: &str, function: &Function) {
@@ -170,8 +224,9 @@ impl CodeGen {
         use std::ops::Deref;
 
         match expr {
-            IRExpr::Const(v) => self.module.const_(Literal::F64(*v)),
             IRExpr::RandF64 => self.module.call("rand", None, Ty::F64),
+            IRExpr::ReadData => self.module.call("read", None, Ty::F64),
+            IRExpr::Const(v) => self.module.const_(Literal::F64(*v)),
             IRExpr::Unary(op, rhs) => {
                 let rhs = self.expr(rhs);
                 self.module.unary((*op).into(), rhs)

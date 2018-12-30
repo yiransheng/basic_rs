@@ -7,12 +7,14 @@ use slotmap::{SecondaryMap, SlotMap};
 
 use crate::ir::{FunctionName, Label};
 
+#[derive(Debug)]
 struct LineCtx {
     line_no: LineNo,
     label: Option<Label>,
     func: Option<FunctionName>,
 }
 
+#[derive(Debug)]
 pub struct CfCtx {
     lines: Vec<LineCtx>,
     functions: SecondaryMap<FunctionName, usize>,
@@ -106,7 +108,6 @@ impl CfCtx {
                         cf_ctx.set_label(to_index, label);
                     }
                 }
-                Stmt::Data(..) => {}
                 _ => {}
             }
         }

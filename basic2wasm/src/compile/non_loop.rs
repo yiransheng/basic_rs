@@ -84,10 +84,15 @@ impl<'a> AstVisitor<Result<(), CompileError>> for NonLoopPass<'a> {
             .map_err(|_| CompileError::Custom("main already set"))?;
 
         for i in 0..prog.statements.len() {
-            let func = self.cf_ctx.get_func(i).unwrap();
-            let label = self.cf_ctx.get_label(i).unwrap();
+            let func = self.cf_ctx.get_func(i);
+            let label = self.cf_ctx.get_label(i);
 
-            let _ = self.builder.add_block(func, label);
+            match (func, label) {
+                (Some(func), Some(label)) => {
+                    let _ = self.builder.add_block(func, label);
+                }
+                _ => {}
+            }
         }
 
         for (i, stmt) in prog.statements.iter().enumerate() {
