@@ -109,6 +109,7 @@ impl<'a> AstVisitor<Result<(), CompileError>> for NonLoopPass<'a> {
             let lval = expr_compiler.lvalue(var)?;
             self.add_statement(IRStatement::Assign(lval, Expr::ReadData))?;
         }
+        self.add_basic_block_branch();
 
         Ok(())
     }

@@ -38,7 +38,7 @@ fn main() {
 
     let conf = CodegenConfig {
         shrink_level: 1,
-        optimization_level: 2,
+        optimization_level: 3,
     };
     set_global_codegen_config(&conf);
 
