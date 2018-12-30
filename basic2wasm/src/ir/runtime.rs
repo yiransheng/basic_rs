@@ -3,12 +3,12 @@ use std::mem;
 trait Stride: Copy {
     fn to_offset(self, index: Self) -> usize;
 }
-impl Stride for u8 {
+impl Stride for i32 {
     fn to_offset(self, index: Self) -> usize {
         (self * index) as usize
     }
 }
-impl Stride for [u8; 2] {
+impl Stride for [i32; 2] {
     fn to_offset(self, index: Self) -> usize {
         let [row_s, col_s] = self;
         let [i, j] = index;
@@ -34,80 +34,74 @@ impl<S: Stride> Array<S> {
     }
 }
 
-static mut NEXT_PTR: i32 = 0;
+fn alloc_array<S: Stride + Sized>(
+    next_ptr: *mut *mut u8,
+    size: usize,
+    stride: S,
+) -> *mut Array<S> {
+    //TODO: use  align_offset instead of hardcoding
+    let meta_size = 16; // enough for Array<S>
+    let data_size = mem::size_of::<f64>() * size;
 
-#[no_mangle]
-pub extern "C" fn free_all() {
     unsafe {
-        NEXT_PTR = 0;
-    }
-}
+        let ptr: *mut u8 = *next_ptr;
+        let data_ptr = ptr.offset(meta_size as isize);
 
-#[no_mangle]
-pub extern "C" fn alloc1d(size: u32) -> *mut Array<u8> {
-    let meta_size = 8; // 8bytes for Array<u8> to satisfy f64 alignment
-    debug_assert!(meta_size >= mem::size_of::<Array<u8>>());
-
-    let data_size = mem::size_of::<f64>() * (size as usize);
-    unsafe {
-        let ptr = NEXT_PTR as *mut Array<u8>;
-        let data_ptr = (NEXT_PTR as *mut u8).offset(meta_size as isize);
+        let arr_ptr = ptr as *mut Array<S>;
         let mut data_ptr = data_ptr as *mut f64;
-        *ptr = Array {
-            stride: 1,
+
+        *arr_ptr = Array {
+            stride,
             data: data_ptr,
         };
         for i in 0..size {
             *data_ptr = 0.0;
             data_ptr = data_ptr.offset(1);
         }
-        NEXT_PTR = NEXT_PTR + (meta_size as i32) + (data_size as i32);
-        ptr
+
+        *next_ptr = ptr.offset((meta_size + data_size) as isize);
+
+        arr_ptr
     }
 }
 
 #[no_mangle]
-pub extern "C" fn alloc2d(row_size: u32, col_size: u32) -> *mut Array<[u8; 2]> {
-    let meta_size = 8; // for alignment
-    debug_assert!(meta_size >= mem::size_of::<Array<[u8; 2]>>());
-    let data_size = mem::size_of::<f64>() * ((row_size * col_size) as usize);
-
-    unsafe {
-        let ptr = NEXT_PTR as *mut Array<[u8; 2]>;
-        let data_ptr = (NEXT_PTR as *mut u8).offset(meta_size as isize);
-        let mut data_ptr = data_ptr as *mut f64;
-        *ptr = Array {
-            stride: [1, row_size as u8],
-            data: data_ptr,
-        };
-        for i in 0..(row_size * col_size) {
-            *data_ptr = 0.0;
-            data_ptr = data_ptr.offset(1);
-        }
-        NEXT_PTR = NEXT_PTR + (meta_size as i32) + (data_size as i32);
-        ptr
-    }
+pub extern "C" fn alloc1d(
+    next_ptr: *mut *mut u8,
+    size: i32,
+) -> *mut Array<i32> {
+    alloc_array(next_ptr, size as usize, 1)
 }
 
 #[no_mangle]
-pub extern "C" fn load1d(ptr: *mut Array<u8>, index: u8) -> f64 {
+pub extern "C" fn alloc2d(
+    next_ptr: *mut *mut u8,
+    row: i32,
+    col: i32,
+) -> *mut Array<[i32; 2]> {
+    let size = (row * col) as usize;
+    alloc_array(next_ptr, size, [1, row])
+}
+
+#[no_mangle]
+pub extern "C" fn load1d(ptr: *mut Array<i32>, index: i32) -> f64 {
     unsafe { (*ptr).load(index) }
 }
 #[no_mangle]
-pub extern "C" fn store1d(ptr: *mut Array<u8>, index: u8, val: f64) {
+pub extern "C" fn store1d(ptr: *mut Array<i32>, index: i32, val: f64) {
     unsafe {
         (*ptr).store(index, val);
     }
 }
 #[no_mangle]
-pub extern "C" fn load2d(ptr: *mut Array<[u8; 2]>, row: u8, col: u8) -> f64 {
+pub extern "C" fn load2d(ptr: *mut Array<[i32; 2]>, row: i32, col: i32) -> f64 {
     unsafe { (*ptr).load([row, col]) }
 }
 #[no_mangle]
 pub extern "C" fn store2d(
-    ptr: *mut Array<[u8; 2]>,
-    row: u8,
-    col: u8,
+    ptr: *mut Array<[i32; 2]>,
+    row: i32,
+    col: i32,
     val: f64,
 ) {
     unsafe {

@@ -12,12 +12,18 @@ use slotmap::SecondaryMap;
 
 // static MODULE_BASE: &'static [u8] = include_bytes!("../runtime.wasm");
 
-const ALLOC1d_INDEX: u32 = 1;
-const ALLOC2d_INDEX: u32 = 2;
-const LOAD1d_INDEX: u32 = 3;
-const LOAD2d_INDEX: u32 = 4;
-const STORE1d_INDEX: u32 = 5;
-const STORE2d_INDEX: u32 = 6;
+const ALLOC1D_INDEX: u32 = 1;
+const ALLOC2D_INDEX: u32 = 2;
+const LOAD1D_INDEX: u32 = 3;
+const LOAD2D_INDEX: u32 = 4;
+const STORE1D_INDEX: u32 = 5;
+const STORE2D_INDEX: u32 = 6;
+
+const F64_SIZE: usize = 8;
+
+fn array_memory_start(ir: &Program) -> u32 {
+    (ir.data.len() * F64_SIZE) as u32
+}
 
 pub struct CodeGen {
     module: Module,
@@ -106,10 +112,10 @@ impl CodeGen {
 
     fn gen_data(&mut self) {
         let data_len = self.ir.data.len();
-        let data_end = data_len * mem::size_of::<f64>();
+        let data_end = data_len * F64_SIZE;
         let init_expr = self.module.const_(Literal::I32(data_end as u32));
         self.module
-            .add_global("data_ptr", ValueTy::I32, true, init_expr);
+            .add_global("data_end", ValueTy::I32, true, init_expr);
         if data_len > 0 {
             let mut data_bytes: Vec<u8> = Vec::with_capacity(data_end);
             for d in &self.ir.data {
@@ -121,27 +127,27 @@ impl CodeGen {
             self.module
                 .set_memory(1, 1, Some("data"), Some(data_segment));
         }
-        let data_ptr_end = self.module.get_global("data_ptr", ValueTy::I32);
+        let data_end_ptr = self.module.get_global("data_end", ValueTy::I32);
         let load = self.module.load(
-            8,
+            F64_SIZE as u32,
             true,
             0,
             8,
             ValueTy::F64,
-            self.module.get_global("data_ptr", ValueTy::I32),
+            self.module.get_global("data_end", ValueTy::I32),
         );
 
         let decr = self.module.set_global(
-            "data_ptr",
+            "data_end",
             self.module.binary(
                 BinaryOp::SubI32,
-                self.module.get_global("data_ptr", ValueTy::I32),
-                self.module.const_(Literal::I32(8)),
+                self.module.get_global("data_end", ValueTy::I32),
+                self.module.const_(Literal::I32(F64_SIZE as u32)),
             ),
         );
 
         let body = self.module.if_(
-            data_ptr_end,
+            data_end_ptr,
             self.module.block::<&'static str, _>(
                 None,
                 vec![decr, self.module.return_(Some(load))],
@@ -151,6 +157,35 @@ impl CodeGen {
         );
         let read_type = self.module.add_fn_type(Some("read"), &[], Ty::F64);
         self.module.add_fn("read", &read_type, &[], body);
+    }
+
+    fn gen_main_entry(&mut self) -> Expr {
+        let arr_start = array_memory_start(&self.ir);
+        let arr_ptr = self
+            .module
+            .const_(Literal::I32(arr_start + (F64_SIZE as u32)));
+        let init_arr_ptr = self.module.store(
+            4, // pointer size
+            0, // offset
+            4, // align
+            self.module.const_(Literal::I32(arr_start)),
+            arr_ptr,
+            ValueTy::I32,
+        );
+
+        let data_len = self.ir.data.len();
+        let data_end = data_len * F64_SIZE;
+
+        let reset_data = self.module.set_global(
+            "data_end",
+            self.module.const_(Literal::I32(data_end as u32)),
+        );
+
+        self.module.block::<&'static str, _>(
+            None,
+            vec![reset_data, init_arr_ptr],
+            None,
+        )
     }
 
     fn gen_function(&mut self, name: &str, function: &Function) {
@@ -193,7 +228,14 @@ impl CodeGen {
             };
         }
 
-        let entry_block = plain_blocks.get(function.entry).unwrap().clone();
+        let mut entry_block = plain_blocks.get(function.entry).unwrap().clone();
+
+        if name == "main" {
+            let main_entry = relooper.add_block(self.gen_main_entry());
+            relooper.add_branch(main_entry, entry_block, None, None);
+            entry_block = main_entry;
+        }
+
         let body = relooper.render(entry_block, 0);
 
         let locals = vec![ValueTy::F64; function.local_count];
