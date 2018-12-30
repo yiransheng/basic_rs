@@ -11,6 +11,8 @@ A BASIC language interpreter written in `rust`. This project is motivated and in
 
 Matches first version of [Dartmouth Basic](https://en.wikipedia.org/wiki/Dartmouth_BASIC) closely: reference manual [here](http://web.archive.org/web/20120716185629/http://www.bitsavers.org/pdf/dartmouth/BASIC_Oct64.pdf), which means this implementation inherits all its limitations.
 
+* [**Update**] Has an additional crate `basic2wasm` to compile BASIC programs to WebAssembly!
+  * Still hacky and buggy, but it is able to compile  [Game of Life](http://nbviewer.jupyter.org/github/norvig/pytudes/blob/master/ipynb/BASIC.ipynb), see it running [here](http://subdued-afternoon.surge.sh/)
 * No input support other than `DATA` statements in source program
 * No string / boolean value types, only value type is `f64`
 * Variable names restricted to `[A-Z]\d?` 
@@ -96,6 +98,12 @@ Chunk: <compiled function 3>
  |    0003    get.loc    X
 ...    
 ```
+
+
+
+## WASM
+
+See [README](./basic2wasm/README.md) for `basic2wasm` crate.
 
 
 
