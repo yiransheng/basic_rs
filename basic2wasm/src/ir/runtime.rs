@@ -1,110 +1,136 @@
-use std::mem;
+use binaryen::*;
 
-trait Stride: Copy {
-    fn to_offset(self, index: Self) -> usize;
+macro_rules! binaryen_expr {
+    ($mod: expr, (escaped $e: expr)) => {
+        $e
+    };
+    ($mod: expr, (i32_const $e: expr)) => {
+        $mod.const_(Literal::I32($e))
+    };
+    ($mod: expr, (i64_const $e: expr)) => {
+        $mod.const_(Literal::I64($e))
+    };
+    ($mod:expr, (i32_get_local $e: expr)) => {
+        $mod.get_local($e, ValueTy::I32)
+    };
+    ($mod:expr, (i32_set_local ($i: expr) ( $($x: tt)* ))) => {{
+        let operand = binaryen_expr!($mod, ( $($x)* ));
+        $mod.set_local($i, operand)
+    }};
+    ($mod:expr, (i32_tee_local ($i: expr) ( $($x: tt)* ))) => {{
+        let operand = binaryen_expr!($mod, ( $($x)* ));
+        $mod.tee_local($i, operand)
+    }};
+    ($mod:expr, (i32_load ( $($ptr: tt)* ))) => {{
+        let ptr = binaryen_expr!($mod, ( $($ptr)* ));
+        $mod.load(4, true, 0, 4, ValueTy::I32, ptr)
+    }};
+    ($mod:expr, (i32_store (offset $o: expr) ( $($ptr: tt)* ) (  $($val: tt)* ))) => {{
+        let ptr = binaryen_expr!($mod, ( $($ptr)* ));
+        let val = binaryen_expr!($mod, ( $($val)* ));
+        $mod.store(4, $o, 4, ptr, val, ValueTy::I32)
+    }};
+    ($mod:expr, (i64_load ( $($ptr: tt)* ))) => {{
+        let ptr = binaryen_expr!($mod, ( $($ptr)* ));
+        $mod.load(4, true, 0, 4, ValueTy::I64, ptr)
+    }};
+    ($mod:expr, (i64_store (offset $o: expr) ( $($ptr: tt)* ) (  $($val: tt)* ))) => {{
+        let ptr = binaryen_expr!($mod, ( $($ptr)* ));
+        let val = binaryen_expr!($mod, ( $($val)* ));
+        $mod.store(8, $o, 8, ptr, val, ValueTy::I64)
+    }};
+    ($mod:expr, (if_ ( $($cond: tt)* ) (  $($rhs: tt)* ))) => {{
+        let cond = binaryen_expr!($mod, ( $($cond)* ));
+        let rhs = binaryen_expr!($mod, ( $($rhs)* ));
+        $mod.if_(cond, rhs, None)
+    }};
+    ($mod:expr, (i32_add ( $($lhs: tt)* ) (  $($rhs: tt)* ))) => {{
+        let lhs = binaryen_expr!($mod, ( $($lhs)* ));
+        let rhs = binaryen_expr!($mod, ( $($rhs)* ));
+        $mod.binary(BinaryOp::AddI32, lhs, rhs)
+    }};
+    ($mod:expr, (i32_shl ( $($lhs: tt)* ) (  $($rhs: tt)* ))) => {{
+        let lhs = binaryen_expr!($mod, ( $($lhs)* ));
+        let rhs = binaryen_expr!($mod, ( $($rhs)* ));
+        $mod.binary(BinaryOp::ShlI32, lhs, rhs)
+    }};
+    ($mod:expr, (i32_lt_u ( $($lhs: tt)* ) (  $($rhs: tt)* ))) => {{
+        let lhs = binaryen_expr!($mod, ( $($lhs)* ));
+        let rhs = binaryen_expr!($mod, ( $($rhs)* ));
+        $mod.binary(BinaryOp::LtUI32, lhs, rhs)
+    }};
+    ($mod:expr, (br $label: expr)) => {
+        $mod.break_($label, None, None)
+    };
+    ($mod:expr, (br_if ($label: expr) ( $($cond: tt)* ))) => {{
+        let cond = binaryen_expr!($mod, ( $($cond)* ));
+        $mod.break_($label, Some(cond), None)
+    }};
+    ($mod:expr, block[ $($e:tt)* ]) => {{
+        let exprs = vec![
+            $(binaryen_expr!($mod, $e),)*
+        ];
+
+        $mod.block::<&'static str, _>(None, exprs, None)
+    }};
+    ($mod:expr, (loop_ ($label:expr) [ $($e:tt)* ])) => {{
+        let exprs = vec![
+            $(binaryen_expr!($mod, $e),)*
+        ];
+
+        let body = $mod.block::<&'static str, _>(None, exprs, None);
+        $mod.loop_($label, body)
+    }}
 }
-impl Stride for i32 {
-    fn to_offset(self, index: Self) -> usize {
-        (self * index) as usize
-    }
-}
-impl Stride for [i32; 2] {
-    fn to_offset(self, index: Self) -> usize {
-        let [row_s, col_s] = self;
-        let [i, j] = index;
-        (row_s * i + col_s * j) as usize
-    }
-}
 
-pub struct Array<S> {
-    stride: S,
-    data: *mut f64,
-}
-
-impl<S: Stride> Array<S> {
-    fn load(&self, index: S) -> f64 {
-        let i = self.stride.to_offset(index);
-        unsafe { *self.data.offset(i as isize) }
-    }
-    fn store(&mut self, index: S, val: f64) {
-        let i = self.stride.to_offset(index);
-        unsafe {
-            *self.data.offset(i as isize) = val;
-        }
-    }
-}
-
-fn alloc_array<S: Stride + Sized>(
-    next_ptr: *mut *mut u8,
-    size: usize,
-    stride: S,
-) -> *mut Array<S> {
-    //TODO: use  align_offset instead of hardcoding
-    let meta_size = 16; // enough for Array<S>
-    let data_size = mem::size_of::<f64>() * size;
-
-    unsafe {
-        let ptr: *mut u8 = *next_ptr;
-        let data_ptr = ptr.offset(meta_size as isize);
-
-        let arr_ptr = ptr as *mut Array<S>;
-        let mut data_ptr = data_ptr as *mut f64;
-
-        *arr_ptr = Array {
-            stride,
-            data: data_ptr,
-        };
-        for i in 0..size {
-            *data_ptr = 0.0;
-            data_ptr = data_ptr.offset(1);
-        }
-
-        *next_ptr = ptr.offset((meta_size + data_size) as isize);
-
-        arr_ptr
-    }
-}
-
-#[no_mangle]
-pub extern "C" fn alloc1d(
-    next_ptr: *mut *mut u8,
-    size: i32,
-) -> *mut Array<i32> {
-    alloc_array(next_ptr, size as usize, 1)
-}
-
-#[no_mangle]
-pub extern "C" fn alloc2d(
-    next_ptr: *mut *mut u8,
-    row: i32,
-    col: i32,
-) -> *mut Array<[i32; 2]> {
-    let size = (row * col) as usize;
-    alloc_array(next_ptr, size, [1, row])
-}
-
-#[no_mangle]
-pub extern "C" fn load1d(ptr: *mut Array<i32>, index: i32) -> f64 {
-    unsafe { (*ptr).load(index) }
-}
-#[no_mangle]
-pub extern "C" fn store1d(ptr: *mut Array<i32>, index: i32, val: f64) {
-    unsafe {
-        (*ptr).store(index, val);
-    }
-}
-#[no_mangle]
-pub extern "C" fn load2d(ptr: *mut Array<[i32; 2]>, row: i32, col: i32) -> f64 {
-    unsafe { (*ptr).load([row, col]) }
-}
-#[no_mangle]
-pub extern "C" fn store2d(
-    ptr: *mut Array<[i32; 2]>,
-    row: i32,
-    col: i32,
-    val: f64,
-) {
-    unsafe {
-        (*ptr).store([row, col], val);
+fn test(module: &Module) -> Expr {
+    binaryen_expr! {
+        module,
+        block[
+            (i32_store (offset 0)
+                 (i32_tee_local (2)
+                      (i32_load (i32_get_local 0))
+                 )
+                 (i32_const 1)
+            )
+            (i32_store (offset 4)
+                 (i32_get_local 2)
+                 (i32_tee_local (3)
+                      (i32_add
+                       (i32_get_local 2)
+                       (i32_const 16))
+                 )
+            )
+            (if_ (i32_get_local 1)
+                (loop_ ("$label$2") [
+                    (i64_store (offset 0)
+                         (i32_get_local 3)
+                         (i64_const 0)
+                    )
+                    (i32_set_local (3)
+                         (i32_add (i32_get_local 3) (i32_const 8))
+                    )
+                    (br_if ("$label$2")
+                         (i32_lt_u
+                              (i32_tee_local (4)
+                                   (i32_add (i32_get_local 4) (i32_const 1))
+                              )
+                              (i32_get_local 1)
+                         )
+                    )
+                ])
+            )
+            (i32_store (offset 0)
+                 (i32_get_local 0)
+                 (i32_add
+                     (i32_add (i32_get_local 2)
+                          (i32_shl (i32_get_local 1)
+                                   (i32_const 3))
+                     )
+                     (i32_const 16)
+                 )
+            )
+            (i32_get_local 2)
+        ]
     }
 }
