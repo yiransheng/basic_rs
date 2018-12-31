@@ -21,23 +21,32 @@ macro_rules! binaryen_expr {
         let operand = binaryen_expr!($mod, ( $($x)* ));
         $mod.tee_local($i, operand)
     }};
-    ($mod:expr, (i32_load ( $($ptr: tt)* ))) => {{
+    ($mod:expr, (i32_load (offset $o: expr) ( $($ptr: tt)* ))) => {{
         let ptr = binaryen_expr!($mod, ( $($ptr)* ));
-        $mod.load(4, true, 0, 4, ValueTy::I32, ptr)
+        $mod.load(4, true, $o, 4, ValueTy::I32, ptr)
     }};
     ($mod:expr, (i32_store (offset $o: expr) ( $($ptr: tt)* ) (  $($val: tt)* ))) => {{
         let ptr = binaryen_expr!($mod, ( $($ptr)* ));
         let val = binaryen_expr!($mod, ( $($val)* ));
         $mod.store(4, $o, 4, ptr, val, ValueTy::I32)
     }};
-    ($mod:expr, (i64_load ( $($ptr: tt)* ))) => {{
+    ($mod:expr, (i64_load (offset $o: expr) ( $($ptr: tt)* ))) => {{
         let ptr = binaryen_expr!($mod, ( $($ptr)* ));
-        $mod.load(4, true, 0, 4, ValueTy::I64, ptr)
+        $mod.load(4, true, $o, 4, ValueTy::I64, ptr)
     }};
     ($mod:expr, (i64_store (offset $o: expr) ( $($ptr: tt)* ) (  $($val: tt)* ))) => {{
         let ptr = binaryen_expr!($mod, ( $($ptr)* ));
         let val = binaryen_expr!($mod, ( $($val)* ));
         $mod.store(8, $o, 8, ptr, val, ValueTy::I64)
+    }};
+    ($mod:expr, (f64_load (offset $o: expr) ( $($ptr: tt)* ))) => {{
+        let ptr = binaryen_expr!($mod, ( $($ptr)* ));
+        $mod.load(4, true, $o, 4, ValueTy::F64, ptr)
+    }};
+    ($mod:expr, (f64_store (offset $o: expr) ( $($ptr: tt)* ) (  $($val: tt)* ))) => {{
+        let ptr = binaryen_expr!($mod, ( $($ptr)* ));
+        let val = binaryen_expr!($mod, ( $($val)* ));
+        $mod.store(8, $o, 8, ptr, val, ValueTy::F64)
     }};
     ($mod:expr, (if_ ( $($cond: tt)* ) (  $($rhs: tt)* ))) => {{
         let cond = binaryen_expr!($mod, ( $($cond)* ));
@@ -48,6 +57,11 @@ macro_rules! binaryen_expr {
         let lhs = binaryen_expr!($mod, ( $($lhs)* ));
         let rhs = binaryen_expr!($mod, ( $($rhs)* ));
         $mod.binary(BinaryOp::AddI32, lhs, rhs)
+    }};
+    ($mod:expr, (i32_mul ( $($lhs: tt)* ) (  $($rhs: tt)* ))) => {{
+        let lhs = binaryen_expr!($mod, ( $($lhs)* ));
+        let rhs = binaryen_expr!($mod, ( $($rhs)* ));
+        $mod.binary(BinaryOp::MulI32, lhs, rhs)
     }};
     ($mod:expr, (i32_shl ( $($lhs: tt)* ) (  $($rhs: tt)* ))) => {{
         let lhs = binaryen_expr!($mod, ( $($lhs)* ));
@@ -83,13 +97,13 @@ macro_rules! binaryen_expr {
     }}
 }
 
-fn test(module: &Module) -> Expr {
+fn _alloc1d(module: &Module) -> Expr {
     binaryen_expr! {
         module,
         block[
             (i32_store (offset 0)
                  (i32_tee_local (2)
-                      (i32_load (i32_get_local 0))
+                      (i32_load (offset 0) (i32_get_local 0))
                  )
                  (i32_const 1)
             )
@@ -132,5 +146,48 @@ fn test(module: &Module) -> Expr {
             )
             (i32_get_local 2)
         ]
+    }
+}
+
+fn _load1d(module: &Module) -> Expr {
+    binaryen_expr! {module,
+        (f64_load (offset 0)
+            (i32_add
+                (i32_load (offset 4) (i32_get_local 0))
+                (i32_shl
+                      (i32_mul
+                            (i32_load (offset 0)
+                                 (i32_get_local 0))
+                            (i32_get_local 1)
+                      )
+                      (i32_const 3)
+                )
+            )
+        )
+    }
+}
+
+fn _load2d(module: &Module) -> Expr {
+    binaryen_expr! {module,
+        (f64_load (offset 0)
+            (i32_add
+                (i32_load (offset 8) (i32_get_local 0))
+                (i32_shl
+                      (i32_add
+                          (i32_mul
+                                (i32_load (offset 0)
+                                      (i32_add (i32_get_local 0) (i32_const 4))
+                                )
+                                (i32_get_local 2)
+                          )
+                          (i32_mul
+                                (i32_load (offset 0) (i32_get_local 0))
+                                (i32_get_local 1)
+                          )
+                     )
+                     (i32_const 3)
+                )
+            )
+        )
     }
 }
