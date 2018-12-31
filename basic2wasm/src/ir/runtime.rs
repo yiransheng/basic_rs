@@ -98,7 +98,8 @@ macro_rules! binaryen_expr {
 }
 
 pub fn runtime_api(module: &Module) {
-    alloc1d(module)
+    alloc1d(module);
+    store1d(module);
 }
 
 fn alloc1d(module: &Module) {
@@ -112,6 +113,17 @@ fn alloc1d(module: &Module) {
     let body = _alloc1d(&module);
 
     module.add_fn("alloc1d_", &ty, &locals, body);
+}
+fn store1d(module: &Module) {
+    let ty = module.add_fn_type(
+        Some("store1d_"),
+        // ptr, index
+        &[ValueTy::I32, ValueTy::I32, ValueTy::F64],
+        Ty::None,
+    );
+    let body = _store1d(&module);
+
+    module.add_fn("store1d_", &ty, &[], body);
 }
 
 fn _alloc1d(module: &Module) -> Expr {

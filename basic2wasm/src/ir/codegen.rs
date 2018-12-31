@@ -426,10 +426,10 @@ impl CodeGen {
                                 UnaryOp::TruncUF64ToI32,
                                 self.expr(index),
                             );
-                            self.module.call_indirect(
-                                self.module.const_(Literal::I32(STORE1D_INDEX)),
+                            self.module.call(
+                                "store1d_",
                                 vec![ptr, index, self.expr(expr)],
-                                "store1d",
+                                Ty::None,
                             )
                         }
                         Offset::TwoD(i, j) => {
