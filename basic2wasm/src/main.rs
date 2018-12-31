@@ -82,6 +82,9 @@ fn main() {
     let ast = Parser::new(scanner).parse().unwrap();
 
     let ir = compile(&ast).unwrap();
+    if opt.print {
+        println!("{}", ir);
+    }
     let wasm = CodeGen::new(ir).generate();
 
     wasm.optimize();
