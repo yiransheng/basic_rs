@@ -87,7 +87,7 @@ fn main() {
     }
     let wasm = CodeGen::new(ir).generate();
 
-    wasm.optimize();
+    // wasm.optimize();
 
     if opt.print {
         wasm.print();

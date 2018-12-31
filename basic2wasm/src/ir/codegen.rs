@@ -1,5 +1,6 @@
 use std::fmt::Display;
 
+use super::runtime::runtime_api;
 use super::{
     BasicBlock, BinaryOp as IRBinaryOp, BlockExit, Expr as IRExpr, Function,
     FunctionName, GlobalKind, LValue, Label, Offset, Program, Statement,
@@ -136,12 +137,8 @@ impl CodeGen {
             }
         }
 
-        let _ = self.module.add_fn_type(
-            Some("alloc1d"),
-            // ptr, size
-            &[ValueTy::I32, ValueTy::I32],
-            Ty::I32, // ptr
-        );
+        runtime_api(&self.module);
+
         let _ = self.module.add_fn_type(
             Some("alloc2d"),
             // ptr, nrow, ncol
@@ -463,10 +460,10 @@ impl CodeGen {
                 let size =
                     self.module.unary(UnaryOp::TruncUF64ToI32, self.expr(size));
 
-                let ptr = self.module.call_indirect(
-                    self.module.const_(Literal::I32(ALLOC1D_INDEX)),
+                let ptr = self.module.call(
+                    "alloc1d_",
                     vec![arr_start, size],
-                    "alloc1d",
+                    Ty::I32,
                 );
 
                 self.module.set_global(arr, ptr)

@@ -97,6 +97,23 @@ macro_rules! binaryen_expr {
     }}
 }
 
+pub fn runtime_api(module: &Module) {
+    alloc1d(module)
+}
+
+fn alloc1d(module: &Module) {
+    let locals = vec![ValueTy::I32; 3];
+    let ty = module.add_fn_type(
+        Some("alloc1d_"),
+        // ptr, size
+        &[ValueTy::I32, ValueTy::I32],
+        Ty::I32, // ptr
+    );
+    let body = _alloc1d(&module);
+
+    module.add_fn("alloc1d_", &ty, &locals, body);
+}
+
 fn _alloc1d(module: &Module) -> Expr {
     binaryen_expr! {
         module,
@@ -167,6 +184,27 @@ fn _load1d(module: &Module) -> Expr {
     }
 }
 
+fn _store1d(module: &Module) -> Expr {
+    binaryen_expr! {module,
+        (f64_store (offset 0)
+            (i32_add
+                (i32_load (offset 4)
+                    (i32_get_local 0)
+                )
+                (i32_shl
+                    (i32_mul
+                          (i32_load (offset 0)
+                               (i32_get_local 0))
+                          (i32_get_local 1)
+                    )
+                    (i32_const 3)
+                )
+            )
+            (i32_get_local 2)
+        )
+    }
+}
+
 fn _load2d(module: &Module) -> Expr {
     binaryen_expr! {module,
         (f64_load (offset 0)
@@ -189,5 +227,26 @@ fn _load2d(module: &Module) -> Expr {
                 )
             )
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_macro() {
+        let mut module = Module::new();
+        let ty = module.add_fn_type(
+            Some("load1d"),
+            &[ValueTy::I32, ValueTy::I32],
+            Ty::F64,
+        );
+
+        let body = _load1d(&module);
+
+        module.add_fn("load1d", &ty, &[], body);
+
+        module.print();
     }
 }
