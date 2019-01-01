@@ -1,6 +1,7 @@
 use binaryen::*;
 
 pub fn runtime_api(module: &Module) {
+    read(module);
     alloc1d(module);
     load1d(module);
     store1d(module);
@@ -8,6 +9,13 @@ pub fn runtime_api(module: &Module) {
     alloc2d(module);
     load2d(module);
     store2d(module);
+}
+
+fn read(module: &Module) {
+    let ty = module.add_fn_type(Some("read"), &[], Ty::F64);
+    let body = _read(&module);
+
+    module.add_fn("read", &ty, &[], body);
 }
 
 fn alloc1d(module: &Module) {
@@ -89,7 +97,7 @@ fn _alloc1d(module: &Module) -> Expr {
                  )
                  (i32_const 1)
             )
-            (i32_store (bytes=4, offset=0, align=4)
+            (i32_store (bytes=4, offset=4, align=4)
                  (i32_get_local 2)
                  (i32_tee_local (3)
                       (i32_add
@@ -283,6 +291,25 @@ fn _store2d(module: &Module) -> Expr {
                   )
             )
             (f64_get_local 3)
+        )
+    }
+}
+
+fn _read(module: &Module) -> Expr {
+    binaryen_expr! {module,
+        (if_ (i32_gt_s (i32_get_global "data_end") (i32_const 0))
+            (block [
+                 (i32_set_global ("data_end")
+                      (i32_sub
+                           (i32_get_global "data_end")
+                           (i32_const 8)
+                      )
+                 )
+                 (f64_load (bytes=8, offset=0, align=8)
+                      (i32_get_global "data_end")
+                 )
+            ])
+            (unreachable)
         )
     }
 }

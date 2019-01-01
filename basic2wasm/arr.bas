@@ -1,9 +1,11 @@
-10 DIM A(5), B(2, 5)
+10 DIM A(5)
 20 FOR I = 0 TO 4
-30 LET A(I) = I
-35 LET B(0, I) = I
+25 PRINT "before read"
+30 READ A(I)
+34 PRINT "A=";A(I)
 40 NEXT I
 50 FOR I = 0 TO 4
-60 PRINT A(I), B(0, I)
+60 PRINT "A("I")=", A(I)
 70 NEXT I
+75 DATA 5, 4, 3, 2, 1.934
 80 END

@@ -15,6 +15,17 @@ macro_rules! binaryen_expr {
     ($mod: expr, (i64_const $e: expr)) => {
         $mod.const_(Literal::I64($e))
     };
+    ($mod: expr, (f64_const $e: expr)) => {
+        $mod.const_(Literal::F64($e))
+    };
+    // globals
+    ($mod:expr, (i32_get_global $e: expr)) => {
+        $mod.get_global($e, ValueTy::I32)
+    };
+    ($mod:expr, (i32_set_global ($i: expr) ( $($x: tt)* ))) => {{
+        let operand = binaryen_expr!($mod, ( $($x)* ));
+        $mod.set_global($i, operand)
+    }};
     // locals
     ($mod:expr, (i32_get_local $e: expr)) => {
         $mod.get_local($e, ValueTy::I32)
@@ -76,7 +87,7 @@ macro_rules! binaryen_expr {
         let cond = binaryen_expr!($mod, ( $($cond)* ));
         let true_val = binaryen_expr!($mod, ( $($true_val)* ));
         let false_val = binaryen_expr!($mod, ( $($false_val)* ));
-        $mod.if_(cond, rhs, Some(false_val))
+        $mod.if_(cond, true_val, Some(false_val))
     }};
     // unary ops
     ($mod:expr, (i64_extend_u_i32 (  $($rhs: tt)* ))) => {{
@@ -84,10 +95,20 @@ macro_rules! binaryen_expr {
         $mod.unary(UnaryOp::ExtendUI32, rhs)
     }};
     // binary ops
+    ($mod:expr, (i32_gt_s ( $($lhs: tt)* ) (  $($rhs: tt)* ))) => {{
+        let lhs = binaryen_expr!($mod, ( $($lhs)* ));
+        let rhs = binaryen_expr!($mod, ( $($rhs)* ));
+        $mod.binary(BinaryOp::GtSI32, lhs, rhs)
+    }};
     ($mod:expr, (i32_add ( $($lhs: tt)* ) (  $($rhs: tt)* ))) => {{
         let lhs = binaryen_expr!($mod, ( $($lhs)* ));
         let rhs = binaryen_expr!($mod, ( $($rhs)* ));
         $mod.binary(BinaryOp::AddI32, lhs, rhs)
+    }};
+    ($mod:expr, (i32_sub ( $($lhs: tt)* ) (  $($rhs: tt)* ))) => {{
+        let lhs = binaryen_expr!($mod, ( $($lhs)* ));
+        let rhs = binaryen_expr!($mod, ( $($rhs)* ));
+        $mod.binary(BinaryOp::SubI32, lhs, rhs)
     }};
     ($mod:expr, (i32_mul ( $($lhs: tt)* ) (  $($rhs: tt)* ))) => {{
         let lhs = binaryen_expr!($mod, ( $($lhs)* ));

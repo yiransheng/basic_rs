@@ -171,37 +171,6 @@ impl CodeGen {
         segments.push(labels_segement);
 
         self.module.set_memory(1, 1, Some("data"), segments);
-
-        let data_end_ptr = self.module.get_global("data_end", ValueTy::I32);
-        let load = self.module.load(
-            F64_SIZE as u32,
-            true,
-            0,
-            8,
-            ValueTy::F64,
-            self.module.get_global("data_end", ValueTy::I32),
-        );
-
-        let decr = self.module.set_global(
-            "data_end",
-            self.module.binary(
-                BinaryOp::SubI32,
-                self.module.get_global("data_end", ValueTy::I32),
-                self.module.const_(Literal::I32(F64_SIZE as u32)),
-            ),
-        );
-
-        let body = self.module.if_(
-            data_end_ptr,
-            self.module.block::<&'static str, _>(
-                None,
-                vec![decr, self.module.return_(Some(load))],
-                None,
-            ),
-            Some(self.module.unreachable()),
-        );
-        let read_type = self.module.add_fn_type(Some("read"), &[], Ty::F64);
-        self.module.add_fn("read", &read_type, &[], body);
     }
 
     fn gen_main_entry(&mut self) -> Expr {
@@ -287,9 +256,6 @@ impl CodeGen {
         self.module.add_fn(name, &self.main_type, &locals, body);
     }
     fn gen_block(&self, block: &BasicBlock) -> Expr {
-        for statement in &block.statements {
-            let _expr = self.statement(statement);
-        }
         let statements = block
             .statements
             .iter()
