@@ -6,6 +6,7 @@ pub use self::builder::Builder;
 
 use basic_rs::ast;
 use slotmap::{new_key_type, SecondaryMap};
+use std::collections::VecDeque;
 
 new_key_type! { pub struct Label; }
 new_key_type! { pub struct FunctionName; }
@@ -32,6 +33,65 @@ pub struct Function {
     local_count: usize,
     entry: Label,
     blocks: SecondaryMap<Label, BasicBlock>,
+}
+
+impl Function {
+    pub fn iter(&self) -> BlockIter {
+        let mut stack = VecDeque::new();
+        stack.push_back(self.entry);
+
+        BlockIter {
+            function: self,
+            stack,
+            visited: SecondaryMap::new(),
+        }
+    }
+}
+
+pub struct BlockIter<'a> {
+    function: &'a Function,
+    stack: VecDeque<Label>,
+    visited: SecondaryMap<Label, ()>,
+}
+
+impl<'a> Iterator for BlockIter<'a> {
+    type Item = &'a BasicBlock;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let label = self.stack.pop_back()?;
+        self.visited.insert(label, ());
+
+        let block = match self.function.blocks.get(label) {
+            Some(block) => block,
+            None => {
+                self.stack.clear();
+                return None;
+            }
+        };
+        match &block.exit {
+            BlockExit::Return(_) => {}
+            BlockExit::Jump(label) => {
+                if self.visited.get(*label).is_none() {
+                    self.stack.push_back(*label);
+                }
+            }
+            BlockExit::Switch(_, true_br, None) => {
+                if self.visited.get(*true_br).is_none() {
+                    self.stack.push_back(*true_br);
+                }
+            }
+            BlockExit::Switch(_, true_br, Some(false_br)) => {
+                if self.visited.get(*true_br).is_none() {
+                    self.stack.push_back(*true_br);
+                }
+                if self.visited.get(*false_br).is_none() {
+                    self.stack.push_back(*false_br);
+                }
+            }
+        }
+
+        Some(block)
+    }
 }
 
 #[derive(Debug)]
@@ -207,7 +267,8 @@ mod print {
             for func in &ir.functions {
                 funcs.insert(func.name, counter_func);
                 counter_func += 1;
-                for label in func.blocks.keys() {
+                for block in func.iter() {
+                    let label = block.label;
                     labels.insert(label, counter_label);
                     counter_label += 1;
                 }
@@ -353,7 +414,7 @@ mod print {
             ))?;
 
             env.indented(|env| {
-                for (_, block) in self.blocks.iter() {
+                for block in self.iter() {
                     if let Err(err) = block.print(env) {
                         return Err(err);
                     }
@@ -380,13 +441,15 @@ mod print {
                     BlockExit::Return(Some(v)) => {
                         env.fmtln(format_args!("return {}", v))
                     }
-                    BlockExit::Jump(label) => env
-                        .fmtln(format_args!("jmp {}", label.named(&env.names))),
+                    BlockExit::Jump(label) => env.fmtln(format_args!(
+                        "goto {}",
+                        label.named(&env.names)
+                    )),
                     BlockExit::Switch(cond, true_br, false_br) => {
                         env.fmtln(format_args!("if {}:", cond))?;
                         env.indented(|env| {
                             env.fmtln(format_args!(
-                                "jmp {}",
+                                "goto {}",
                                 true_br.named(&env.names)
                             ))
                         })?;
@@ -394,7 +457,7 @@ mod print {
                             env.fmtln("else:")?;
                             env.indented(|env| {
                                 env.fmtln(format_args!(
-                                    "jmp {}",
+                                    "goto {}",
                                     label.named(&env.names)
                                 ))
                             })?;
