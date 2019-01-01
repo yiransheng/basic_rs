@@ -83,6 +83,7 @@ fetch("main.wasm")
   .then(bytes => WebAssembly.instantiate(bytes, importObject))
   .then(results => {
     instance = results.instance;
+    window.wasm = instance;
     printer.setBuffer(instance);
 
     instance.exports.main();

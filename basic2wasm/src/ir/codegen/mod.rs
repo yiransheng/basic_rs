@@ -2,6 +2,9 @@ pub use self::generate::generate;
 
 #[macro_export]
 macro_rules! binaryen_expr {
+    ($mod: expr, (unreachable)) => {
+        $mod.unreachable()
+    };
     ($mod: expr, (escaped $e: expr)) => {
         $e
     };
@@ -57,6 +60,12 @@ macro_rules! binaryen_expr {
         let cond = binaryen_expr!($mod, ( $($cond)* ));
         let rhs = binaryen_expr!($mod, ( $($rhs)* ));
         $mod.if_(cond, rhs, None)
+    }};
+    ($mod:expr, (if_ ( $($cond: tt)* ) (  $($true_val: tt)* ) (  $($false_val: tt)* ))) => {{
+        let cond = binaryen_expr!($mod, ( $($cond)* ));
+        let true_val = binaryen_expr!($mod, ( $($true_val)* ));
+        let false_val = binaryen_expr!($mod, ( $($false_val)* ));
+        $mod.if_(cond, rhs, Some(false_val))
     }};
     // unary ops
     ($mod:expr, (i64_extend_u_i32 (  $($rhs: tt)* ))) => {{

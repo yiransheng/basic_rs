@@ -11,15 +11,6 @@ use binaryen::*;
 use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
 use slotmap::SecondaryMap;
 
-static MODULE_BASE: &'static [u8] = include_bytes!("../../runtime.wasm");
-
-const ALLOC1D_INDEX: u32 = 0;
-const ALLOC2D_INDEX: u32 = 1;
-const LOAD1D_INDEX: u32 = 2;
-const LOAD2D_INDEX: u32 = 3;
-const STORE1D_INDEX: u32 = 4;
-const STORE2D_INDEX: u32 = 5;
-
 const F64_SIZE: usize = 8;
 
 fn array_memory_start(ir: &Program) -> u32 {
@@ -48,7 +39,7 @@ struct CodeGen {
 
 impl CodeGen {
     pub fn new(ir: Program) -> Self {
-        let module = Module::read(MODULE_BASE);
+        let module = Module::new();
         let main_type = module.add_fn_type(Some("main"), &[], Ty::None);
         let mut func_names = SecondaryMap::new();
 
@@ -385,10 +376,10 @@ impl CodeGen {
                                 UnaryOp::TruncUF64ToI32,
                                 self.expr(index),
                             );
-                            self.module.call_indirect(
-                                self.module.const_(Literal::I32(LOAD1D_INDEX)),
+                            self.module.call(
+                                "load1d_",
                                 vec![ptr, index],
-                                "load1d",
+                                Ty::F64,
                             )
                         }
                         Offset::TwoD(i, j) => {
@@ -399,10 +390,10 @@ impl CodeGen {
                                 .module
                                 .unary(UnaryOp::TruncUF64ToI32, self.expr(j));
 
-                            self.module.call_indirect(
-                                self.module.const_(Literal::I32(LOAD2D_INDEX)),
+                            self.module.call(
+                                "load2d_",
                                 vec![ptr, i, j],
-                                "load2d",
+                                Ty::F64,
                             )
                         }
                     }
@@ -444,10 +435,10 @@ impl CodeGen {
                                 .module
                                 .unary(UnaryOp::TruncUF64ToI32, self.expr(j));
 
-                            self.module.call_indirect(
-                                self.module.const_(Literal::I32(STORE2D_INDEX)),
+                            self.module.call(
+                                "store2d_",
                                 vec![ptr, i, j, self.expr(expr)],
-                                "store2d",
+                                Ty::None,
                             )
                         }
                     }
@@ -483,10 +474,10 @@ impl CodeGen {
                     self.module.unary(UnaryOp::TruncUF64ToI32, self.expr(nrow));
                 let ncol =
                     self.module.unary(UnaryOp::TruncUF64ToI32, self.expr(ncol));
-                let ptr = self.module.call_indirect(
-                    self.module.const_(Literal::I32(ALLOC2D_INDEX)),
+                let ptr = self.module.call(
+                    "alloc2d_",
                     vec![arr_start, nrow, ncol],
-                    "alloc2d",
+                    Ty::I32,
                 );
 
                 self.module.set_global(arr, ptr)
