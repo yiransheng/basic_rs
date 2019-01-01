@@ -134,38 +134,6 @@ impl CodeGen {
 
         runtime_api(&self.module);
 
-        let _ = self.module.add_fn_type(
-            Some("alloc2d"),
-            // ptr, nrow, ncol
-            &[ValueTy::I32, ValueTy::I32, ValueTy::I32],
-            Ty::I32, // ptr
-        );
-
-        let _ = self.module.add_fn_type(
-            Some("load1d"),
-            // ptr, index
-            &[ValueTy::I32, ValueTy::I32],
-            Ty::F64,
-        );
-        let _ = self.module.add_fn_type(
-            Some("load2d"),
-            // ptr, row, col
-            &[ValueTy::I32, ValueTy::I32, ValueTy::I32],
-            Ty::F64,
-        );
-        let _ = self.module.add_fn_type(
-            Some("store1d"),
-            // ptr, index
-            &[ValueTy::I32, ValueTy::I32, ValueTy::F64],
-            Ty::None,
-        );
-        let _ = self.module.add_fn_type(
-            Some("store2d"),
-            // ptr, row, col
-            &[ValueTy::I32, ValueTy::I32, ValueTy::I32, ValueTy::F64],
-            Ty::None,
-        );
-
         let functions = ::std::mem::replace(&mut self.ir.functions, vec![]);
 
         for function in &functions {
@@ -377,7 +345,7 @@ impl CodeGen {
                                 self.expr(index),
                             );
                             self.module.call(
-                                "load1d_",
+                                "load1d",
                                 vec![ptr, index],
                                 Ty::F64,
                             )
@@ -390,11 +358,7 @@ impl CodeGen {
                                 .module
                                 .unary(UnaryOp::TruncUF64ToI32, self.expr(j));
 
-                            self.module.call(
-                                "load2d_",
-                                vec![ptr, i, j],
-                                Ty::F64,
-                            )
+                            self.module.call("load2d", vec![ptr, i, j], Ty::F64)
                         }
                     }
                 }
@@ -422,7 +386,7 @@ impl CodeGen {
                                 self.expr(index),
                             );
                             self.module.call(
-                                "store1d_",
+                                "store1d",
                                 vec![ptr, index, self.expr(expr)],
                                 Ty::None,
                             )
@@ -436,7 +400,7 @@ impl CodeGen {
                                 .unary(UnaryOp::TruncUF64ToI32, self.expr(j));
 
                             self.module.call(
-                                "store2d_",
+                                "store2d",
                                 vec![ptr, i, j, self.expr(expr)],
                                 Ty::None,
                             )
@@ -455,11 +419,8 @@ impl CodeGen {
                 let size =
                     self.module.unary(UnaryOp::TruncUF64ToI32, self.expr(size));
 
-                let ptr = self.module.call(
-                    "alloc1d_",
-                    vec![arr_start, size],
-                    Ty::I32,
-                );
+                let ptr =
+                    self.module.call("alloc1d", vec![arr_start, size], Ty::I32);
 
                 self.module.set_global(arr, ptr)
             }
@@ -475,7 +436,7 @@ impl CodeGen {
                 let ncol =
                     self.module.unary(UnaryOp::TruncUF64ToI32, self.expr(ncol));
                 let ptr = self.module.call(
-                    "alloc2d_",
+                    "alloc2d",
                     vec![arr_start, nrow, ncol],
                     Ty::I32,
                 );

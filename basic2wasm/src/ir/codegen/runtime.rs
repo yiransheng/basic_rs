@@ -13,70 +13,70 @@ pub fn runtime_api(module: &Module) {
 fn alloc1d(module: &Module) {
     let locals = vec![ValueTy::I32; 3];
     let ty = module.add_fn_type(
-        Some("alloc1d_"),
+        Some("alloc1d"),
         // ptr, size
         &[ValueTy::I32, ValueTy::I32],
         Ty::I32, // ptr
     );
     let body = _alloc1d(&module);
 
-    module.add_fn("alloc1d_", &ty, &locals, body);
+    module.add_fn("alloc1d", &ty, &locals, body);
 }
 fn load1d(module: &Module) {
     let ty = module.add_fn_type(
-        Some("load1d_"),
+        Some("load1d"),
         // ptr, index
         &[ValueTy::I32, ValueTy::I32],
         Ty::F64,
     );
     let body = _load1d(&module);
 
-    module.add_fn("load1d_", &ty, &[], body);
+    module.add_fn("load1d", &ty, &[], body);
 }
 fn store1d(module: &Module) {
     let ty = module.add_fn_type(
-        Some("store1d_"),
-        // ptr, index
+        Some("store1d"),
+        // ptr, index, value
         &[ValueTy::I32, ValueTy::I32, ValueTy::F64],
         Ty::None,
     );
     let body = _store1d(&module);
 
-    module.add_fn("store1d_", &ty, &[], body);
+    module.add_fn("store1d", &ty, &[], body);
 }
 fn alloc2d(module: &Module) {
     let locals = vec![ValueTy::I32; 3];
     let ty = module.add_fn_type(
-        Some("alloc2d_"),
+        Some("alloc2d"),
         // ptr, row, col
         &[ValueTy::I32, ValueTy::I32, ValueTy::I32],
         Ty::I32, // ptr
     );
     let body = _alloc2d(&module);
 
-    module.add_fn("alloc2d_", &ty, &locals, body);
+    module.add_fn("alloc2d", &ty, &locals, body);
 }
 fn load2d(module: &Module) {
     let ty = module.add_fn_type(
-        Some("load2d_"),
+        Some("load2d"),
         // ptr, index
         &[ValueTy::I32, ValueTy::I32, ValueTy::I32],
         Ty::F64,
     );
     let body = _load2d(&module);
 
-    module.add_fn("load2d_", &ty, &[], body);
+    module.add_fn("load2d", &ty, &[], body);
 }
 fn store2d(module: &Module) {
     let ty = module.add_fn_type(
-        Some("store2d_"),
+        Some("store2d"),
         // ptr, index
         &[ValueTy::I32, ValueTy::I32, ValueTy::I32, ValueTy::F64],
         Ty::None,
     );
     let body = _store2d(&module);
 
-    module.add_fn("store2d_", &ty, &[], body);
+    module.add_fn("store2d", &ty, &[], body);
 }
 
 fn _alloc1d(module: &Module) -> Expr {
@@ -165,7 +165,7 @@ fn _store1d(module: &Module) -> Expr {
                     (i32_const 3)
                 )
             )
-            (i32_get_local 2)
+            (f64_get_local 2)
         )
     }
 }
@@ -282,7 +282,7 @@ fn _store2d(module: &Module) -> Expr {
                        (i32_const 3)
                   )
             )
-            (i32_get_local 3)
+            (f64_get_local 3)
         )
     }
 }

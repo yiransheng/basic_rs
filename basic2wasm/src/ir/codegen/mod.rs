@@ -27,6 +27,17 @@ macro_rules! binaryen_expr {
         let operand = binaryen_expr!($mod, ( $($x)* ));
         $mod.tee_local($i, operand)
     }};
+    ($mod:expr, (f64_get_local $e: expr)) => {
+        $mod.get_local($e, ValueTy::F64)
+    };
+    ($mod:expr, (f64_set_local ($i: expr) ( $($x: tt)* ))) => {{
+        let operand = binaryen_expr!($mod, ( $($x)* ));
+        $mod.set_local($i, operand)
+    }};
+    ($mod:expr, (f64_tee_local ($i: expr) ( $($x: tt)* ))) => {{
+        let operand = binaryen_expr!($mod, ( $($x)* ));
+        $mod.tee_local($i, operand)
+    }};
     // load and store
     ($mod:expr, (i32_load (bytes=$b:expr, offset=$o:expr, align=$a:expr) ( $($ptr: tt)* ))) => {{
         let ptr = binaryen_expr!($mod, ( $($ptr)* ));
