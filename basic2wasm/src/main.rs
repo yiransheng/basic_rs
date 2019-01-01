@@ -11,7 +11,7 @@ use binaryen::{set_global_codegen_config, CodegenConfig};
 use structopt::StructOpt;
 
 use crate::compile::compile;
-use crate::ir::CodeGen;
+use crate::ir::codegen;
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "bas2wasm", about = "bas2wasm file")]
@@ -85,7 +85,7 @@ fn main() {
     if opt.print {
         println!("{}", ir);
     }
-    let wasm = CodeGen::new(ir).generate();
+    let wasm = codegen::generate(ir);
 
     // wasm.optimize();
 

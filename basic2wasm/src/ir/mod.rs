@@ -1,11 +1,8 @@
 mod builder;
-mod codegen;
-mod runtime;
+#[macro_use]
+pub mod codegen;
 
 pub use self::builder::Builder;
-pub use self::codegen::CodeGen;
-
-use std::fmt;
 
 use basic_rs::ast;
 use slotmap::{new_key_type, SecondaryMap};

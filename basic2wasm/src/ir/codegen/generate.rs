@@ -1,7 +1,7 @@
 use std::fmt::Display;
 
 use super::runtime::runtime_api;
-use super::{
+use crate::ir::{
     BasicBlock, BinaryOp as IRBinaryOp, BlockExit, Expr as IRExpr, Function,
     FunctionName, GlobalKind, LValue, Label, Offset, Program, Statement,
     UnaryOp as IRUnaryOp,
@@ -11,7 +11,7 @@ use binaryen::*;
 use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
 use slotmap::SecondaryMap;
 
-static MODULE_BASE: &'static [u8] = include_bytes!("../runtime.wasm");
+static MODULE_BASE: &'static [u8] = include_bytes!("../../runtime.wasm");
 
 const ALLOC1D_INDEX: u32 = 0;
 const ALLOC2D_INDEX: u32 = 1;
@@ -35,7 +35,11 @@ fn array_name<V: Display>(var: V) -> String {
     format!("array_{}", var)
 }
 
-pub struct CodeGen {
+pub fn generate(ir: Program) -> Module {
+    CodeGen::new(ir).generate()
+}
+
+struct CodeGen {
     module: Module,
     ir: Program,
     func_names: SecondaryMap<FunctionName, String>,
