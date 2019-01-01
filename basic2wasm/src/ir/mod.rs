@@ -18,6 +18,26 @@ pub enum GlobalKind {
     FnPtr(ast::Func),
 }
 
+#[derive(Debug, Copy, Clone)]
+pub enum ValueType {
+    F64,
+    ArrPtr,
+    FnPtr,
+}
+#[derive(Debug)]
+pub struct FnType {
+    arg: Option<ValueType>,
+    ret: Option<ValueType>,
+}
+impl Default for FnType {
+    fn default() -> Self {
+        FnType {
+            arg: None,
+            ret: None,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct Program {
     pub globals: Vec<GlobalKind>,
@@ -30,7 +50,8 @@ pub struct Program {
 #[derive(Debug)]
 pub struct Function {
     name: FunctionName,
-    local_count: usize,
+    ty: FnType,
+    locals: Vec<ValueType>,
     entry: Label,
     blocks: SecondaryMap<Label, BasicBlock>,
 }
@@ -311,6 +332,26 @@ mod print {
         }
     }
 
+    impl Display for ValueType {
+        fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+            match self {
+                ValueType::F64 => "f64".fmt(f),
+                ValueType::ArrPtr => "*array".fmt(f),
+                ValueType::FnPtr => "*fn".fmt(f),
+            }
+        }
+    }
+    impl Display for FnType {
+        fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+            match (self.arg, self.ret) {
+                (Some(x), Some(y)) => write!(f, "fn({}) -> {}", x, y),
+                (Some(x), None) => write!(f, "fn({})", x),
+                (None, Some(y)) => write!(f, "fn() -> {}", y),
+                (None, None) => write!(f, "fn()"),
+            }
+        }
+    }
+
     impl Display for GlobalKind {
         fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
             match self {
@@ -408,12 +449,13 @@ mod print {
     impl Printable for Function {
         fn print(&self, env: &mut PrintEnv) -> Result<(), fmt::Error> {
             let name = self.name.named(&env.names);
-            env.fmtln(format_args!(
-                "function {} locals: {}",
-                name, self.local_count
-            ))?;
+            env.fmtln(format_args!("function {}", name,))?;
 
             env.indented(|env| {
+                env.fmtln(format_args!("type: {}", self.ty))?;
+                for (i, local) in self.locals.iter().enumerate() {
+                    env.fmtln(format_args!("local({}): {}", i, local))?;
+                }
                 for block in self.iter() {
                     if let Err(err) = block.print(env) {
                         return Err(err);

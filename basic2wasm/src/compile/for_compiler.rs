@@ -7,7 +7,7 @@ use super::error::CompileError;
 use super::expr_compiler::ExprCompiler;
 use crate::ir::{
     BinaryOp, Builder, Expr, FunctionName, LValue as LV, Label,
-    Statement as IRStatement,
+    Statement as IRStatement, ValueType,
 };
 
 struct ForState {
@@ -94,11 +94,11 @@ impl<'a> AstVisitor<Result<(), CompileError>> for LoopPass<'a> {
 
         let step_local = self
             .builder
-            .add_local(func)
+            .add_local(ValueType::F64, func)
             .map_err(|_| CompileError::Custom("function not found"))?;
         let target_local = self
             .builder
-            .add_local(func)
+            .add_local(ValueType::F64, func)
             .map_err(|_| CompileError::Custom("function not found"))?;
 
         // setup

@@ -1,11 +1,5 @@
-10 DIM A(5)
-20 FOR I = 0 TO 4
-25 PRINT "before read"
-30 READ A(I)
-34 PRINT "A=";A(I)
+10 LET N = RND(X) * 20
+20 FOR I = 0 TO N
+30 PRINT I
 40 NEXT I
-50 FOR I = 0 TO 4
-60 PRINT "A("I")=", A(I)
-70 NEXT I
-75 DATA 5, 4, 3, 2, 1.934
-80 END
+50 END

@@ -6,8 +6,8 @@ use super::control_flow_context::CfCtx;
 use super::error::CompileError;
 use super::expr_compiler::ExprCompiler;
 use crate::ir::{
-    BasicBlock, Builder, Expr, Function, FunctionName, LValue as LV, Label,
-    Offset, Statement as IRStatement,
+    BasicBlock, Builder, Expr, FnType, Function, FunctionName, LValue as LV,
+    Label, Offset, Statement as IRStatement,
 };
 
 pub struct NonLoopPass<'a> {
@@ -74,7 +74,7 @@ impl<'a> AstVisitor<Result<(), CompileError>> for NonLoopPass<'a> {
     fn visit_program(&mut self, prog: &Program) -> Result<(), CompileError> {
         for (func, entry) in self.cf_ctx.functions() {
             self.builder
-                .add_function(func, entry)
+                .add_function(FnType::default(), func, entry)
                 .map_err(|_| CompileError::Custom("function already exist"))?;
         }
 

@@ -4,7 +4,7 @@ use super::runtime::runtime_api;
 use crate::ir::{
     BasicBlock, BinaryOp as IRBinaryOp, BlockExit, Expr as IRExpr, Function,
     FunctionName, GlobalKind, LValue, Label, Offset, Program, Statement,
-    UnaryOp as IRUnaryOp,
+    UnaryOp as IRUnaryOp, ValueType,
 };
 
 use binaryen::*;
@@ -252,7 +252,15 @@ impl CodeGen {
 
         let body = relooper.render(entry_block, 0);
 
-        let locals = vec![ValueTy::F64; function.local_count];
+        let locals: Vec<_> = function
+            .locals
+            .iter()
+            .map(|ty| match ty {
+                ValueType::F64 => ValueTy::F64,
+                ValueType::ArrPtr => ValueTy::I32,
+                ValueType::FnPtr => ValueTy::I32,
+            })
+            .collect();
         self.module.add_fn(name, &self.main_type, &locals, body);
     }
     fn gen_block(&self, block: &BasicBlock) -> Expr {
