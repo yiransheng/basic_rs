@@ -393,16 +393,15 @@ impl<'a> Parser<'a> {
         Ok(lhs)
     }
     fn power(&mut self) -> Result<Expression, Error> {
+        // ^ is right associative, use recursion
         let mut lhs = self.unary()?;
-        loop {
-            match &self.current {
-                Token::CaretUp => {
-                    self.advance()?;
-                    let rhs = self.unary()?;
-                    lhs = Expression::Pow(Box::new(lhs), Box::new(rhs));
-                }
-                _ => break,
+        match &self.current {
+            Token::CaretUp => {
+                self.advance()?;
+                let rhs = self.power()?;
+                lhs = Expression::Pow(Box::new(lhs), Box::new(rhs));
             }
+            _ => {}
         }
 
         Ok(lhs)
