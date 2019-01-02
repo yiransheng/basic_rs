@@ -1,6 +1,5 @@
-use std::mem;
-
 use rustc_hash::FxHashMap;
+use std::mem;
 use void::Void;
 
 use crate::ir::*;
@@ -9,6 +8,32 @@ use crate::ir::*;
 enum GlobalUsage {
     Single(usize),
     Multiple,
+}
+
+struct FunctionUpdater<'a> {
+    function: &'a mut Function,
+    init_statements: Vec<Statement>,
+}
+impl<'a> FunctionUpdater<'a> {
+    fn replace_global(&mut self, g: GlobalKind) {
+        let local_index = self.function.locals.len();
+        self.function.locals.push(g.into());
+        self.function.replace_global(g, local_index);
+
+        self.init_statements.push(Statement::Assign(
+            LValue::Local(local_index),
+            Expr::Const(0.0),
+        ));
+    }
+    fn done(mut self) {
+        if !self.init_statements.is_empty() {
+            let entry = self.function.entry;
+            let entry_statements =
+                &mut self.function.blocks.get_mut(entry).unwrap().statements;
+            self.init_statements.append(entry_statements);
+            *entry_statements = self.init_statements;
+        }
+    }
 }
 
 pub fn demote_global(ir: &mut Program) {
@@ -32,19 +57,26 @@ pub fn demote_global(ir: &mut Program) {
         }
     }
     let mut globals = vec![];
+    let mut updaters: Vec<_> = ir
+        .functions
+        .iter_mut()
+        .map(|f| FunctionUpdater {
+            function: f,
+            init_statements: Vec::new(),
+        })
+        .collect();
     for (g, usage) in func_indices.iter() {
         match usage {
             GlobalUsage::Single(index) => {
-                let func = &mut ir.functions[*index];
-                let local_index = func.locals.len();
-                func.replace_global(g.clone(), local_index);
-                func.locals.push(g.clone().into());
+                updaters[*index].replace_global(g.clone());
             }
             GlobalUsage::Multiple => {
                 globals.push(g.clone());
             }
-            _ => {}
         }
+    }
+    for updater in updaters {
+        updater.done();
     }
 
     ir.globals = globals;
