@@ -1,6 +1,7 @@
 mod builder;
 #[macro_use]
 pub mod codegen;
+pub mod optimize;
 
 pub use self::builder::Builder;
 
@@ -11,11 +12,20 @@ use std::collections::VecDeque;
 new_key_type! { pub struct Label; }
 new_key_type! { pub struct FunctionName; }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Hash, Eq, PartialEq)]
 pub enum GlobalKind {
     Variable(ast::Variable),
     ArrPtr(ast::Variable),
     FnPtr(ast::Func),
+}
+impl Into<ValueType> for GlobalKind {
+    fn into(self) -> ValueType {
+        match self {
+            GlobalKind::Variable(_) => ValueType::F64,
+            GlobalKind::ArrPtr(_) => ValueType::ArrPtr,
+            GlobalKind::FnPtr(_) => ValueType::FnPtr,
+        }
+    }
 }
 
 #[derive(Debug, Copy, Clone)]
