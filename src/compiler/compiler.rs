@@ -12,7 +12,6 @@ use super::array_dims::ArrayDims;
 use super::data::PrepareData;
 use super::error::CompileError as CompileErrorInner;
 use super::ir_labels::IrLabels;
-use super::line_order::LineOrder;
 
 #[derive(Debug)]
 pub struct CompileError {
@@ -287,10 +286,6 @@ where
     V: Default,
 {
     fn visit_program(&mut self, prog: &Program) -> Result {
-        // check input line numbers are in order and unique
-        let mut line_order = LineOrder::new();
-        line_order.visit_program(prog)?;
-
         // preprocess: generate labels for certain line numbers
         let mut ir_labels = IrLabels::new(
             &mut self.state.label_id_gen,
