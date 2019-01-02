@@ -1,7 +1,7 @@
 use super::*;
 
 pub trait Visitor<T> {
-    fn visit_program(&mut self, prog: &Program) -> T {
+    fn visit_program(&mut self, _prog: &Program) -> T {
         unimplemented! {}
     }
 
@@ -25,47 +25,47 @@ pub trait Visitor<T> {
         }
     }
 
-    fn visit_let(&mut self, stmt: &LetStmt) -> T {
+    fn visit_let(&mut self, _stmt: &LetStmt) -> T {
         unimplemented!()
     }
 
-    fn visit_read(&mut self, stmt: &ReadStmt) -> T {
+    fn visit_read(&mut self, _stmt: &ReadStmt) -> T {
         unimplemented!()
     }
 
-    fn visit_data(&mut self, stmt: &DataStmt) -> T {
+    fn visit_data(&mut self, _stmt: &DataStmt) -> T {
         unimplemented!()
     }
 
-    fn visit_print(&mut self, stmt: &PrintStmt) -> T {
+    fn visit_print(&mut self, _stmt: &PrintStmt) -> T {
         unimplemented!()
     }
 
-    fn visit_goto(&mut self, stmt: &GotoStmt) -> T {
+    fn visit_goto(&mut self, _stmt: &GotoStmt) -> T {
         unimplemented!()
     }
 
-    fn visit_gosub(&mut self, stmt: &GosubStmt) -> T {
+    fn visit_gosub(&mut self, _stmt: &GosubStmt) -> T {
         unimplemented!()
     }
 
-    fn visit_if(&mut self, stmt: &IfStmt) -> T {
+    fn visit_if(&mut self, _stmt: &IfStmt) -> T {
         unimplemented!()
     }
 
-    fn visit_for(&mut self, stmt: &ForStmt) -> T {
+    fn visit_for(&mut self, _stmt: &ForStmt) -> T {
         unimplemented!()
     }
 
-    fn visit_next(&mut self, stmt: &NextStmt) -> T {
+    fn visit_next(&mut self, _stmt: &NextStmt) -> T {
         unimplemented!()
     }
 
-    fn visit_def(&mut self, stmt: &DefStmt) -> T {
+    fn visit_def(&mut self, _stmt: &DefStmt) -> T {
         unimplemented!()
     }
 
-    fn visit_dim(&mut self, stmt: &DimStmt) -> T {
+    fn visit_dim(&mut self, _stmt: &DimStmt) -> T {
         unimplemented!()
     }
 
@@ -93,19 +93,19 @@ pub trait Visitor<T> {
         }
     }
 
-    fn visit_variable(&mut self, lval: &Variable) -> T {
+    fn visit_variable(&mut self, _lval: &Variable) -> T {
         unimplemented!()
     }
 
-    fn visit_list(&mut self, list: &List) -> T {
+    fn visit_list(&mut self, _list: &List) -> T {
         unimplemented!()
     }
 
-    fn visit_table(&mut self, table: &Table) -> T {
+    fn visit_table(&mut self, _table: &Table) -> T {
         unimplemented!()
     }
 
-    fn visit_expr(&mut self, table: &Expression) -> T {
+    fn visit_expr(&mut self, _table: &Expression) -> T {
         unimplemented!()
     }
 }
