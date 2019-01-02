@@ -685,6 +685,77 @@ mod tests {
         assert_matches!(result, Ok(_));
     }
 
+    macro_rules! test_parse_statement {
+        ($kind: ident, $code: expr) => {{
+            let program = $code;
+
+            let scanner = Scanner::new(program);
+            let mut parser = Parser::new(scanner);
+
+            let ast = parser.parse();
+            let ast = ast.unwrap();
+            let stmt = &ast.statements[0].statement;
+
+            assert_matches!(*stmt, Stmt::$kind(_));
+        }};
+    }
+
+    #[test]
+    fn test_parse_let() {
+        test_parse_statement!(Let, "10 LET X = Y + 1");
+    }
+
+    #[test]
+    fn test_parse_read() {
+        test_parse_statement!(Read, "10 READ X, Y, Z(1,2)");
+    }
+
+    #[test]
+    fn test_parse_data() {
+        test_parse_statement!(Data, "10 DATA 1, 2, -4.9, 1e10, 3e-99");
+    }
+
+    #[test]
+    fn test_parse_print() {
+        test_parse_statement!(Print, "10 PRINT X, D(1, Z),;");
+    }
+
+    #[test]
+    fn test_parse_goto() {
+        test_parse_statement!(Goto, "10 GOTO 40");
+    }
+
+    #[test]
+    fn test_parse_gosub() {
+        test_parse_statement!(Gosub, "10 GOSUB 800");
+    }
+
+    #[test]
+    fn test_parse_if() {
+        test_parse_statement!(If, "10 IF 10 = X THEN 99");
+    }
+
+    #[test]
+    fn test_parse_for() {
+        test_parse_statement!(For, "10 FOR I = 1 TO 10");
+        test_parse_statement!(For, "10 FOR I = 1 TO Y STEP -9");
+    }
+
+    #[test]
+    fn test_parse_next() {
+        test_parse_statement!(Next, "10 NEXT J");
+    }
+
+    #[test]
+    fn test_parse_def() {
+        test_parse_statement!(Def, "10 DEF FNZ(X) = SIN(X)");
+    }
+
+    #[test]
+    fn test_parse_dim() {
+        test_parse_statement!(Dim, "10 DIM X(1), Y(20, 30)");
+    }
+
     #[test]
     fn test_parse_simple() {
         let program = indoc!(
