@@ -10,21 +10,11 @@ use crate::ir::{
     Statement as IRStatement, ValueType,
 };
 
-struct ForState {
-    func: FunctionName,
-    test: Label,
-    body: Label,
-    var: Variable,
-    step_local: usize,
-    cond: Expr,
-}
-
 pub struct LoopPass<'a> {
     cf_ctx: &'a mut CfCtx,
     builder: &'a mut Builder,
 
     line_index: usize,
-    stack: VecDeque<ForState>,
 }
 
 impl<'a> LoopPass<'a> {
@@ -34,24 +24,33 @@ impl<'a> LoopPass<'a> {
             builder,
 
             line_index: 0,
-            stack: VecDeque::new(),
         }
     }
-    fn current_label(&self) -> Label {
-        self.cf_ctx.get_label(self.line_index).unwrap()
+    fn current_label(&self) -> Result<Label, CompileError> {
+        self.cf_ctx.get_label(self.line_index).ok_or_else(|| {
+            let line_no = self.cf_ctx.find_line_no(self.line_index);
+            CompileError::UnreachableCode(line_no)
+        })
     }
 
-    fn current_func(&self) -> FunctionName {
-        self.cf_ctx.get_func(self.line_index).unwrap()
+    fn current_func(&self) -> Result<FunctionName, CompileError> {
+        self.cf_ctx.get_func(self.line_index).ok_or_else(|| {
+            let line_no = self.cf_ctx.find_line_no(self.line_index);
+            CompileError::UnreachableCode(line_no)
+        })
     }
 
     fn next_line_label(&self) -> Option<Label> {
-        let current_func = self.current_func();
-        let next_func = self.cf_ctx.get_func(self.line_index + 1);
-        if Some(current_func) == next_func {
-            self.cf_ctx.get_label(self.line_index + 1)
-        } else {
-            None
+        match (
+            self.current_func(),
+            self.cf_ctx.get_func(self.line_index + 1),
+        ) {
+            (Ok(current_func), Some(next_func))
+                if current_func == next_func =>
+            {
+                self.cf_ctx.get_label(self.line_index + 1)
+            }
+            _ => None,
         }
     }
 }
@@ -60,29 +59,89 @@ impl<'a> AstVisitor<Result<(), CompileError>> for LoopPass<'a> {
     fn visit_program(&mut self, prog: &Program) -> Result<(), CompileError> {
         for (i, stmt) in prog.statements.iter().enumerate() {
             self.line_index = i;
-            match &stmt.statement {
-                Stmt::For(stmt) => {
-                    self.visit_for(stmt)?;
+            let stmt = match &stmt.statement {
+                Stmt::For(stmt) => stmt,
+                _ => continue,
+            };
+
+            let label = self.current_label()?;
+            let func = self.current_func()?;
+            let successor_label = self.next_line_label().ok_or_else(|| {
+                CompileError::Custom("Unexpected end of program")
+            })?;
+            let mut for_compiler = ForCompiler {
+                cf_ctx: &mut *self.cf_ctx,
+                builder: &mut *self.builder,
+                func,
+                label,
+                successor_label,
+            };
+            let mut for_state = Some(for_compiler.visit_for(stmt)?);
+            let mut successors: VecDeque<usize> =
+                self.cf_ctx.line_successors(i).collect();
+
+            loop {
+                let j = match successors.pop_back() {
+                    Some(j) => j,
+                    None => break,
+                };
+                self.line_index = j;
+                match &prog.statements[j].statement {
+                    Stmt::Next(stmt) => {
+                        let label = self.current_label()?;
+                        let func = self.current_func()?;
+                        let successor_label = self.next_line_label();
+                        let mut next_compiler = NextCompiler {
+                            cf_ctx: &mut *self.cf_ctx,
+                            builder: &mut *self.builder,
+                            func,
+                            label,
+                            successor_label,
+                            for_state: for_state.take(),
+                        };
+                        next_compiler.visit_next(stmt)?;
+                    }
+                    _ => {
+                        successors.extend(self.cf_ctx.line_successors(j));
+                    }
                 }
-                Stmt::Next(stmt) => {
-                    self.visit_next(stmt)?;
-                }
-                _ => {}
+            }
+
+            if for_state.is_some() {
+                return Err(CompileError::Custom("For without Next"));
             }
         }
 
         Ok(())
     }
+}
 
-    fn visit_for(&mut self, stmt: &ForStmt) -> Result<(), CompileError> {
-        let func = self.current_func();
+struct ForState {
+    func: FunctionName,
+    test: Label,
+    body: Label,
+    var: Variable,
+    step_local: usize,
+    cond: Expr,
+}
+
+struct ForCompiler<'a> {
+    cf_ctx: &'a mut CfCtx,
+    builder: &'a mut Builder,
+
+    func: FunctionName,
+    label: Label,
+    successor_label: Label,
+}
+
+impl<'a> AstVisitor<Result<ForState, CompileError>> for ForCompiler<'a> {
+    fn visit_for(&mut self, stmt: &ForStmt) -> Result<ForState, CompileError> {
+        let func = self.func;
         let var = stmt.var;
 
-        let header = self.current_label();
+        let header = self.label;
         let test = self.cf_ctx.add_label();
-        let body = self
-            .next_line_label()
-            .ok_or_else(|| CompileError::Custom("missing for body"))?;
+        let body = self.successor_label;
 
         let mut expr_compiler = ExprCompiler::new();
         let from = expr_compiler.visit_expr(&stmt.from)?;
@@ -153,11 +212,20 @@ impl<'a> AstVisitor<Result<(), CompileError>> for LoopPass<'a> {
             step_local,
         };
 
-        self.stack.push_back(for_state);
-
-        Ok(())
+        Ok(for_state)
     }
+}
 
+struct NextCompiler<'a> {
+    cf_ctx: &'a mut CfCtx,
+    builder: &'a mut Builder,
+    for_state: Option<ForState>,
+
+    func: FunctionName,
+    label: Label,
+    successor_label: Option<Label>,
+}
+impl<'a> AstVisitor<Result<(), CompileError>> for NextCompiler<'a> {
     fn visit_next(&mut self, stmt: &NextStmt) -> Result<(), CompileError> {
         let ForState {
             func,
@@ -167,13 +235,13 @@ impl<'a> AstVisitor<Result<(), CompileError>> for LoopPass<'a> {
             var,
             step_local,
         } = self
-            .stack
-            .pop_back()
+            .for_state
+            .take()
             .ok_or_else(|| CompileError::Custom("next without for"))?;
 
-        let current_func = self.current_func();
-        let next_label = self.current_label();
-        let continue_to = match self.next_line_label() {
+        let current_func = self.func;
+        let next_label = self.label;
+        let continue_to = match self.successor_label {
             Some(label) => label,
             None => {
                 let label = self.cf_ctx.add_label();

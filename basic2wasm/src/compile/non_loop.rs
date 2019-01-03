@@ -28,44 +28,53 @@ impl<'a> NonLoopPass<'a> {
     }
 
     fn add_statement(&mut self, stmt: IRStatement) -> Result<(), CompileError> {
-        let current_func = self.cf_ctx.get_func(self.line_index).unwrap();
-        let current_label = self.cf_ctx.get_label(self.line_index).unwrap();
-
         self.builder
-            .add_statement(current_func, current_label, stmt)
+            .add_statement(self.current_func()?, self.current_label()?, stmt)
             .map_err(|_| CompileError::Custom("function or block not found"))
     }
 
-    fn add_basic_block_branch(&mut self) {
-        let current_label = self.current_label();
+    fn add_basic_block_branch(&mut self) -> Result<(), CompileError> {
+        let current_label = self.current_label()?;
         let next_label = self.next_line_label();
 
         if let Some(next_label) = next_label {
             if next_label != current_label {
                 self.builder.add_branch(
-                    self.current_func(),
+                    self.current_func()?,
                     current_label,
                     next_label,
                 );
             }
         }
+
+        Ok(())
     }
 
-    fn current_label(&self) -> Label {
-        self.cf_ctx.get_label(self.line_index).unwrap()
+    fn current_label(&self) -> Result<Label, CompileError> {
+        self.cf_ctx.get_label(self.line_index).ok_or_else(|| {
+            let line_no = self.cf_ctx.find_line_no(self.line_index);
+            CompileError::UnreachableCode(line_no)
+        })
     }
 
-    fn current_func(&self) -> FunctionName {
-        self.cf_ctx.get_func(self.line_index).unwrap()
+    fn current_func(&self) -> Result<FunctionName, CompileError> {
+        self.cf_ctx.get_func(self.line_index).ok_or_else(|| {
+            let line_no = self.cf_ctx.find_line_no(self.line_index);
+            CompileError::UnreachableCode(line_no)
+        })
     }
 
     fn next_line_label(&self) -> Option<Label> {
-        let current_func = self.current_func();
-        let next_func = self.cf_ctx.get_func(self.line_index + 1);
-        if Some(current_func) == next_func {
-            self.cf_ctx.get_label(self.line_index + 1)
-        } else {
-            None
+        match (
+            self.current_func(),
+            self.cf_ctx.get_func(self.line_index + 1),
+        ) {
+            (Ok(current_func), Some(next_func))
+                if current_func == next_func =>
+            {
+                self.cf_ctx.get_label(self.line_index + 1)
+            }
+            _ => None,
         }
     }
 }
@@ -119,16 +128,12 @@ impl<'a> AstVisitor<Result<(), CompileError>> for NonLoopPass<'a> {
             let lval = expr_compiler.lvalue(var)?;
             self.add_statement(IRStatement::Assign(lval, Expr::ReadData))?;
         }
-        self.add_basic_block_branch();
-
-        Ok(())
+        self.add_basic_block_branch()
     }
     fn visit_data(&mut self, stmt: &DataStmt) -> Result<(), CompileError> {
         self.builder.add_data(stmt.vals.iter().map(|v| *v));
 
-        self.add_basic_block_branch();
-
-        Ok(())
+        self.add_basic_block_branch()
     }
 
     fn visit_let(&mut self, stmt: &LetStmt) -> Result<(), CompileError> {
@@ -137,9 +142,7 @@ impl<'a> AstVisitor<Result<(), CompileError>> for NonLoopPass<'a> {
         let expr = expr_compiler.visit_expr(&stmt.expr)?;
 
         self.add_statement(IRStatement::Assign(lval, expr))?;
-        self.add_basic_block_branch();
-
-        Ok(())
+        self.add_basic_block_branch()
     }
 
     fn visit_print(&mut self, stmt: &PrintStmt) -> Result<(), CompileError> {
@@ -175,14 +178,12 @@ impl<'a> AstVisitor<Result<(), CompileError>> for NonLoopPass<'a> {
             self.add_statement(IRStatement::PrintNewline)?;
         }
 
-        self.add_basic_block_branch();
-
-        Ok(())
+        self.add_basic_block_branch()
     }
 
     fn visit_goto(&mut self, stmt: &GotoStmt) -> Result<(), CompileError> {
-        let func = self.current_func();
-        let label = self.current_label();
+        let func = self.current_func()?;
+        let label = self.current_label()?;
 
         let gotoline = self.cf_ctx.find_line_index(stmt.goto).unwrap();
         let to_label = self.cf_ctx.get_label(gotoline).unwrap();
@@ -197,17 +198,15 @@ impl<'a> AstVisitor<Result<(), CompileError>> for NonLoopPass<'a> {
         let subname = self.cf_ctx.get_func(subline).unwrap();
 
         self.add_statement(IRStatement::CallSub(subname))?;
-        self.add_basic_block_branch();
-
-        Ok(())
+        self.add_basic_block_branch()
     }
 
     fn visit_if(&mut self, stmt: &IfStmt) -> Result<(), CompileError> {
         let mut expr_compiler = ExprCompiler::new();
         let expr = expr_compiler.visit_if(stmt)?;
 
-        let func = self.current_func();
-        let label = self.current_label();
+        let func = self.current_func()?;
+        let label = self.current_label()?;
 
         let gotoline = self.cf_ctx.find_line_index(stmt.then).unwrap();
         let to_label = self.cf_ctx.get_label(gotoline).unwrap();
@@ -239,12 +238,10 @@ impl<'a> AstVisitor<Result<(), CompileError>> for NonLoopPass<'a> {
         let expr = expr_compiler.visit_def(stmt)?;
 
         self.builder
-            .add_return(func, self.current_label(), Some(expr));
+            .add_return(func, self.current_label()?, Some(expr));
 
         self.add_statement(IRStatement::DefFn(lval, func))?;
-        self.add_basic_block_branch();
-
-        Ok(())
+        self.add_basic_block_branch()
     }
 
     fn visit_dim(&mut self, stmt: &DimStmt) -> Result<(), CompileError> {
@@ -269,20 +266,20 @@ impl<'a> AstVisitor<Result<(), CompileError>> for NonLoopPass<'a> {
             }
         }
 
-        self.add_basic_block_branch();
+        self.add_basic_block_branch()?;
 
         Ok(())
     }
 
     fn visit_rem(&mut self) -> Result<(), CompileError> {
-        self.add_basic_block_branch();
+        self.add_basic_block_branch()?;
 
         Ok(())
     }
 
     fn visit_end(&mut self) -> Result<(), CompileError> {
-        let func = self.current_func();
-        let label = self.current_label();
+        let func = self.current_func()?;
+        let label = self.current_label()?;
 
         if Some(func) != self.main {
             Err(CompileError::Custom("unexpected end"))
@@ -297,8 +294,8 @@ impl<'a> AstVisitor<Result<(), CompileError>> for NonLoopPass<'a> {
     }
 
     fn visit_return(&mut self) -> Result<(), CompileError> {
-        let func = self.current_func();
-        let label = self.current_label();
+        let func = self.current_func()?;
+        let label = self.current_label()?;
 
         if Some(func) == self.main {
             Err(CompileError::Custom("unexpected return"))
