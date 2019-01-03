@@ -11,7 +11,7 @@ use binaryen::{set_global_codegen_config, CodegenConfig};
 use structopt::StructOpt;
 
 use crate::compile::compile;
-use crate::ir::{codegen, optimize};
+use crate::ir::codegen;
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "bas2wasm", about = "bas2wasm file")]
@@ -82,7 +82,7 @@ fn main() {
     let ast = Parser::new(scanner).parse().unwrap();
 
     let mut ir = compile(&ast).unwrap();
-    optimize::optimize(&mut ir);
+    ir.optimize();
 
     if opt.print {
         println!("{}", ir);
