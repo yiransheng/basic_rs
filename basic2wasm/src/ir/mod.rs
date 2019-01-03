@@ -34,10 +34,18 @@ pub enum ValueType {
     ArrPtr,
     FnPtr,
 }
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub struct FnType {
     arg: Option<ValueType>,
     ret: Option<ValueType>,
+}
+impl FnType {
+    pub fn def_type() -> Self {
+        FnType {
+            arg: Some(ValueType::F64),
+            ret: Some(ValueType::F64),
+        }
+    }
 }
 impl Default for FnType {
     fn default() -> Self {

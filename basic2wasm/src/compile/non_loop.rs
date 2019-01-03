@@ -81,9 +81,9 @@ impl<'a> NonLoopPass<'a> {
 
 impl<'a> AstVisitor<Result<(), CompileError>> for NonLoopPass<'a> {
     fn visit_program(&mut self, prog: &Program) -> Result<(), CompileError> {
-        for (func, entry) in self.cf_ctx.functions() {
+        for (func, entry, ty) in self.cf_ctx.functions() {
             self.builder
-                .add_function(FnType::default(), func, entry)
+                .add_function(ty.clone(), func, entry)
                 .map_err(|_| CompileError::Custom("function already exist"))?;
         }
 
@@ -232,7 +232,10 @@ impl<'a> AstVisitor<Result<(), CompileError>> for NonLoopPass<'a> {
 
     fn visit_def(&mut self, stmt: &DefStmt) -> Result<(), CompileError> {
         let lval = LV::FnPtr(stmt.func);
-        let func = self.cf_ctx.get_def_func(self.line_index).unwrap();
+        let func = self
+            .cf_ctx
+            .get_def_func(self.line_index)
+            .ok_or_else(|| CompileError::Custom("function not defined"))?;
 
         let mut expr_compiler = ExprCompiler::new();
         let expr = expr_compiler.visit_def(stmt)?;
