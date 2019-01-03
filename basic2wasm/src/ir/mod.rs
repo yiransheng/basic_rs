@@ -5,6 +5,8 @@ pub mod optimize;
 
 pub use self::builder::Builder;
 
+use std::mem;
+
 use basic_rs::ast;
 use slotmap::{new_key_type, SecondaryMap};
 use std::collections::VecDeque;
@@ -158,7 +160,7 @@ pub enum BlockExit {
     Switch(Expr, Label, Option<Label>),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum LValue {
     ArrPtr(ast::Variable, Offset),
     FnPtr(ast::Func),
@@ -166,13 +168,13 @@ pub enum LValue {
     Local(usize),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Offset {
     OneD(Expr),
     TwoD(Expr, Expr),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Expr {
     RandF64,
     ReadData,
@@ -181,6 +183,97 @@ pub enum Expr {
     Binary(BinaryOp, Box<Expr>, Box<Expr>),
     Unary(UnaryOp, Box<Expr>),
     Call(Box<LValue>, Box<Expr>),
+}
+
+impl Expr {
+    // basic local const folding
+    pub fn evaluate_const(&mut self) {
+        use std::ops::{Deref, DerefMut};
+
+        match self {
+            Expr::Call(_, expr) => {
+                expr.evaluate_const();
+            }
+            Expr::Unary(op, expr) => {
+                expr.evaluate_const();
+                let expr = match (*expr).deref() {
+                    Expr::Const(v) => f64::evaluate_unary(*op, *v),
+                    _ => None,
+                };
+                if let Some(n) = expr {
+                    *self = Expr::Const(n);
+                }
+            }
+            Expr::Binary(op, lhs, rhs) => {
+                lhs.evaluate_const();
+                rhs.evaluate_const();
+
+                let lhs = (*lhs).deref_mut();
+                let rhs = (*rhs).deref_mut();
+
+                match (op, lhs, rhs) {
+                    (BinaryOp::Add, Expr::Const(z), ref mut rhs)
+                        if 0.0.eq(z) =>
+                    {
+                        let rhs = mem::replace(*rhs, Expr::ReadData);
+                        *self = rhs;
+                        return;
+                    }
+                    (BinaryOp::Add, ref mut lhs, Expr::Const(z))
+                        if 0.0.eq(z) =>
+                    {
+                        let lhs = mem::replace(*lhs, Expr::ReadData);
+                        *self = lhs;
+                        return;
+                    }
+                    (BinaryOp::Mul, Expr::Const(z), _) if 0.0.eq(z) => {
+                        *self = Expr::Const(0.0);
+                        return;
+                    }
+                    (BinaryOp::Mul, _, Expr::Const(z)) if 0.0.eq(z) => {
+                        *self = Expr::Const(0.0);
+                        return;
+                    }
+                    (BinaryOp::Mul, Expr::Const(v), ref mut rhs)
+                        if 1.0.eq(v) =>
+                    {
+                        let rhs = mem::replace(*rhs, Expr::ReadData);
+                        *self = rhs;
+                        return;
+                    }
+                    (BinaryOp::Mul, ref mut lhs, Expr::Const(v))
+                        if 1.0.eq(v) =>
+                    {
+                        let lhs = mem::replace(*lhs, Expr::ReadData);
+                        *self = lhs;
+                        return;
+                    }
+                    (BinaryOp::Mul, Expr::Const(v), ref mut rhs)
+                        if (-1.0).eq(v) =>
+                    {
+                        let rhs = mem::replace(*rhs, Expr::ReadData);
+                        *self = Expr::Unary(UnaryOp::Neg, Box::new(rhs));
+                        return;
+                    }
+                    (BinaryOp::Mul, ref mut lhs, Expr::Const(v))
+                        if (-1.0).eq(v) =>
+                    {
+                        let lhs = mem::replace(*lhs, Expr::ReadData);
+                        *self = Expr::Unary(UnaryOp::Neg, Box::new(lhs));
+                        return;
+                    }
+                    (ref op @ _, Expr::Const(lhs), Expr::Const(rhs)) => {
+                        if let Some(n) = f64::evaluate_binary(**op, *lhs, *rhs)
+                        {
+                            *self = Expr::Const(n);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            _ => {}
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -225,9 +318,56 @@ pub enum BinaryOp {
     Equal,
 }
 
+trait EvalBinary<T> {
+    fn evaluate_binary(_op: BinaryOp, _lhs: Self, _rhs: Self) -> Option<T>
+    where
+        Self: Sized,
+    {
+        None
+    }
+}
+trait EvalUnary<T> {
+    fn evaluate_unary(_op: UnaryOp, _operand: Self) -> Option<T>
+    where
+        Self: Sized,
+    {
+        None
+    }
+}
+impl EvalUnary<f64> for f64 {
+    fn evaluate_unary(op: UnaryOp, operand: Self) -> Option<f64> {
+        match op {
+            UnaryOp::Neg => Some(-operand),
+            UnaryOp::Sin => Some(operand.sin()),
+            UnaryOp::Cos => Some(operand.cos()),
+            UnaryOp::Atn => Some(operand.atan()),
+            UnaryOp::Exp => Some(operand.exp()),
+            UnaryOp::Abs => Some(operand.abs()),
+            UnaryOp::Log => Some(operand.ln()),
+            UnaryOp::Sqr => Some(operand.sqrt()),
+            UnaryOp::Trunc => Some(operand.trunc()),
+            _ => None,
+        }
+    }
+}
+
+impl EvalBinary<f64> for f64 {
+    fn evaluate_binary(op: BinaryOp, lhs: Self, rhs: Self) -> Option<Self> {
+        match op {
+            BinaryOp::Add => Some(lhs + rhs),
+            BinaryOp::Sub => Some(lhs - rhs),
+            BinaryOp::Mul => Some(lhs * rhs),
+            BinaryOp::Div => Some(lhs / rhs),
+            BinaryOp::Pow => Some(lhs.powf(rhs)),
+            // copysign is unstable now
+            BinaryOp::CopySign => Some(lhs * rhs.signum()),
+            _ => None,
+        }
+    }
+}
+
 mod print {
     use std::fmt::{self, Display};
-    use std::marker::PhantomData;
 
     use super::*;
 

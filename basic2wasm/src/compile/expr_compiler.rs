@@ -4,12 +4,13 @@ use super::error::CompileError;
 use crate::ir::{BinaryOp, Expr, LValue as LV, Offset, UnaryOp};
 
 pub struct ExprCompiler {
-    local: Option<Variable>,
+    inner: ExprCompilerInner,
 }
-
 impl ExprCompiler {
     pub fn new() -> Self {
-        ExprCompiler { local: None }
+        ExprCompiler {
+            inner: ExprCompilerInner { local: None },
+        }
     }
 
     pub fn lvalue(&mut self, lval: &LValue) -> Result<LV, CompileError> {
@@ -20,8 +21,55 @@ impl ExprCompiler {
         }
     }
 }
-
 impl AstVisitor<Result<Expr, CompileError>> for ExprCompiler {
+    fn visit_def(&mut self, stmt: &DefStmt) -> Result<Expr, CompileError> {
+        self.inner.visit_def(stmt).map(|mut expr| {
+            expr.evaluate_const();
+            expr
+        })
+    }
+
+    fn visit_if(&mut self, stmt: &IfStmt) -> Result<Expr, CompileError> {
+        self.inner.visit_if(stmt).map(|mut expr| {
+            expr.evaluate_const();
+            expr
+        })
+    }
+
+    fn visit_variable(&mut self, var: &Variable) -> Result<Expr, CompileError> {
+        self.inner.visit_variable(var).map(|mut expr| {
+            expr.evaluate_const();
+            expr
+        })
+    }
+
+    fn visit_list(&mut self, list: &List) -> Result<Expr, CompileError> {
+        self.inner.visit_list(list).map(|mut expr| {
+            expr.evaluate_const();
+            expr
+        })
+    }
+
+    fn visit_table(&mut self, table: &Table) -> Result<Expr, CompileError> {
+        self.inner.visit_table(table).map(|mut expr| {
+            expr.evaluate_const();
+            expr
+        })
+    }
+
+    fn visit_expr(&mut self, expr: &Expression) -> Result<Expr, CompileError> {
+        self.inner.visit_expr(expr).map(|mut expr| {
+            expr.evaluate_const();
+            expr
+        })
+    }
+}
+
+struct ExprCompilerInner {
+    local: Option<Variable>,
+}
+
+impl AstVisitor<Result<Expr, CompileError>> for ExprCompilerInner {
     fn visit_def(&mut self, stmt: &DefStmt) -> Result<Expr, CompileError> {
         self.local = Some(stmt.var);
 

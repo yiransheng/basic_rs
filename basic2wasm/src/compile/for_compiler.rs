@@ -131,7 +131,7 @@ struct ForState {
     test: Label,
     body: Label,
     var: Variable,
-    step_local: usize,
+    step: Expr,
     cond: Expr,
 }
 
@@ -161,30 +161,45 @@ impl<'a> AstVisitor<Result<ForState, CompileError>> for ForCompiler<'a> {
             _ => Expr::Const(1.0),
         };
 
-        let step_local = self
-            .builder
-            .add_local(ValueType::F64, func)
-            .map_err(|_| CompileError::Custom("function not found"))?;
-        let target_local = self
-            .builder
-            .add_local(ValueType::F64, func)
-            .map_err(|_| CompileError::Custom("function not found"))?;
+        let step = match step {
+            expr @ Expr::Const(_) => expr,
+            expr @ _ => {
+                let step_local =
+                    self.builder.add_local(ValueType::F64, func).map_err(
+                        |_| CompileError::Custom("function not found"),
+                    )?;
+                self.builder
+                    .add_statement(
+                        func,
+                        header,
+                        IRStatement::Assign(LV::Local(step_local), expr),
+                    )
+                    .map_err(|_| CompileError::Custom("block not found"))?;
+
+                Expr::Get(Box::new(LV::Local(step_local)))
+            }
+        };
+
+        let target = match to {
+            expr @ Expr::Const(_) => expr,
+            expr @ _ => {
+                let target_local = self
+                    .builder
+                    .add_local(ValueType::F64, func)
+                    .map_err(|_| CompileError::Custom("function not found"))?;
+                self.builder
+                    .add_statement(
+                        func,
+                        header,
+                        IRStatement::Assign(LV::Local(target_local), expr),
+                    )
+                    .map_err(|_| CompileError::Custom("block not found"))?;
+
+                Expr::Get(Box::new(LV::Local(target_local)))
+            }
+        };
 
         // setup
-        self.builder
-            .add_statement(
-                func,
-                header,
-                IRStatement::Assign(LV::Local(step_local), step),
-            )
-            .map_err(|_| CompileError::Custom("block not found"))?;
-        self.builder
-            .add_statement(
-                func,
-                header,
-                IRStatement::Assign(LV::Local(target_local), to),
-            )
-            .map_err(|_| CompileError::Custom("block not found"))?;
         self.builder
             .add_statement(
                 func,
@@ -197,17 +212,19 @@ impl<'a> AstVisitor<Result<ForState, CompileError>> for ForCompiler<'a> {
         self.builder.add_branch(func, header, test);
 
         // condition test
-        let step = Expr::Get(Box::new(LV::Local(step_local)));
         let dir = Expr::Binary(
             BinaryOp::CopySign,
             Box::new(Expr::Const(1.0)),
-            Box::new(step),
+            Box::new(step.clone()),
         );
-        let target = Expr::Get(Box::new(LV::Local(target_local)));
         let current = Expr::Get(Box::new(LV::Global(var)));
         let dist =
             Expr::Binary(BinaryOp::Sub, Box::new(current), Box::new(target));
-        let dist = Expr::Binary(BinaryOp::Mul, Box::new(dist), Box::new(dir));
+        let mut dist =
+            Expr::Binary(BinaryOp::Mul, Box::new(dist), Box::new(dir));
+
+        dist.evaluate_const();
+
         let done = Expr::Binary(
             BinaryOp::Greater,
             Box::new(dist),
@@ -219,7 +236,7 @@ impl<'a> AstVisitor<Result<ForState, CompileError>> for ForCompiler<'a> {
             test,
             body,
             var,
-            step_local,
+            step,
         };
 
         Ok(for_state)
@@ -243,7 +260,7 @@ impl<'a> AstVisitor<Result<(), CompileError>> for NextCompiler<'a> {
             test,
             body,
             var,
-            step_local,
+            step,
         } = self
             .for_state
             .take()
@@ -283,7 +300,7 @@ impl<'a> AstVisitor<Result<(), CompileError>> for NextCompiler<'a> {
                 Expr::Binary(
                     BinaryOp::Add,
                     Box::new(Expr::Get(Box::new(LV::Global(var)))),
-                    Box::new(Expr::Get(Box::new(LV::Local(step_local)))),
+                    Box::new(step),
                 ),
             ),
         );
