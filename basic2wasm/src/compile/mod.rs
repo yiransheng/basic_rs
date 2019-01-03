@@ -5,8 +5,8 @@ mod for_compiler;
 mod global_defs;
 mod non_loop;
 
-use basic_rs::ast;
 use basic_rs::ast::Visitor;
+use basic_rs::{ast, SourceLoc, SourceMapped};
 
 use crate::ir::{Builder, Program};
 
@@ -15,6 +15,23 @@ use self::error::CompileError;
 use self::for_compiler::LoopPass;
 use self::global_defs::GlobalDefPass;
 use self::non_loop::NonLoopPass;
+
+trait HasLineState<E>: ast::Visitor<Result<(), E>> {
+    fn line_state(&self) -> usize;
+
+    fn compile(
+        &mut self,
+        program: &ast::Program,
+    ) -> Result<(), SourceMapped<E>> {
+        self.visit_program(program).map_err(|err| {
+            let line = self.line_state();
+            SourceMapped {
+                loc: SourceLoc { line, col: 0 },
+                value: err,
+            }
+        })
+    }
+}
 
 pub fn compile(program: &ast::Program) -> Result<Program, CompileError> {
     let mut builder = Builder::new();
