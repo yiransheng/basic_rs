@@ -440,7 +440,7 @@ mod print {
                     let name = name.named(&env.names);
                     env.fmtln(format_args!("{}();", name))
                 }
-                Statement::Print(v) => env.fmtln(format_args!("print({});", v)),
+                Statement::Print(v) => env.fmtln(format_args!("print({})", v)),
                 Statement::PrintLabel(offset, length) => {
                     let offset = *offset;
                     let length = *length;
@@ -452,7 +452,7 @@ mod print {
                 }
                 Statement::PrintAdvance3 => env.fmtln("print(;)"),
                 Statement::PrintAdvance15 => env.fmtln("print(,)"),
-                Statement::PrintNewline => env.fmtln("print()"),
+                Statement::PrintNewline => env.fmtln("println()"),
             }
         }
     }
