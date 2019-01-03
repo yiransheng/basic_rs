@@ -11,10 +11,11 @@ mod ast;
 // mod compiler;
 mod compile;
 // mod error_print;
+mod codegen;
 mod ir;
 mod parser;
 mod scanner;
-// mod vm;
+mod vm;
 
 // #[cfg(test)]
 // mod tests;

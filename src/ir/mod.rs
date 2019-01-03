@@ -67,11 +67,11 @@ pub struct Program {
 
 #[derive(Debug)]
 pub struct Function {
-    name: FunctionName,
-    ty: FnType,
-    locals: Vec<ValueType>,
-    entry: Label,
-    blocks: SecondaryMap<Label, BasicBlock>,
+    pub name: FunctionName,
+    pub ty: FnType,
+    pub locals: Vec<ValueType>,
+    pub entry: Label,
+    pub blocks: SecondaryMap<Label, BasicBlock>,
 }
 
 impl Function {

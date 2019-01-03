@@ -13,6 +13,9 @@ use crate::ast::variable::Variable;
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct JumpPoint(pub usize);
 
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub struct LocalVar(pub u16);
+
 pub trait InlineOperand: Into<[u8; 2]> {
     fn from_bytes_unchecked(bytes: [u8; 2]) -> Self;
 }
@@ -35,6 +38,28 @@ impl InlineOperand for Func {
     #[inline(always)]
     fn from_bytes_unchecked(bytes: [u8; 2]) -> Self {
         Func::from_u8(bytes[0]).unwrap()
+    }
+}
+
+impl From<usize> for LocalVar {
+    fn from(i: usize) -> Self {
+        LocalVar(i as u16)
+    }
+}
+
+impl Into<[u8; 2]> for LocalVar {
+    fn into(self) -> [u8; 2] {
+        let mut bytes: [u8; 2] = [0, 0];
+        (&mut bytes[..]).write_u16::<LittleEndian>(self.0).unwrap();
+        bytes
+    }
+}
+
+impl InlineOperand for LocalVar {
+    #[inline(always)]
+    fn from_bytes_unchecked(bytes: [u8; 2]) -> Self {
+        let i = (&bytes[..]).read_u16::<LittleEndian>().unwrap();
+        LocalVar(i)
     }
 }
 
@@ -147,22 +172,20 @@ impl Chunk {
     }
 
     #[inline(always)]
-    pub fn write_opcode(&mut self, code: OpCode, line: usize) {
-        self.write(code as u8, line)
+    pub fn write_opcode(&mut self, code: OpCode) {
+        self.write(code as u8)
     }
 
-    pub fn write(&mut self, byte: u8, line: usize) {
-        self.code.push(byte.into());
-        self.line_map.add_mapping(line, self.len());
+    pub fn write(&mut self, byte: u8) {
+        self.code.push(byte);
     }
 
     pub fn line_no(&self, offset: usize) -> usize {
-        self.line_map.find_line(offset)
+        0
     }
 
-    pub fn add_operand<O: Operand>(&mut self, o: O, line: usize) -> u16 {
+    pub fn add_operand<O: Operand>(&mut self, o: O) -> u16 {
         let slot = o.add_to_chunk(self);
-        self.line_map.add_mapping(line, self.len());
         slot
     }
 
@@ -171,11 +194,11 @@ impl Chunk {
         storage[index as usize] = o;
     }
 
-    pub fn add_inline_operand<O: InlineOperand>(&mut self, o: O, line: usize) {
+    pub fn add_inline_operand<O: InlineOperand>(&mut self, o: O) {
         let bytes = o.into();
-        self.write(bytes[0], line);
-        self.write(bytes[1], line);
-        self.line_map.add_mapping(line, self.len());
+        self.write(bytes[0]);
+        self.write(bytes[1]);
+        // self.line_map.add_mapping(line, self.len());
     }
 
     #[inline(always)]
@@ -217,7 +240,7 @@ impl Chunk {
 }
 
 pub mod from_ir {
-    use rustc_hash::FxHashMap;
+    use slotmap::SecondaryMap;
 
     use super::*;
     use crate::ir::*;
@@ -227,228 +250,228 @@ pub mod from_ir {
     pub struct WriteError;
 
     pub struct ChunkWriter {
-        jp_label_map: FxHashMap<Label, JumpPoint>,
+        jp_label_map: SecondaryMap<Label, JumpPoint>,
         jp_indices: Vec<(u16, Label)>,
         chunk: Chunk,
     }
     impl Default for ChunkWriter {
         fn default() -> Self {
             ChunkWriter {
-                jp_label_map: FxHashMap::default(),
+                jp_label_map: SecondaryMap::new(),
                 jp_indices: Vec::new(),
                 chunk: Chunk::new(),
             }
         }
     }
 
-    impl Visitor for ChunkWriter {
-        type Output = Chunk;
-        type Error = WriteError;
+    // impl Visitor for ChunkWriter {
+    // type Output = Chunk;
+    // type Error = WriteError;
 
-        fn finish(mut self) -> Result<Self::Output, WriteError> {
-            for (index, label) in self.jp_indices.iter() {
-                let jp = self.jp_label_map.get(label).ok_or(WriteError)?;
-                self.chunk.set_operand(*index, *jp);
-            }
-            Ok(self.chunk)
-        }
+    // fn finish(mut self) -> Result<Self::Output, WriteError> {
+    // for (index, label) in self.jp_indices.iter() {
+    // let jp = self.jp_label_map.get(label).ok_or(WriteError)?;
+    // self.chunk.set_operand(*index, *jp);
+    // }
+    // Ok(self.chunk)
+    // }
 
-        fn visit_instruction(
-            &mut self,
-            instr: Instruction,
-        ) -> Result<(), WriteError> {
-            use self::InstructionKind::*;
+    // fn visit_instruction(
+    // &mut self,
+    // instr: Instruction,
+    // ) -> Result<(), WriteError> {
+    // use self::InstructionKind::*;
 
-            let Instruction {
-                kind,
-                line_no,
-                label,
-            } = instr;
+    // let Instruction {
+    // kind,
+    // line_no,
+    // label,
+    // } = instr;
 
-            if let Some(label) = label {
-                let jp = JumpPoint(self.chunk.len());
-                if let Some(_) = self.jp_label_map.insert(label, jp) {
-                    return Err(WriteError);
-                }
-            }
+    // if let Some(label) = label {
+    // let jp = JumpPoint(self.chunk.len());
+    // if let Some(_) = self.jp_label_map.insert(label, jp) {
+    // return Err(WriteError);
+    // }
+    // }
 
-            match kind {
-                Data(n) => self.chunk.data.push_back(n),
-                Constant(n) => {
-                    self.chunk.write_opcode(OpCode::Constant, line_no);
-                    self.chunk.add_operand(n, line_no);
-                }
-                Return => {
-                    self.chunk.write_opcode(OpCode::Return, line_no);
-                }
-                Stop => {
-                    self.chunk.write_opcode(OpCode::Stop, line_no);
-                }
-                Jump(label) => {
-                    self.chunk.write_opcode(OpCode::Jump, line_no);
-                    let jp_index =
-                        self.chunk.add_operand(JumpPoint(0), line_no);
-                    self.jp_indices.push((jp_index, label));
-                }
-                JumpTrue(label) => {
-                    self.chunk.write_opcode(OpCode::JumpTrue, line_no);
-                    let jp_index =
-                        self.chunk.add_operand(JumpPoint(0), line_no);
-                    self.jp_indices.push((jp_index, label));
-                }
-                JumpFalse(label) => {
-                    self.chunk.write_opcode(OpCode::JumpFalse, line_no);
-                    let jp_index =
-                        self.chunk.add_operand(JumpPoint(0), line_no);
-                    self.jp_indices.push((jp_index, label));
-                }
-                Subroutine(label) => {
-                    self.chunk.write_opcode(OpCode::Subroutine, line_no);
-                    let jp_index =
-                        self.chunk.add_operand(JumpPoint(0), line_no);
-                    self.jp_indices.push((jp_index, label));
-                }
-                CallNative(func) => {
-                    self.chunk.write_opcode(OpCode::CallNative, line_no);
-                    self.chunk.add_inline_operand(func, line_no);
-                }
-                MapFunc(func, func_id) => {
-                    self.chunk.write_opcode(OpCode::FnConstant, line_no);
-                    self.chunk.add_inline_operand(func_id, line_no);
-                    self.chunk.write_opcode(OpCode::SetFunc, line_no);
-                    self.chunk.add_inline_operand(func, line_no);
-                }
-                Call(func) => {
-                    self.chunk.write_opcode(OpCode::GetFunc, line_no);
-                    self.chunk.add_inline_operand(func, line_no);
-                    self.chunk.write_opcode(OpCode::Call, line_no);
-                }
-                DefineGlobal(_) => {}
-                DefineLocal(_) => {}
-                SetLocal(var) => {
-                    self.chunk.write_opcode(OpCode::SetLocal, line_no);
-                    self.chunk.add_inline_operand(var, line_no);
-                }
-                ReadGlobal(var) => {
-                    self.chunk.write_opcode(OpCode::ReadGlobal, line_no);
-                    self.chunk.add_inline_operand(var, line_no);
-                }
-                ReadGlobalArray(var) => {
-                    self.chunk.write_opcode(OpCode::ReadGlobalArray, line_no);
-                    self.chunk.add_inline_operand(var, line_no);
-                }
-                ReadGlobalArray2d(var) => {
-                    self.chunk.write_opcode(OpCode::ReadGlobalArray2d, line_no);
-                    self.chunk.add_inline_operand(var, line_no);
-                }
-                GetLocal(var) => {
-                    self.chunk.write_opcode(OpCode::GetLocal, line_no);
-                    self.chunk.add_inline_operand(var, line_no);
-                }
-                GetGlobal(var) => {
-                    self.chunk.write_opcode(OpCode::GetGlobal, line_no);
-                    self.chunk.add_inline_operand(var, line_no);
-                }
-                SetGlobal(var) => {
-                    self.chunk.write_opcode(OpCode::SetGlobal, line_no);
-                    self.chunk.add_inline_operand(var, line_no);
-                }
-                GetGlobalArray(var) => {
-                    self.chunk.write_opcode(OpCode::GetGlobalArray, line_no);
-                    self.chunk.add_inline_operand(var, line_no);
-                }
-                SetGlobalArray(var) => {
-                    self.chunk.write_opcode(OpCode::SetGlobalArray, line_no);
-                    self.chunk.add_inline_operand(var, line_no);
-                }
-                GetGlobalArray2d(var) => {
-                    self.chunk.write_opcode(OpCode::GetGlobalArray2d, line_no);
-                    self.chunk.add_inline_operand(var, line_no);
-                }
-                SetGlobalArray2d(var) => {
-                    self.chunk.write_opcode(OpCode::SetGlobalArray2d, line_no);
-                    self.chunk.add_inline_operand(var, line_no);
-                }
-                // TODO: locals
-                InitArray(var) => {
-                    self.chunk.write_opcode(OpCode::InitArray, line_no);
-                    self.chunk.add_inline_operand(var, line_no);
-                }
-                InitArray2d(var) => {
-                    self.chunk.write_opcode(OpCode::InitArray2d, line_no);
-                    self.chunk.add_inline_operand(var, line_no);
-                }
-                SetArrayBound(var) => {
-                    self.chunk.write_opcode(OpCode::SetArrayBound, line_no);
-                    self.chunk.add_inline_operand(var, line_no);
-                }
-                SetArrayBound2d(var) => {
-                    self.chunk.write_opcode(OpCode::SetArrayBound2d, line_no);
-                    self.chunk.add_inline_operand(var, line_no);
-                }
-                PrintStart => {
-                    self.chunk.write_opcode(OpCode::PrintStart, line_no);
-                }
-                PrintEnd => {
-                    self.chunk.write_opcode(OpCode::PrintEnd, line_no);
-                }
-                PrintExpr => {
-                    self.chunk.write_opcode(OpCode::PrintExpr, line_no);
-                }
-                PrintLabel(s) => {
-                    self.chunk.write_opcode(OpCode::PrintLabel, line_no);
-                    self.chunk.add_operand(s, line_no);
-                }
-                PrintAdvance3 => {
-                    self.chunk.write_opcode(OpCode::PrintAdvance3, line_no);
-                }
-                PrintAdvance15 => {
-                    self.chunk.write_opcode(OpCode::PrintAdvance15, line_no);
-                }
-                Dup => {
-                    self.chunk.write_opcode(OpCode::Dup, line_no);
-                }
-                Negate => {
-                    self.chunk.write_opcode(OpCode::Negate, line_no);
-                }
-                Not => {
-                    self.chunk.write_opcode(OpCode::Not, line_no);
-                }
-                Add => {
-                    self.chunk.write_opcode(OpCode::Add, line_no);
-                }
-                Sub => {
-                    self.chunk.write_opcode(OpCode::Sub, line_no);
-                }
-                Mul => {
-                    self.chunk.write_opcode(OpCode::Mul, line_no);
-                }
-                Div => {
-                    self.chunk.write_opcode(OpCode::Div, line_no);
-                }
-                Pow => {
-                    self.chunk.write_opcode(OpCode::Pow, line_no);
-                }
-                Equal => {
-                    self.chunk.write_opcode(OpCode::Equal, line_no);
-                }
-                Less => {
-                    self.chunk.write_opcode(OpCode::Less, line_no);
-                }
-                Greater => {
-                    self.chunk.write_opcode(OpCode::Greater, line_no);
-                }
-                LoopTest => {
-                    self.chunk.write_opcode(OpCode::LoopTest, line_no);
-                }
-                Noop => {
-                    self.chunk.write_opcode(OpCode::Noop, line_no);
-                }
-            }
+    // match kind {
+    // Data(n) => self.chunk.data.push_back(n),
+    // Constant(n) => {
+    // self.chunk.write_opcode(OpCode::Constant, line_no);
+    // self.chunk.add_operand(n, line_no);
+    // }
+    // Return => {
+    // self.chunk.write_opcode(OpCode::Return, line_no);
+    // }
+    // Stop => {
+    // self.chunk.write_opcode(OpCode::Stop, line_no);
+    // }
+    // Jump(label) => {
+    // self.chunk.write_opcode(OpCode::Jump, line_no);
+    // let jp_index =
+    // self.chunk.add_operand(JumpPoint(0), line_no);
+    // self.jp_indices.push((jp_index, label));
+    // }
+    // JumpTrue(label) => {
+    // self.chunk.write_opcode(OpCode::JumpTrue, line_no);
+    // let jp_index =
+    // self.chunk.add_operand(JumpPoint(0), line_no);
+    // self.jp_indices.push((jp_index, label));
+    // }
+    // JumpFalse(label) => {
+    // self.chunk.write_opcode(OpCode::JumpFalse, line_no);
+    // let jp_index =
+    // self.chunk.add_operand(JumpPoint(0), line_no);
+    // self.jp_indices.push((jp_index, label));
+    // }
+    // Subroutine(label) => {
+    // self.chunk.write_opcode(OpCode::Subroutine, line_no);
+    // let jp_index =
+    // self.chunk.add_operand(JumpPoint(0), line_no);
+    // self.jp_indices.push((jp_index, label));
+    // }
+    // CallNative(func) => {
+    // self.chunk.write_opcode(OpCode::CallNative, line_no);
+    // self.chunk.add_inline_operand(func, line_no);
+    // }
+    // MapFunc(func, func_id) => {
+    // self.chunk.write_opcode(OpCode::FnConstant, line_no);
+    // self.chunk.add_inline_operand(func_id, line_no);
+    // self.chunk.write_opcode(OpCode::SetFunc, line_no);
+    // self.chunk.add_inline_operand(func, line_no);
+    // }
+    // Call(func) => {
+    // self.chunk.write_opcode(OpCode::GetFunc, line_no);
+    // self.chunk.add_inline_operand(func, line_no);
+    // self.chunk.write_opcode(OpCode::Call, line_no);
+    // }
+    // DefineGlobal(_) => {}
+    // DefineLocal(_) => {}
+    // SetLocal(var) => {
+    // self.chunk.write_opcode(OpCode::SetLocal, line_no);
+    // self.chunk.add_inline_operand(var, line_no);
+    // }
+    // ReadGlobal(var) => {
+    // self.chunk.write_opcode(OpCode::ReadGlobal, line_no);
+    // self.chunk.add_inline_operand(var, line_no);
+    // }
+    // ReadGlobalArray(var) => {
+    // self.chunk.write_opcode(OpCode::ReadGlobalArray, line_no);
+    // self.chunk.add_inline_operand(var, line_no);
+    // }
+    // ReadGlobalArray2d(var) => {
+    // self.chunk.write_opcode(OpCode::ReadGlobalArray2d, line_no);
+    // self.chunk.add_inline_operand(var, line_no);
+    // }
+    // GetLocal(var) => {
+    // self.chunk.write_opcode(OpCode::GetLocal, line_no);
+    // self.chunk.add_inline_operand(var, line_no);
+    // }
+    // GetGlobal(var) => {
+    // self.chunk.write_opcode(OpCode::GetGlobal, line_no);
+    // self.chunk.add_inline_operand(var, line_no);
+    // }
+    // SetGlobal(var) => {
+    // self.chunk.write_opcode(OpCode::SetGlobal, line_no);
+    // self.chunk.add_inline_operand(var, line_no);
+    // }
+    // GetGlobalArray(var) => {
+    // self.chunk.write_opcode(OpCode::GetGlobalArray, line_no);
+    // self.chunk.add_inline_operand(var, line_no);
+    // }
+    // SetGlobalArray(var) => {
+    // self.chunk.write_opcode(OpCode::SetGlobalArray, line_no);
+    // self.chunk.add_inline_operand(var, line_no);
+    // }
+    // GetGlobalArray2d(var) => {
+    // self.chunk.write_opcode(OpCode::GetGlobalArray2d, line_no);
+    // self.chunk.add_inline_operand(var, line_no);
+    // }
+    // SetGlobalArray2d(var) => {
+    // self.chunk.write_opcode(OpCode::SetGlobalArray2d, line_no);
+    // self.chunk.add_inline_operand(var, line_no);
+    // }
+    // // TODO: locals
+    // InitArray(var) => {
+    // self.chunk.write_opcode(OpCode::InitArray, line_no);
+    // self.chunk.add_inline_operand(var, line_no);
+    // }
+    // InitArray2d(var) => {
+    // self.chunk.write_opcode(OpCode::InitArray2d, line_no);
+    // self.chunk.add_inline_operand(var, line_no);
+    // }
+    // SetArrayBound(var) => {
+    // self.chunk.write_opcode(OpCode::SetArrayBound, line_no);
+    // self.chunk.add_inline_operand(var, line_no);
+    // }
+    // SetArrayBound2d(var) => {
+    // self.chunk.write_opcode(OpCode::SetArrayBound2d, line_no);
+    // self.chunk.add_inline_operand(var, line_no);
+    // }
+    // PrintStart => {
+    // self.chunk.write_opcode(OpCode::PrintStart, line_no);
+    // }
+    // PrintEnd => {
+    // self.chunk.write_opcode(OpCode::PrintEnd, line_no);
+    // }
+    // PrintExpr => {
+    // self.chunk.write_opcode(OpCode::PrintExpr, line_no);
+    // }
+    // PrintLabel(s) => {
+    // self.chunk.write_opcode(OpCode::PrintLabel, line_no);
+    // self.chunk.add_operand(s, line_no);
+    // }
+    // PrintAdvance3 => {
+    // self.chunk.write_opcode(OpCode::PrintAdvance3, line_no);
+    // }
+    // PrintAdvance15 => {
+    // self.chunk.write_opcode(OpCode::PrintAdvance15, line_no);
+    // }
+    // Dup => {
+    // self.chunk.write_opcode(OpCode::Dup, line_no);
+    // }
+    // Negate => {
+    // self.chunk.write_opcode(OpCode::Negate, line_no);
+    // }
+    // Not => {
+    // self.chunk.write_opcode(OpCode::Not, line_no);
+    // }
+    // Add => {
+    // self.chunk.write_opcode(OpCode::Add, line_no);
+    // }
+    // Sub => {
+    // self.chunk.write_opcode(OpCode::Sub, line_no);
+    // }
+    // Mul => {
+    // self.chunk.write_opcode(OpCode::Mul, line_no);
+    // }
+    // Div => {
+    // self.chunk.write_opcode(OpCode::Div, line_no);
+    // }
+    // Pow => {
+    // self.chunk.write_opcode(OpCode::Pow, line_no);
+    // }
+    // Equal => {
+    // self.chunk.write_opcode(OpCode::Equal, line_no);
+    // }
+    // Less => {
+    // self.chunk.write_opcode(OpCode::Less, line_no);
+    // }
+    // Greater => {
+    // self.chunk.write_opcode(OpCode::Greater, line_no);
+    // }
+    // LoopTest => {
+    // self.chunk.write_opcode(OpCode::LoopTest, line_no);
+    // }
+    // Noop => {
+    // self.chunk.write_opcode(OpCode::Noop, line_no);
+    // }
+    // }
 
-            Ok(())
-        }
-    }
+    // Ok(())
+    // }
+    // }
 
 }
 
