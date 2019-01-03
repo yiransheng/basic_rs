@@ -79,12 +79,22 @@ impl<'a> AstVisitor<Result<(), CompileError>> for LoopPass<'a> {
             let mut for_state = Some(for_compiler.visit_for(stmt)?);
             let mut successors: VecDeque<usize> =
                 self.cf_ctx.line_successors(i).collect();
+            let mut visited: Vec<bool> =
+                prog.statements.iter().map(|_| false).collect();
 
             loop {
                 let j = match successors.pop_back() {
-                    Some(j) => j,
+                    Some(j) => {
+                        if visited[j] {
+                            continue;
+                        } else {
+                            visited[j] = true;
+                            j
+                        }
+                    }
                     None => break,
                 };
+
                 self.line_index = j;
                 match &prog.statements[j].statement {
                     Stmt::Next(stmt) => {
