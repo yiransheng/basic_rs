@@ -8,6 +8,12 @@ class Printer {
     this._buffer = null;
 
     this.newline();
+
+    if (window.WordWidth) {
+      this._widthOf = WordWidth;
+    } else {
+      this._widthOf = s => s.length;
+    }
   }
 
   setBuffer(wasmInstance) {
@@ -41,12 +47,11 @@ class Printer {
     const rem = this._col % k;
     const n = k - rem;
     this._write(" ".repeat(n));
-    this._col += n;
   }
 
   _write(str) {
     this._element.textContent += str;
-    this._col += str.length;
+    this._col += this._widthOf(str);
   }
 }
 
@@ -83,6 +88,7 @@ fetch("main.wasm")
   .then(bytes => WebAssembly.instantiate(bytes, importObject))
   .then(results => {
     instance = results.instance;
+    window.wasm = instance;
     printer.setBuffer(instance);
 
     instance.exports.main();

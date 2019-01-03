@@ -27,7 +27,8 @@ impl<'a> AstVisitor<Result<(), CompileError>> for GlobalDefPass<'a> {
         Ok(())
     }
     fn visit_let(&mut self, stmt: &LetStmt) -> Result<(), CompileError> {
-        self.visit_lvalue(&stmt.var)
+        self.visit_lvalue(&stmt.var)?;
+        self.visit_expr(&stmt.expr)
     }
 
     fn visit_read(&mut self, stmt: &ReadStmt) -> Result<(), CompileError> {

@@ -51,11 +51,29 @@ mod tests {
         let scanner = Scanner::new(program);
         let ast = Parser::new(scanner).parse().unwrap();
 
-        let ir = compile(&ast).unwrap();
+        let ir = compile(&ast);
 
-        println!("{}", ir);
+        assert!(ir.is_ok());
+    }
 
-        assert!(false);
+    #[test]
+    fn test_non_lexical_for_loop() {
+        let program = indoc!(
+            "
+            10 GOTO 50
+            20 PRINT I
+            30 NEXT I
+            40 END
+            50 FOR I = 1 TO 10
+            60 GOTO 20"
+        );
+
+        let scanner = Scanner::new(program);
+        let ast = Parser::new(scanner).parse().unwrap();
+
+        let ir = compile(&ast);
+
+        assert!(ir.is_ok());
     }
 
 }

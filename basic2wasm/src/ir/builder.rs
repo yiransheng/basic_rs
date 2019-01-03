@@ -72,6 +72,7 @@ impl Builder {
     }
     pub fn add_function(
         &mut self,
+        ty: FnType,
         name: FunctionName,
         entry: Label,
     ) -> Result<(), Function> {
@@ -80,7 +81,8 @@ impl Builder {
 
         let function = Function {
             name,
-            local_count: 0,
+            ty,
+            locals: vec![],
             entry,
             blocks,
         };
@@ -94,12 +96,13 @@ impl Builder {
     }
     pub fn add_local(
         &mut self,
+        ty: ValueType,
         name: FunctionName,
     ) -> Result<usize, FunctionName> {
         self.get_function_mut(name)
             .map(|func| {
-                let index = func.local_count;
-                func.local_count += 1;
+                let index = func.locals.len();
+                func.locals.push(ty);
                 index
             })
             .ok_or_else(|| name)

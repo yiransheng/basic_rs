@@ -11,7 +11,7 @@ use binaryen::{set_global_codegen_config, CodegenConfig};
 use structopt::StructOpt;
 
 use crate::compile::compile;
-use crate::ir::CodeGen;
+use crate::ir::{codegen, optimize};
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "bas2wasm", about = "bas2wasm file")]
@@ -31,6 +31,9 @@ struct Opt {
 
     #[structopt(short = "p", long = "print")]
     print: bool,
+
+    #[structopt(short = "d", long = "dry-run")]
+    dry_run: bool,
 }
 
 impl Opt {
@@ -78,8 +81,15 @@ fn main() {
     let scanner = Scanner::new(&source);
     let ast = Parser::new(scanner).parse().unwrap();
 
-    let ir = compile(&ast).unwrap();
-    let wasm = CodeGen::new(ir).generate();
+    let mut ir = compile(&ast).unwrap();
+    optimize::optimize(&mut ir);
+
+    if opt.print {
+        println!("{}", ir);
+    }
+    let wasm = codegen::generate(ir);
+
+    assert!(wasm.is_valid());
 
     wasm.optimize();
 
@@ -87,14 +97,15 @@ fn main() {
         wasm.print();
     }
 
-    let code = wasm.write();
+    if !opt.dry_run {
+        let code = wasm.write();
+        let mut buffer = File::create(opt.wasm_path()).unwrap();
+        buffer.write(&code).expect("failed to write");
 
-    let mut buffer = File::create(opt.wasm_path()).unwrap();
-    buffer.write(&code).expect("failed to write");
+        let mut buffer = File::create(opt.js_path()).unwrap();
+        buffer.write(JS.as_bytes()).expect("failed to write");
 
-    let mut buffer = File::create(opt.js_path()).unwrap();
-    buffer.write(JS.as_bytes()).expect("failed to write");
-
-    let mut buffer = File::create(opt.html_path()).unwrap();
-    buffer.write(HTML.as_bytes()).expect("failed to write");
+        let mut buffer = File::create(opt.html_path()).unwrap();
+        buffer.write(HTML.as_bytes()).expect("failed to write");
+    }
 }

@@ -17,8 +17,11 @@ pub enum ErrorInner {
     BadListOrTableName(Variable),
     BadSubscript(String),
     BadArgument(String),
+    DuplicatedLines(LineNo),
+    LinesOutOfOrder(LineNo, LineNo),
     BadLineNo,
 }
+
 impl fmt::Display for ErrorInner {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let desc = error::Error::description(self);
@@ -30,6 +33,12 @@ impl fmt::Display for ErrorInner {
             }
             ErrorInner::BadArgument(arg) => write!(f, "{}: {}", desc, arg),
             ErrorInner::BadSubscript(sub) => write!(f, "{}: {}", desc, sub),
+            ErrorInner::DuplicatedLines(line) => {
+                write!(f, "{}: {}", desc, line)
+            }
+            ErrorInner::LinesOutOfOrder(line1, line2) => {
+                write!(f, "{}: {} and {}", desc, line1, line2)
+            }
             ErrorInner::BadLineNo => write!(f, "{}", desc),
         }
     }
@@ -43,6 +52,8 @@ impl error::Error for ErrorInner {
             ErrorInner::BadListOrTableName(_) => "Invalid list/table name",
             ErrorInner::BadSubscript(_) => "Invalid list/table subscripts",
             ErrorInner::BadArgument(_) => "Invalid function argument",
+            ErrorInner::DuplicatedLines(_) => "Duplicated line numbers",
+            ErrorInner::LinesOutOfOrder(..) => "Line numbers out of order",
             ErrorInner::BadLineNo => "Expected line number",
         }
     }
@@ -56,9 +67,9 @@ impl From<ScanError> for ErrorInner {
 
 pub struct Parser<'a> {
     scanner: Scanner<'a>,
-    previous: Token,
     current: Token,
     current_loc: SourceLoc,
+    current_line_no: Option<LineNo>,
 }
 
 macro_rules! consume_token {
@@ -88,9 +99,9 @@ impl<'a> Parser<'a> {
     pub fn new(scanner: Scanner<'a>) -> Self {
         let mut parser = Parser {
             scanner,
-            previous: Token::Eof,
             current: Token::Eof,
             current_loc: SourceLoc { line: 0, col: 0 },
+            current_line_no: None,
         };
         parser.advance().unwrap();
 
@@ -113,6 +124,20 @@ impl<'a> Parser<'a> {
         }
 
         let line_no = self.line_no()?;
+
+        if let Some(prev_line_no) = self.current_line_no {
+            if line_no == prev_line_no {
+                return self.error_current(ErrorInner::DuplicatedLines(line_no));
+            } else if line_no < prev_line_no {
+                return self.error_current(ErrorInner::LinesOutOfOrder(
+                    prev_line_no,
+                    line_no,
+                ));
+            }
+        }
+
+        self.current_line_no = Some(line_no);
+
         let keyword = &match self.current {
             Token::Keyword(kw) => kw,
             _ => return self.unexpected_token(),
@@ -368,16 +393,15 @@ impl<'a> Parser<'a> {
         Ok(lhs)
     }
     fn power(&mut self) -> Result<Expression, Error> {
+        // ^ is right associative, use recursion
         let mut lhs = self.unary()?;
-        loop {
-            match &self.current {
-                Token::CaretUp => {
-                    self.advance()?;
-                    let rhs = self.unary()?;
-                    lhs = Expression::Pow(Box::new(lhs), Box::new(rhs));
-                }
-                _ => break,
+        match &self.current {
+            Token::CaretUp => {
+                self.advance()?;
+                let rhs = self.power()?;
+                lhs = Expression::Pow(Box::new(lhs), Box::new(rhs));
             }
+            _ => {}
         }
 
         Ok(lhs)
@@ -525,7 +549,7 @@ impl<'a> Parser<'a> {
 
     fn line_no(&mut self) -> Result<LineNo, Error> {
         let n = match &self.current {
-            Token::Natural(n) => *n,
+            Token::Natural(n) => n.clone(),
             _ => return self.error_current(ErrorInner::BadLineNo),
         };
 
@@ -578,8 +602,6 @@ impl<'a> Parser<'a> {
     }
 
     fn advance(&mut self) -> Result<(), Error> {
-        mem::swap(&mut self.previous, &mut self.current);
-
         match self.scanner.scan() {
             Ok(token) => {
                 self.current = token.value;
@@ -607,6 +629,131 @@ impl<'a> Parser<'a> {
 mod tests {
     use super::*;
     use indoc::*;
+    use matches::*;
+
+    #[test]
+    fn test_parse_error_dup_lines() {
+        let program = indoc!(
+            "
+            10 REM line: 10
+            10 REM line: 10
+            99 END"
+        );
+
+        let scanner = Scanner::new(program);
+        let mut parser = Parser::new(scanner);
+
+        let result = parser.parse().map_err(|e| e.value);
+
+        assert_matches!(result, Err(ErrorInner::DuplicatedLines(_)));
+    }
+
+    #[test]
+    fn test_parse_error_line_order() {
+        let program = indoc!(
+            "
+            30 REM line: 30
+            10 REM line: 10
+            99 END"
+        );
+
+        let scanner = Scanner::new(program);
+        let mut parser = Parser::new(scanner);
+
+        let result = parser.parse().map_err(|e| e.value);
+
+        assert_matches!(result, Err(ErrorInner::LinesOutOfOrder(_, _)));
+    }
+
+    #[test]
+    fn test_parse_line_order() {
+        let program = indoc!(
+            "
+            10 REM line: 10
+            20 REM line: 20
+            30 REM line: 30
+            40 REM line: 40
+            99 END"
+        );
+
+        let scanner = Scanner::new(program);
+        let mut parser = Parser::new(scanner);
+
+        let result = parser.parse();
+
+        assert_matches!(result, Ok(_));
+    }
+
+    macro_rules! test_parse_statement {
+        ($kind: ident, $code: expr) => {{
+            let program = $code;
+
+            let scanner = Scanner::new(program);
+            let mut parser = Parser::new(scanner);
+
+            let ast = parser.parse();
+            let ast = ast.unwrap();
+            let stmt = &ast.statements[0].statement;
+
+            assert_matches!(*stmt, Stmt::$kind(_));
+        }};
+    }
+
+    #[test]
+    fn test_parse_let() {
+        test_parse_statement!(Let, "10 LET X = Y + 1");
+    }
+
+    #[test]
+    fn test_parse_read() {
+        test_parse_statement!(Read, "10 READ X, Y, Z(1,2)");
+    }
+
+    #[test]
+    fn test_parse_data() {
+        test_parse_statement!(Data, "10 DATA 1, 2, -4.9, 1e10, 3e-99");
+    }
+
+    #[test]
+    fn test_parse_print() {
+        test_parse_statement!(Print, "10 PRINT X, D(1, Z),;");
+    }
+
+    #[test]
+    fn test_parse_goto() {
+        test_parse_statement!(Goto, "10 GOTO 40");
+    }
+
+    #[test]
+    fn test_parse_gosub() {
+        test_parse_statement!(Gosub, "10 GOSUB 800");
+    }
+
+    #[test]
+    fn test_parse_if() {
+        test_parse_statement!(If, "10 IF 10 = X THEN 99");
+    }
+
+    #[test]
+    fn test_parse_for() {
+        test_parse_statement!(For, "10 FOR I = 1 TO 10");
+        test_parse_statement!(For, "10 FOR I = 1 TO Y STEP -9");
+    }
+
+    #[test]
+    fn test_parse_next() {
+        test_parse_statement!(Next, "10 NEXT J");
+    }
+
+    #[test]
+    fn test_parse_def() {
+        test_parse_statement!(Def, "10 DEF FNZ(X) = SIN(X)");
+    }
+
+    #[test]
+    fn test_parse_dim() {
+        test_parse_statement!(Dim, "10 DIM X(1), Y(20, 30)");
+    }
 
     #[test]
     fn test_parse_simple() {
@@ -676,4 +823,5 @@ mod tests {
         // is not broken
         assert_eq!(parsed, &ast.to_string());
     }
+
 }

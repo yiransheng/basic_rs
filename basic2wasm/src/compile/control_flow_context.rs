@@ -5,7 +5,7 @@ use std::collections::VecDeque;
 use basic_rs::ast::*;
 use slotmap::{SecondaryMap, SlotMap};
 
-use crate::ir::{FunctionName, Label};
+use crate::ir::{FnType, FunctionName, Label};
 
 #[derive(Debug)]
 struct LineCtx {
@@ -18,15 +18,20 @@ struct LineCtx {
 pub struct CfCtx {
     lines: Vec<LineCtx>,
     functions: SecondaryMap<FunctionName, usize>,
+    fn_types: SecondaryMap<FunctionName, FnType>,
+
     index_cache: RefCell<BTreeMap<LineNo, usize>>,
     labels: SlotMap<Label, ()>,
+    // stores branches (from_index -> to_index) generated
+    // by IF / GOTO and next line, for and next will
+    // be handled in a later pass
+    branches: Vec<(usize, usize)>,
 }
 
 #[derive(Debug)]
 pub enum CfError {
     MissingLine(LineNo),
     JumpInsideSubroutine(LineNo),
-    UnreachableCode(LineNo),
 }
 
 impl CfCtx {
@@ -86,6 +91,7 @@ impl CfCtx {
                         let func = func_gen.insert(());
 
                         cf_ctx.functions.insert(func, to_index);
+                        cf_ctx.fn_types.insert(func, FnType::default());
 
                         cf_ctx.set_label(to_index, label);
                         let _ = cf_ctx.set_func(to_index, func);
@@ -97,6 +103,7 @@ impl CfCtx {
                     let func = func_gen.insert(());
 
                     cf_ctx.functions.insert(func, i);
+                    cf_ctx.fn_types.insert(func, FnType::def_type());
                 }
                 Stmt::If(stmt) => {
                     let to_index = cf_ctx
@@ -118,6 +125,7 @@ impl CfCtx {
         let main_func = func_gen.insert(());
         cf_ctx.set_func(0, main_func)?;
         cf_ctx.functions.insert(main_func, 0);
+        cf_ctx.fn_types.insert(main_func, FnType::default());
 
         stack.push_back(0);
 
@@ -155,6 +163,7 @@ impl CfCtx {
                         cf_ctx.set_func(next_line_index, current_func)?;
 
                         stack.push_back(next_line_index);
+                        cf_ctx.branches.push((index, next_line_index));
                     }
                 }
                 // conditional branch
@@ -168,6 +177,7 @@ impl CfCtx {
                         cf_ctx.set_func(to_index, current_func)?;
 
                         stack.push_back(to_index);
+                        cf_ctx.branches.push((index, to_index));
                     }
 
                     if !visited!(next_line_index) {
@@ -177,6 +187,7 @@ impl CfCtx {
                         cf_ctx.set_func(next_line_index, current_func)?;
 
                         stack.push_back(next_line_index);
+                        cf_ctx.branches.push((index, next_line_index));
                     }
                 }
                 // unconditional branch
@@ -190,6 +201,7 @@ impl CfCtx {
                         cf_ctx.set_func(to_index, current_func)?;
 
                         stack.push_back(to_index);
+                        cf_ctx.branches.push((index, to_index));
                     }
                 }
                 Stmt::Next(_) | Stmt::For(_) => {
@@ -203,12 +215,39 @@ impl CfCtx {
                         cf_ctx.set_func(next_line_index, current_func)?;
 
                         stack.push_back(next_line_index);
+                        cf_ctx.branches.push((index, next_line_index));
                     }
                 }
             }
         }
 
         Ok(cf_ctx)
+    }
+
+    pub fn line_predecessors<'a>(
+        &'a self,
+        line_index: usize,
+    ) -> impl Iterator<Item = usize> + 'a {
+        self.branches.iter().filter_map(move |(from, to)| {
+            if *to == line_index {
+                Some(*from)
+            } else {
+                None
+            }
+        })
+    }
+
+    pub fn line_successors<'a>(
+        &'a self,
+        line_index: usize,
+    ) -> impl Iterator<Item = usize> + 'a {
+        self.branches.iter().filter_map(move |(from, to)| {
+            if *from == line_index {
+                Some(*to)
+            } else {
+                None
+            }
+        })
     }
 
     pub fn find_line_no(&self, line_index: usize) -> LineNo {
@@ -238,13 +277,15 @@ impl CfCtx {
 
     pub fn functions<'a>(
         &'a self,
-    ) -> impl Iterator<Item = (FunctionName, Label)> + 'a {
+    ) -> impl Iterator<Item = (FunctionName, Label, FnType)> + 'a {
         let lines = &self.lines;
 
         self.functions
             .iter()
             .filter_map(move |(k, i)| match lines[*i].label {
-                Some(label) => Some((k, label)),
+                Some(label) => {
+                    self.fn_types.get(k).cloned().map(|ty| (k, label, ty))
+                }
                 _ => None,
             })
     }
@@ -281,6 +322,8 @@ impl CfCtx {
             index_cache,
             labels: SlotMap::with_key(),
             functions: SecondaryMap::new(),
+            fn_types: SecondaryMap::new(),
+            branches: vec![],
         }
     }
 
