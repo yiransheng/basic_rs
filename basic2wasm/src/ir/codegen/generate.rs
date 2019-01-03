@@ -445,8 +445,9 @@ impl CodeGen {
                 let name: &str = &*self.func_names.get(*name).unwrap();
                 self.module.call(name, None, Ty::None)
             }
-            x @ _ => {
+            x @ Statement::DefFn(..) => {
                 println!("{:?}", x);
+                println!("Current ver of binaryen rs binding does not have wasm function tables");
                 unimplemented!()
             }
         }

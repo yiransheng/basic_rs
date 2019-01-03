@@ -30,7 +30,6 @@ pub struct CfCtx {
 pub enum CfError {
     MissingLine(LineNo),
     JumpInsideSubroutine(LineNo),
-    // UnreachableCode(LineNo),
 }
 
 impl CfCtx {
