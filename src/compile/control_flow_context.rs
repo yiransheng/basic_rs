@@ -163,12 +163,15 @@ impl CfCtx {
                         cf_ctx.set_func(next_line_index, current_func)?;
 
                         stack.push_back(next_line_index);
-                        cf_ctx.branches.push((index, next_line_index));
                     }
+
+                    cf_ctx.branches.push((index, next_line_index));
                 }
                 // conditional branch
                 Stmt::If(stmt) => {
                     let to_index = cf_ctx.find_line_index(stmt.then).unwrap();
+                    cf_ctx.branches.push((index, to_index));
+                    cf_ctx.branches.push((index, next_line_index));
 
                     if !visited!(to_index) {
                         let new_label = cf_ctx.add_label();
@@ -177,7 +180,6 @@ impl CfCtx {
                         cf_ctx.set_func(to_index, current_func)?;
 
                         stack.push_back(to_index);
-                        cf_ctx.branches.push((index, to_index));
                     }
 
                     if !visited!(next_line_index) {
@@ -187,12 +189,12 @@ impl CfCtx {
                         cf_ctx.set_func(next_line_index, current_func)?;
 
                         stack.push_back(next_line_index);
-                        cf_ctx.branches.push((index, next_line_index));
                     }
                 }
                 // unconditional branch
                 Stmt::Goto(stmt) => {
                     let to_index = cf_ctx.find_line_index(stmt.goto).unwrap();
+                    cf_ctx.branches.push((index, to_index));
 
                     if !visited!(to_index) {
                         let new_label = cf_ctx.add_label();
@@ -201,12 +203,12 @@ impl CfCtx {
                         cf_ctx.set_func(to_index, current_func)?;
 
                         stack.push_back(to_index);
-                        cf_ctx.branches.push((index, to_index));
                     }
                 }
                 Stmt::Next(_) | Stmt::For(_) => {
                     let new_label = cf_ctx.add_label();
                     cf_ctx.set_label(index, new_label);
+                    cf_ctx.branches.push((index, next_line_index));
 
                     if !visited!(next_line_index) {
                         let new_label = cf_ctx.add_label();
@@ -215,7 +217,6 @@ impl CfCtx {
                         cf_ctx.set_func(next_line_index, current_func)?;
 
                         stack.push_back(next_line_index);
-                        cf_ctx.branches.push((index, next_line_index));
                     }
                 }
             }

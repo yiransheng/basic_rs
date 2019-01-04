@@ -20,63 +20,81 @@ mod vm;
 // #[cfg(test)]
 // mod tests;
 
-// use crate::compiler::compile;
+use crate::codegen::codegen;
+use crate::compile::compile;
+use crate::vm::VM;
 // use crate::error_print::{print_source_error, InterpreterError};
-// use crate::parser::Parser;
-// use crate::scanner::Scanner;
+use crate::parser::Parser;
+use crate::scanner::Scanner;
 
-// #[derive(Debug, StructOpt)]
-// #[structopt(name = "basic_rs", about = "basic_rs file")]
-// struct Opt {
-// /// Input file
-// #[structopt(parse(from_os_str))]
-// input: PathBuf,
+#[derive(Debug, StructOpt)]
+#[structopt(name = "basic_rs", about = "basic_rs file")]
+struct Opt {
+    /// Input file
+    #[structopt(parse(from_os_str))]
+    input: PathBuf,
 
-// #[structopt(short = "d", long = "disassemble")]
-// disassemble: bool,
-// }
+    #[structopt(short = "d", long = "disassemble")]
+    disassemble: bool,
+}
 
-// fn read_source(opt: &Opt) -> Result<String, InterpreterError> {
-// let mut file = File::open(&opt.input)?;
-// let mut source = String::new();
-// file.read_to_string(&mut source)?;
+fn read_source(opt: &Opt) -> Result<String, io::Error> {
+    let mut file = File::open(&opt.input)?;
+    let mut source = String::new();
+    file.read_to_string(&mut source)?;
 
-// Ok(source)
-// }
+    Ok(source)
+}
 
-// fn run(source: &str, opt: &Opt) -> Result<(), InterpreterError> {
-// let scanner = Scanner::new(source);
-// let ast = Parser::new(scanner).parse()?;
+pub struct InterpreterError;
 
-// let mut vm = compile(&ast)?;
+fn run(source: &str, opt: &Opt) -> Result<(), InterpreterError> {
+    let scanner = Scanner::new(source);
+    let ast = Parser::new(scanner).parse().map_err(|_| InterpreterError)?;
 
-// let stdout = io::stdout();
+    let mut ir = compile(&ast).map_err(|err| {
+        eprintln!("{}", err);
+        InterpreterError
+    })?;
+    ir.optimize();
 
-// if opt.disassemble {
-// vm.disassemble(stdout.lock());
-// }
+    if opt.disassemble {
+        println!("{}", ir);
+    }
 
-// let mut rng = SmallRng::from_entropy();
+    let (entry, chunks) = codegen(&ir).map_err(|_| InterpreterError)?;
+    let mut vm = VM::new(entry, chunks);
 
-// vm.run(stdout.lock(), &mut rng)?;
+    let stdout = io::stdout();
 
-// Ok(())
-// }
+    if opt.disassemble {
+        vm.disassemble(stdout.lock());
+    }
 
-// fn main() {
-// let opt = Opt::from_args();
-// let source = match read_source(&opt) {
-// Ok(s) => s,
-// Err(err) => return eprintln!("{}", err),
-// };
+    let mut rng = SmallRng::from_entropy();
 
-// match run(&source, &opt) {
-// Ok(_) => {}
-// Err(e) => match e {
-// InterpreterError::ParseFail(e) => print_source_error(e, &source),
-// _ => eprintln!("{}", e),
-// },
-// }
-// }
+    vm.run(stdout.lock(), &mut rng)
+        .map_err(|_| InterpreterError)?;
 
-fn main() {}
+    Ok(())
+}
+
+fn main() {
+    let opt = Opt::from_args();
+    let source = match read_source(&opt) {
+        Ok(s) => s,
+        Err(err) => return eprintln!("{}", err),
+    };
+    match run(&source, &opt) {
+        Ok(_) => {}
+        Err(_) => eprintln!("fail"),
+    }
+
+    // match run(&source, &opt) {
+    // Ok(_) => {}
+    // Err(e) => match e {
+    // InterpreterError::ParseFail(e) => print_source_error(e, &source),
+    // _ => eprintln!("{}", e),
+    // },
+    // }
+}

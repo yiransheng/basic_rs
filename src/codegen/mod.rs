@@ -1,22 +1,23 @@
+use rustc_hash::FxHashMap;
 use slotmap::SecondaryMap;
 use std::ops::Deref;
 
 use crate::ast::Func;
 use crate::ir::*;
-use crate::vm::{Chunk, FuncId, JumpPoint, LocalVar, OpCode};
+use crate::vm::{Chunk, FuncId, FuncIdGen, JumpPoint, LocalVar, OpCode};
 
 #[derive(Debug, Copy, Clone)]
-struct WriteError(pub &'static str);
+pub struct WriteError(pub &'static str);
 
-struct ChunkWriter {
-    chunk: Chunk,
+struct ChunkWriter<'a> {
+    func_map: &'a SecondaryMap<FunctionName, FuncId>,
+    chunk: &'a mut Chunk,
 
     jp_label_map: SecondaryMap<Label, JumpPoint>,
-    func_map: SecondaryMap<FunctionName, FuncId>,
     jp_indices: Vec<(u16, Label)>,
 }
 
-impl ChunkWriter {
+impl<'a> ChunkWriter<'a> {
     fn mark_jump_point(&mut self, label: Label) {
         self.jp_label_map.insert(label, JumpPoint(self.chunk.len()));
     }
@@ -24,6 +25,39 @@ impl ChunkWriter {
 
 trait ChunkWrite {
     fn write(&self, writer: &mut ChunkWriter) -> Result<(), WriteError>;
+}
+
+pub fn codegen(
+    ir: &Program,
+) -> Result<(FuncId, FxHashMap<FuncId, Chunk>), WriteError> {
+    let mut func_id_gen = FuncIdGen::new();
+    let func_map: SecondaryMap<FunctionName, FuncId> = ir
+        .functions
+        .iter()
+        .map(move |function| {
+            let id = func_id_gen.next_id();
+            (function.name, id)
+        })
+        .collect();
+
+    let mut compiled_functions: FxHashMap<FuncId, Chunk> = FxHashMap::default();
+
+    for function in &ir.functions {
+        let mut chunk = Chunk::new();
+        let id = func_map.get(function.name).cloned().unwrap();
+        let mut writer = ChunkWriter {
+            func_map: &func_map,
+            chunk: &mut chunk,
+            jp_label_map: SecondaryMap::new(),
+            jp_indices: vec![],
+        };
+        function.write(&mut writer)?;
+        compiled_functions.insert(id, chunk);
+    }
+
+    let main_id = func_map.get(ir.main).cloned().unwrap();
+
+    Ok((main_id, compiled_functions))
 }
 
 impl ChunkWrite for Function {
@@ -154,6 +188,14 @@ impl ChunkWrite for Statement {
                     writer.func_map.get(*fname).cloned().unwrap(),
                 );
             }
+            Statement::Print(expr) => {
+                expr.write(writer)?;
+                writer.chunk.write_opcode(OpCode::PrintExpr);
+            }
+            Statement::PrintLabel(..) => {}
+            Statement::PrintAdvance15 => {}
+            Statement::PrintAdvance3 => {}
+            Statement::PrintNewline => {}
             _ => unimplemented!(),
         }
 

@@ -76,6 +76,7 @@ impl<'a> AstVisitor<Result<(), CompileError>> for LoopPass<'a> {
                 label,
                 successor_label,
             };
+            let for_var = stmt.var;
             let mut for_state = Some(for_compiler.visit_for(stmt)?);
             let mut successors: VecDeque<usize> =
                 self.cf_ctx.line_successors(i).collect();
@@ -96,8 +97,9 @@ impl<'a> AstVisitor<Result<(), CompileError>> for LoopPass<'a> {
                 };
 
                 self.line_index = j;
+
                 match &prog.statements[j].statement {
-                    Stmt::Next(stmt) => {
+                    Stmt::Next(stmt) if stmt.var == for_var => {
                         let label = self.current_label()?;
                         let func = self.current_func()?;
                         let successor_label = self.next_line_label();
