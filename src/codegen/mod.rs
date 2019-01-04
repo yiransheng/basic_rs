@@ -4,7 +4,7 @@ use std::ops::Deref;
 
 use crate::ast::Func;
 use crate::ir::*;
-use crate::vm::{Chunk, FuncId, FuncIdGen, JumpPoint, LocalVar, OpCode};
+use crate::vm::{Chunk, FuncId, FuncIdGen, JumpPoint, LocalVar, OpCode, VM};
 
 #[derive(Debug, Copy, Clone)]
 pub struct WriteError(pub &'static str);
@@ -32,9 +32,7 @@ trait ChunkWrite {
     fn write(&self, writer: &mut ChunkWriter) -> Result<(), WriteError>;
 }
 
-pub fn codegen(
-    ir: &Program,
-) -> Result<(FuncId, FxHashMap<FuncId, Chunk>), WriteError> {
+pub fn codegen(ir: &Program) -> Result<VM, WriteError> {
     let mut func_id_gen = FuncIdGen::new();
     let func_map: SecondaryMap<FunctionName, FuncId> = ir
         .functions
@@ -63,7 +61,7 @@ pub fn codegen(
 
     let main_id = func_map.get(ir.main).cloned().unwrap();
 
-    Ok((main_id, compiled_functions))
+    Ok(VM::new(main_id, compiled_functions))
 }
 
 impl ChunkWrite for Function {

@@ -62,8 +62,7 @@ fn run(source: &str, opt: &Opt) -> Result<(), InterpreterError> {
         println!("{}", ir);
     }
 
-    let (entry, chunks) = codegen(&ir).map_err(|_| InterpreterError)?;
-    let mut vm = VM::new(entry, chunks);
+    let mut vm = codegen(&ir).map_err(|_| InterpreterError)?;
 
     let stdout = io::stdout();
 

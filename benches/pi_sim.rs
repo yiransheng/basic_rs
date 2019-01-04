@@ -11,7 +11,8 @@ fn compile_basic_program(prog: &str) -> VM {
     let scanner = Scanner::new(prog);
     let ast = Parser::new(scanner).parse().unwrap();
 
-    let vm = compile(&ast).expect("it should compile successfuly");
+    let ir = compile(&ast).expect("it should compile successfuly");
+    let vm = codegen(&ir).expect("it should generate vm code");
 
     vm
 }
