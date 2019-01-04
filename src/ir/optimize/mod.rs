@@ -5,6 +5,6 @@ use super::Program;
 
 impl Program {
     pub fn optimize(&mut self) {
-        // demote_global(self);
+        demote_global(self);
     }
 }

@@ -123,6 +123,10 @@ impl TraverseLValue for LValue {
     where
         F: Fn(&mut LValue) -> Option<T> + Clone,
     {
+        if let Some(x) = f(self) {
+            return Some(x);
+        }
+
         match self {
             LValue::ArrPtr(_, offset) => match offset {
                 Offset::OneD(expr) => expr.traverse(f),
@@ -130,7 +134,7 @@ impl TraverseLValue for LValue {
                     i.traverse(f.clone()).or_else(|| j.traverse(f))
                 }
             },
-            _ => f(self),
+            _ => None,
         }
     }
 }
@@ -156,7 +160,7 @@ impl TraverseLValue for Expr {
         F: Fn(&mut LValue) -> Option<T> + Clone,
     {
         match self {
-            Expr::Get(ref mut lval) => f(lval),
+            Expr::Get(ref mut lval) => lval.traverse(f),
             Expr::Unary(_, expr) => expr.traverse(f),
             Expr::Binary(_, ref mut lhs, ref mut rhs) => {
                 lhs.traverse(f.clone()).or_else(|| rhs.traverse(f))
@@ -178,7 +182,7 @@ impl TraverseLValue for Statement {
             Statement::Assign(ref mut lval, ref mut expr) => {
                 lval.traverse(f.clone()).or_else(|| expr.traverse(f))
             }
-            Statement::DefFn(ref mut lval, _) => f(lval),
+            Statement::DefFn(ref mut lval, _) => lval.traverse(f),
             Statement::Alloc1d(ref mut lval, ref mut expr) => {
                 lval.traverse(f.clone()).or_else(|| expr.traverse(f))
             }
