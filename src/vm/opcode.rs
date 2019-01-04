@@ -8,7 +8,6 @@ pub enum OpCode {
     Jump,
     JumpTrue,
     JumpFalse,
-    Subroutine,
     CallNative,
     CallIndirect,
     Call,
@@ -39,7 +38,6 @@ pub enum OpCode {
     PrintAdvance15,
     PrintNewline,
 
-    Dup,
     Negate,
     Not,
     Add,
@@ -52,8 +50,6 @@ pub enum OpCode {
     Equal,
     Less,
     Greater,
-
-    LoopTest,
 
     Noop,
 }

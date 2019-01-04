@@ -3,7 +3,6 @@ use std::error;
 use std::f64;
 use std::fmt;
 use std::io;
-use std::mem;
 
 use num_traits::{FromPrimitive, ToPrimitive};
 use rand::Rng;
@@ -36,12 +35,12 @@ pub struct CallFrame {
     depth: usize,
     ip: usize,
     sp: usize,
-    func: FuncId,
+    func: Option<FuncId>,
 }
 
 pub struct VM {
     chunk: Chunk,
-    user_fns: FxHashMap<FuncId, Chunk>,
+    fn_chunks: FxHashMap<FuncId, Chunk>,
 
     globals: FxHashMap<Variable, Number>,
     functions: FxHashMap<Func, FuncId>,
@@ -137,12 +136,12 @@ impl VM {
             depth: 0,
             ip: 0,
             sp: 0,
-            func: main_id,
+            func: None,
         };
         call_stack.push_back(call_frame);
         VM {
             chunk,
-            user_fns: chunks,
+            fn_chunks: chunks,
 
             globals: FxHashMap::default(),
             functions: FxHashMap::default(),
@@ -160,7 +159,7 @@ impl VM {
         let mut main_chunk = Disassembler::new(&mut self.chunk, &mut out);
         main_chunk.disassemble();
 
-        for (func_id, chunk) in self.user_fns.iter_mut() {
+        for (func_id, chunk) in self.fn_chunks.iter_mut() {
             let _ = writeln!(&mut out, "Chunk: {}\n", func_id);
             let mut fn_chunk = Disassembler::new(chunk, &mut out);
             fn_chunk.disassemble();
@@ -169,7 +168,7 @@ impl VM {
 
     pub fn reset(&mut self) {
         self.chunk.reset();
-        for c in self.user_fns.values_mut() {
+        for c in self.fn_chunks.values_mut() {
             c.reset();
         }
         self.globals.clear();
@@ -179,7 +178,12 @@ impl VM {
         self.stack.clear();
         self.call_stack.clear();
 
-        let call_frame = CallFrame { depth: 0, ip: 0 };
+        let call_frame = CallFrame {
+            depth: 0,
+            ip: 0,
+            sp: 0,
+            func: None,
+        };
 
         self.call_stack.push_back(call_frame);
     }
@@ -219,7 +223,11 @@ impl VM {
             let instr = OpCode::from_u8(byte)
                 .ok_or_else(|| ExecError::DecodeError(byte))?;
             match instr {
+                OpCode::Noop => continue,
                 OpCode::Stop => return Ok(()),
+                OpCode::PrintNewline => {
+                    printer.writeln()?;
+                }
                 OpCode::PrintExpr => {
                     let value = self.pop_number()?;
                     printer.write_num(value)?;
@@ -245,7 +253,6 @@ impl VM {
                         Array::new([DEFAULT_ARRAY_SIZE, DEFAULT_ARRAY_SIZE]);
                     self.global_tables.insert(var, arr);
                 }
-                OpCode::Noop => continue,
                 OpCode::Jump => {
                     let jump_point: JumpPoint = self.read_operand()?;
                     *self.get_ip() = jump_point.0;
@@ -283,7 +290,8 @@ impl VM {
                     self.push_value(value);
                 }
                 OpCode::Rand => {
-                    self.push_value(rng.gen());
+                    let v: f64 = rng.gen();
+                    self.push_value(v);
                 }
                 OpCode::BindFunc => {
                     let func: Func = self.read_inline_operand()?;
@@ -343,7 +351,7 @@ impl VM {
                         depth: current_depth + 1,
                         ip: 0,
                         sp: n_values - n_args,
-                        func: func_id,
+                        func: Some(func_id),
                     };
                     self.call_stack.push_back(new_frame);
                 }
@@ -366,7 +374,7 @@ impl VM {
                         depth: current_depth + 1,
                         ip: 0,
                         sp: n_values - n_args,
-                        func: func_id,
+                        func: Some(func_id),
                     };
                     self.call_stack.push_back(new_frame);
                 }
@@ -561,9 +569,9 @@ impl VM {
     fn current_chunk(&mut self) -> Result<&mut Chunk, ExecError> {
         let frame = self.call_stack.back().unwrap();
 
-        match frame.context {
+        match frame.func {
             Some(func_id) => self
-                .user_fns
+                .fn_chunks
                 .get_mut(&func_id)
                 .ok_or_else(|| ExecError::FunctionNotFound),
             _ => Ok(&mut self.chunk),
@@ -616,7 +624,8 @@ impl VM {
         &self,
         index: LocalVar,
     ) -> Result<V, ExecError> {
-        let index = self.current_frame().sp + index.into();
+        let index: usize = index.into();
+        let index = self.current_frame().sp + index;
         if let Some(v) = self.stack.get(index) {
             Ok(V::from(*v))
         } else {
@@ -629,7 +638,8 @@ impl VM {
         index: LocalVar,
         v: V,
     ) -> Result<(), ExecError> {
-        let index = self.current_frame().sp + index.into();
+        let index: usize = index.into();
+        let index = self.current_frame().sp + index;
         if let Some(vref) = self.stack.get_mut(index) {
             *vref = v.into();
             Ok(())

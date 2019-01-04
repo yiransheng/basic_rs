@@ -6,12 +6,6 @@ use std::str::from_utf8_unchecked;
 
 use unicode_width::UnicodeWidthStr;
 
-#[derive(Debug, Copy, Clone)]
-enum PrintState {
-    Printing(usize, bool),
-    Idle,
-}
-
 #[derive(Debug)]
 pub enum PrintError {
     Io(Error),
@@ -47,7 +41,7 @@ impl error::Error for PrintError {
 pub struct Printer<W> {
     num: Vec<u8>,
     out: W,
-    state: PrintState,
+    col: usize,
 }
 
 impl<W: Write> Printer<W> {
@@ -56,29 +50,15 @@ impl<W: Write> Printer<W> {
         Printer {
             num: Vec::new(),
             out,
-            state: PrintState::Idle,
+            col: 0,
         }
     }
     pub fn new_buffered(out: W) -> Printer<BufWriter<W>> {
         Printer {
             num: Vec::new(),
             out: BufWriter::with_capacity(100, out),
-            state: PrintState::Idle,
+            col: 0,
         }
-    }
-    pub fn write_start(&mut self) {
-        match self.state {
-            PrintState::Printing(..) => {}
-            PrintState::Idle => {
-                self.state = PrintState::Printing(0, true);
-            }
-        }
-    }
-    pub fn write_end(&mut self) {
-        if let PrintState::Printing(_, true) = self.state {
-            let _ = writeln!(&mut self.out);
-        }
-        self.state = PrintState::Idle;
     }
     pub fn write_num(&mut self, n: f64) -> Result<(), PrintError> {
         let mut num = mem::replace(&mut self.num, Vec::new());
@@ -94,33 +74,29 @@ impl<W: Write> Printer<W> {
     pub fn write_str(&mut self, s: &str) -> Result<(), PrintError> {
         debug_assert!(!s.contains('\n'));
 
-        match self.state {
-            PrintState::Printing(ref mut written, ref mut end_line) => {
-                let w = UnicodeWidthStr::width(s);
-                write!(&mut self.out, "{}", s)?;
-                *written += w;
-                *end_line = true;
-                Ok(())
-            }
-            _ => Err(PrintError::NotPrinting),
-        }
+        let w = UnicodeWidthStr::width(s);
+        self.col += w;
+
+        Ok(())
+    }
+    pub fn writeln(&mut self) -> Result<(), PrintError> {
+        write!(self.out, " ")?;
+        self.col = 0;
+
+        Ok(())
     }
 
     #[inline(always)]
     pub fn advance_to_multiple(&mut self, k: usize) -> Result<(), PrintError> {
         debug_assert!(k > 0);
-
-        match self.state {
-            PrintState::Printing(ref mut written, ref mut end_line) => {
-                let n = k - *written % k;
-                *written += n;
-                for _ in 0..n {
-                    write!(self.out, " ")?;
-                }
-                *end_line = false;
-                Ok(())
-            }
-            _ => Err(PrintError::NotPrinting),
+        let mut written = self.col;
+        let n = k - written % k;
+        written += n;
+        for _ in 0..n {
+            write!(self.out, " ")?;
         }
+        self.col = written;
+
+        Ok(())
     }
 }

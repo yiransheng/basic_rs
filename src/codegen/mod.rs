@@ -118,7 +118,7 @@ fn write_block_exit(
         }
         BlockExit::Return(Some(expr)) => {
             expr.write(writer)?;
-            writer.chunk.write_opcode(OpCode::Return);
+            writer.chunk.write_opcode(OpCode::ReturnValue);
         }
         BlockExit::Switch(cond, true_br, None) => {
             cond.write(writer)?;

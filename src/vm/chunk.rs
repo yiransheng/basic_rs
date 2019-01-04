@@ -278,22 +278,21 @@ pub mod disassembler {
             while let Some(instr) = self.disassemble_instruction() {
                 match instr {
                     Constant => self.disassemble_constant(),
-                    Subroutine | Jump | JumpTrue | JumpFalse => {
-                        self.disassemble_address()
-                    }
-                    CallNative | GetFunc | SetFunc => {
-                        self.disassemble_function()
+                    Jump | JumpTrue | JumpFalse => self.disassemble_address(),
+                    CallNative | GetFunc => self.disassemble_function(),
+
+                    BindFunc => {
+                        self.disassemble_function();
+                        self.disassemble_function_id();
                     }
 
-                    FnConstant => self.disassemble_function_id(),
-
-                    GetGlobal | SetGlobal | GetLocal | SetLocal
-                    | ReadGlobal | ReadGlobalArray | ReadGlobalArray2d
-                    | GetGlobalArray | SetGlobalArray | GetGlobalArray2d
-                    | SetGlobalArray2d | InitArray | InitArray2d
-                    | SetArrayBound | SetArrayBound2d => {
-                        self.disassemble_variable()
+                    GetLocal | SetLocal => {
+                        self.disassemble_local();
                     }
+
+                    GetGlobal | SetGlobal | GetGlobalArray | SetGlobalArray
+                    | GetGlobalArray2d | SetGlobalArray2d | InitArray
+                    | InitArray2d => self.disassemble_variable(),
 
                     PrintLabel => self.disassemble_label(),
                     _ => {}
@@ -316,6 +315,11 @@ pub mod disassembler {
         fn disassemble_label(&mut self) {
             let label: String = self.get_operand();
             let _ = write!(&mut self.out, " \"{}\"", label);
+        }
+
+        fn disassemble_local(&mut self) {
+            let var: LocalVar = self.get_inline_operand();
+            let _ = write!(&mut self.out, " ${}", var.0);
         }
 
         fn disassemble_variable(&mut self) {
@@ -368,25 +372,7 @@ pub mod disassembler {
             self.ip += 1;
 
             OpCode::from_u8(byte).map(|instr| {
-                match instr {
-                    OpCode::PrintEnd => {
-                        self.printing = false;
-                    }
-                    _ => {}
-                }
-
-                if self.printing {
-                    let _ = write!(&mut self.out, "      {:8}", instr.short());
-                } else {
-                    let _ = write!(&mut self.out, "    {:10}", instr.short());
-                }
-
-                match instr {
-                    OpCode::PrintStart => {
-                        self.printing = true;
-                    }
-                    _ => {}
-                }
+                let _ = write!(&mut self.out, "    {:10}", instr.short());
 
                 instr
             })
