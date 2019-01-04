@@ -196,6 +196,7 @@ impl ChunkWrite for Statement {
                 writer.chunk.add_inline_operand(
                     writer.func_map.get(*fname).cloned().unwrap(),
                 );
+                writer.chunk.write(0); // n args
             }
             Statement::Print(expr) => {
                 expr.write(writer)?;
@@ -269,6 +270,7 @@ impl ChunkWrite for Expr {
                     writer.chunk.write_opcode(OpCode::GetFunc);
                     writer.chunk.add_inline_operand(*func);
                     writer.chunk.write_opcode(OpCode::CallIndirect);
+                    writer.chunk.write(1); // 1 arg
                 }
                 _ => return Err(WriteError("Type error")),
             },

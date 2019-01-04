@@ -36,8 +36,7 @@ pub struct CallFrame {
     depth: usize,
     ip: usize,
     sp: usize,
-    context: Option<FuncId>,
-    locals: FxHashMap<Variable, Number>,
+    func: FuncId,
 }
 
 pub struct VM {
@@ -138,8 +137,7 @@ impl VM {
             depth: 0,
             ip: 0,
             sp: 0,
-            context: None,
-            locals: FxHashMap::default(),
+            func: main_id,
         };
         call_stack.push_back(call_frame);
         VM {
@@ -181,12 +179,7 @@ impl VM {
         self.stack.clear();
         self.call_stack.clear();
 
-        let call_frame = CallFrame {
-            depth: 0,
-            ip: 0,
-            context: None,
-            locals: FxHashMap::default(),
-        };
+        let call_frame = CallFrame { depth: 0, ip: 0 };
 
         self.call_stack.push_back(call_frame);
     }
@@ -289,6 +282,9 @@ impl VM {
                     let value = self.read_number()?;
                     self.push_value(value);
                 }
+                OpCode::Rand => {
+                    self.push_value(rng.gen());
+                }
                 OpCode::BindFunc => {
                     let func: Func = self.read_inline_operand()?;
                     let func_id: FuncId = self.read_inline_operand()?;
@@ -302,13 +298,7 @@ impl VM {
                 }
                 OpCode::CallNative => {
                     let func: Func = self.read_inline_operand()?;
-                    // BASIC RND function does not actually take
-                    // arguments, `RND(X)` is only a syntactic requirement
-                    let x = if func != Func::Rnd {
-                        self.pop_number()?
-                    } else {
-                        0.0
-                    };
+                    let x = self.pop_number()?;
                     let y = match func {
                         Func::Sin => x.sin(),
                         Func::Cos => x.cos(),
@@ -318,55 +308,65 @@ impl VM {
                         Func::Abs => x.abs(),
                         Func::Log => x.ln(),
                         Func::Sqr => x.sqrt(),
-                        Func::Rnd => rng.gen(),
                         Func::Int => x.trunc(),
                         _ => unreachable!("Compiler bug"),
                     };
                     self.push_value(y);
                 }
-                OpCode::Return => match self.current_frame().context {
-                    Some(_) => {
-                        // function call
-                        let v = self.pop_number()?;
-                        self.call_stack.pop_back();
-                        self.push_value(v);
+                OpCode::Return => {
+                    let frame = self.call_stack.pop_back().unwrap();
+                    while self.stack.len() > frame.sp {
+                        self.stack.pop_back();
                     }
-                    _ => {
-                        // subroutine call
-                        let ret_frame = self.call_stack.pop_back().unwrap();
-                        let current_frame = self.current_frame_mut();
-                        current_frame.locals = ret_frame.locals;
+                }
+                OpCode::ReturnValue => {
+                    let ret = self.pop_number()?;
+                    let frame = self.call_stack.pop_back().unwrap();
+                    while self.stack.len() > frame.sp {
+                        self.stack.pop_back();
                     }
-                },
+                    self.push_value(ret);
+                }
                 OpCode::Call => {
                     let current_depth = self.current_frame().depth;
-                    let func = match self.pop_value()? {
-                        Variant::Function(func_id) => func_id,
-                        _ => return Err(ExecError::TypeError("not a function")),
-                    };
+                    let func_id: FuncId = self.read_inline_operand()?;
+                    let n_args = (self.read_byte()?) as usize;
+
+                    let n_values = self.stack.len();
+                    if n_args > n_values {
+                        return Err(ExecError::TypeError(
+                            "not enough arguments",
+                        ));
+                    }
+
                     let new_frame = CallFrame {
                         depth: current_depth + 1,
-                        context: Some(func),
-                        locals: FxHashMap::default(),
                         ip: 0,
+                        sp: n_values - n_args,
+                        func: func_id,
                     };
                     self.call_stack.push_back(new_frame);
                 }
-                OpCode::Subroutine => {
-                    let jp: JumpPoint = self.read_operand()?;
-                    let current_frame = self.current_frame_mut();
+                OpCode::CallIndirect => {
+                    let n_args = (self.read_byte()?) as usize;
+                    let current_depth = self.current_frame().depth;
+                    let func_id: FuncId = match self.pop_value()? {
+                        Variant::Function(func_id) => func_id,
+                        _ => return Err(ExecError::TypeError("not callable")),
+                    };
 
-                    // transfer locals to subroutine callframe
-                    let locals = mem::replace(
-                        &mut current_frame.locals,
-                        FxHashMap::default(),
-                    );
+                    let n_values = self.stack.len();
+                    if n_args > n_values {
+                        return Err(ExecError::TypeError(
+                            "not enough arguments",
+                        ));
+                    }
 
                     let new_frame = CallFrame {
-                        depth: current_frame.depth,
-                        context: None,
-                        locals,
-                        ip: jp.0,
+                        depth: current_depth + 1,
+                        ip: 0,
+                        sp: n_values - n_args,
+                        func: func_id,
                     };
                     self.call_stack.push_back(new_frame);
                 }
@@ -474,34 +474,6 @@ impl VM {
                         .get_mut(&var)
                         .ok_or_else(|| ExecError::TableNotFound(var))?;
                     table.set([i, j], v)?;
-                }
-                OpCode::SetArrayBound => {
-                    let var: Variable = self.read_inline_operand()?;
-                    let value = self.pop_number()?;
-                    let value = value
-                        .to_u8()
-                        .ok_or_else(|| ExecError::IndexError(var, value))?;
-                    let list = self
-                        .global_lists
-                        .get_mut(&var)
-                        .ok_or_else(|| ExecError::ListNotFound(var))?;
-                    list.set_bound(value)?;
-                }
-                OpCode::SetArrayBound2d => {
-                    let var: Variable = self.read_inline_operand()?;
-                    let n = self.pop_number()?;
-                    let n = n
-                        .to_u8()
-                        .ok_or_else(|| ExecError::IndexError(var, n))?;
-                    let m = self.pop_number()?;
-                    let m = m
-                        .to_u8()
-                        .ok_or_else(|| ExecError::IndexError(var, m))?;
-                    let table = self
-                        .global_tables
-                        .get_mut(&var)
-                        .ok_or_else(|| ExecError::TableNotFound(var))?;
-                    table.set_bound([m, n])?;
                 }
                 OpCode::Negate => {
                     let value = self.pop_number()?;

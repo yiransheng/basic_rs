@@ -4,6 +4,7 @@ use num_derive::{FromPrimitive, ToPrimitive};
 pub enum OpCode {
     Constant = 0x00,
     Return,
+    ReturnValue,
     Jump,
     JumpTrue,
     JumpFalse,
@@ -13,7 +14,6 @@ pub enum OpCode {
     Call,
     Stop,
 
-    Pop,
     Read,
     Rand,
 
