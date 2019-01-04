@@ -21,6 +21,7 @@ mod opcode;
 mod print;
 
 pub use self::chunk::*;
+pub use self::data::DataStack;
 pub use self::opcode::*;
 pub use self::value::{FuncId, FuncIdGen};
 
@@ -41,6 +42,7 @@ pub struct CallFrame {
 pub struct VM {
     chunk: Chunk,
     fn_chunks: FxHashMap<FuncId, Chunk>,
+    data: DataStack<f64>,
 
     globals: FxHashMap<Variable, Number>,
     functions: FxHashMap<Func, FuncId>,
@@ -128,7 +130,11 @@ impl From<PrintError> for ExecError {
 }
 
 impl VM {
-    pub fn new(main_id: FuncId, mut chunks: FxHashMap<FuncId, Chunk>) -> Self {
+    pub fn new(
+        main_id: FuncId,
+        mut chunks: FxHashMap<FuncId, Chunk>,
+        data: Vec<f64>,
+    ) -> Self {
         let chunk = chunks.remove(&main_id).unwrap();
 
         let mut call_stack = VecDeque::with_capacity(16);
@@ -142,6 +148,7 @@ impl VM {
         VM {
             chunk,
             fn_chunks: chunks,
+            data: DataStack::new(data),
 
             globals: FxHashMap::default(),
             functions: FxHashMap::default(),
@@ -167,10 +174,6 @@ impl VM {
     }
 
     pub fn reset(&mut self) {
-        self.chunk.reset();
-        for c in self.fn_chunks.values_mut() {
-            c.reset();
-        }
         self.globals.clear();
         self.global_lists.clear();
         self.global_tables.clear();
@@ -672,8 +675,7 @@ impl VM {
     }
 
     fn read_number(&mut self) -> Result<Number, ExecError> {
-        let chunk = self.current_chunk()?;
-        let n = chunk.pop_data().ok_or_else(|| ExecError::NoData)?;
+        let n = self.data.pop_back().ok_or_else(|| ExecError::NoData)?;
 
         Ok(n)
     }

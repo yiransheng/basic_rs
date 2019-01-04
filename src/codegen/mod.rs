@@ -61,7 +61,7 @@ pub fn codegen(ir: &Program) -> Result<VM, WriteError> {
 
     let main_id = func_map.get(ir.main).cloned().unwrap();
 
-    Ok(VM::new(main_id, compiled_functions))
+    Ok(VM::new(main_id, compiled_functions, ir.data.clone()))
 }
 
 impl ChunkWrite for Function {
@@ -344,8 +344,7 @@ impl ChunkWrite for Expr {
                         writer.chunk.write_opcode(OpCode::Equal);
                     }
                     BinaryOp::CopySign => {
-                        // writer.chunk.write_opcode(OpCode::Pow);
-                        unimplemented!()
+                        writer.chunk.write_opcode(OpCode::CopySign);
                     }
                 }
             }

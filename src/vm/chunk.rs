@@ -144,7 +144,6 @@ impl Operand for String {
 pub struct Chunk {
     code: Vec<u8>,
 
-    data: DataStack<f64>,
     constants: Vec<f64>,
 
     jump_points: Vec<JumpPoint>,
@@ -157,17 +156,12 @@ impl Chunk {
         Chunk {
             code: Vec::new(),
 
-            data: DataStack::new(),
             constants: Vec::new(),
 
             jump_points: Vec::new(),
             strings: Vec::new(),
             line_map: LineMapping::new(),
         }
-    }
-
-    pub fn reset(&mut self) {
-        self.data.reset();
     }
 
     pub fn len(&self) -> usize {
@@ -226,11 +220,6 @@ impl Chunk {
     ) -> O {
         let bytes = [self.read_byte(offset), self.read_byte(offset + 1)];
         O::from_bytes_unchecked(bytes)
-    }
-
-    #[inline(always)]
-    pub fn pop_data(&mut self) -> Option<f64> {
-        self.data.pop_front()
     }
 
     fn write_index(&mut self, index: u16) {
