@@ -637,6 +637,7 @@ impl VM {
                         self.push_value(Value::false_value());
                     }
                 }
+                _ => unimplemented!(),
             }
         }
     }

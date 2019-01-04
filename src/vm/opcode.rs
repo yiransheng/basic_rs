@@ -10,6 +10,7 @@ pub enum OpCode {
     JumpFalse,
     Subroutine,
     CallNative,
+    CallIndirect,
     Call,
     Stop,
 
@@ -73,6 +74,7 @@ impl OpCode {
             JumpFalse => "jmp.f",
             Subroutine => "sub",
             CallNative => "call.na",
+            CallIndirect => "call_",
             Call => "call",
             Stop => "stop",
 
