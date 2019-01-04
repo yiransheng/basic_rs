@@ -1,6 +1,9 @@
+use std::error::Error;
+use std::fmt;
+use std::ops::Deref;
+
 use rustc_hash::FxHashMap;
 use slotmap::SecondaryMap;
-use std::ops::Deref;
 
 use crate::ast::Func;
 use crate::ir::*;
@@ -8,6 +11,18 @@ use crate::vm::{Chunk, FuncId, FuncIdGen, JumpPoint, LocalVar, OpCode, VM};
 
 #[derive(Debug, Copy, Clone)]
 pub struct WriteError(pub &'static str);
+
+impl fmt::Display for WriteError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl Error for WriteError {
+    fn description(&self) -> &str {
+        "Codegen error"
+    }
+}
 
 struct ChunkWriter<'a> {
     func_map: &'a SecondaryMap<FunctionName, FuncId>,

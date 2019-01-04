@@ -4,16 +4,20 @@ use std::io;
 use std::iter::repeat;
 use unicode_width::UnicodeWidthStr;
 
-use crate::compiler::CompileError;
+use crate::codegen::WriteError;
+use crate::compile::CompileError as CompileErrorInner;
 use crate::parser::Error as ParseError;
 use crate::scanner::SourceMapped;
 use crate::vm::RuntimeError;
+
+type CompileError = SourceMapped<CompileErrorInner>;
 
 #[derive(Debug)]
 pub enum InterpreterError {
     IoFail(io::Error),
     ParseFail(ParseError),
     CompileFail(CompileError),
+    CodegenFail(WriteError),
     Runtime(RuntimeError),
 }
 
@@ -30,6 +34,11 @@ impl From<ParseError> for InterpreterError {
 impl From<CompileError> for InterpreterError {
     fn from(e: CompileError) -> Self {
         InterpreterError::CompileFail(e)
+    }
+}
+impl From<WriteError> for InterpreterError {
+    fn from(e: WriteError) -> Self {
+        InterpreterError::CodegenFail(e)
     }
 }
 impl From<RuntimeError> for InterpreterError {
@@ -50,8 +59,12 @@ impl fmt::Display for InterpreterError {
                 e.fmt(formatter)
             }
             InterpreterError::CompileFail(e) => {
-                writeln!(formatter, "Compile error at Line: {}\n", e.line_no)?;
-                e.inner.fmt(formatter)
+                writeln!(formatter, "Compile error")?;
+                e.fmt(formatter)
+            }
+            InterpreterError::CodegenFail(e) => {
+                writeln!(formatter, "Compile error")?;
+                e.fmt(formatter)
             }
             InterpreterError::Runtime(e) => {
                 writeln!(formatter, "Runtime error in Line: {}\n", e.line_no)?;
@@ -66,7 +79,8 @@ impl Error for InterpreterError {
         match self {
             InterpreterError::IoFail(e) => e.description(),
             InterpreterError::ParseFail(e) => e.description(),
-            InterpreterError::CompileFail(e) => e.inner.description(),
+            InterpreterError::CompileFail(e) => e.description(),
+            InterpreterError::CodegenFail(e) => e.description(),
             InterpreterError::Runtime(e) => e.error.description(),
         }
     }

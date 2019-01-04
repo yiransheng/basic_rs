@@ -5,6 +5,7 @@ use slotmap::SecondaryMap;
 use super::control_flow_context::CfCtx;
 use super::error::CompileError;
 use super::expr_compiler::ExprCompiler;
+use super::HasLineState;
 use crate::ir::{
     BasicBlock, Builder, Expr, FnType, Function, FunctionName, LValue as LV,
     Label, Offset, Statement as IRStatement,
@@ -79,19 +80,25 @@ impl<'a> NonLoopPass<'a> {
     }
 }
 
+impl<'a> HasLineState<CompileError> for NonLoopPass<'a> {
+    fn line_state(&self) -> usize {
+        self.line_index
+    }
+}
+
 impl<'a> AstVisitor<Result<(), CompileError>> for NonLoopPass<'a> {
     fn visit_program(&mut self, prog: &Program) -> Result<(), CompileError> {
         for (func, entry, ty) in self.cf_ctx.functions() {
             self.builder
                 .add_function(ty.clone(), func, entry)
-                .map_err(|_| CompileError::Custom("function already exist"))?;
+                .map_err(|_| CompileError::Custom("Function already exist"))?;
         }
 
         let main_func = self.cf_ctx.get_func(0).unwrap();
         self.main = Some(main_func);
         self.builder
             .set_main(main_func)
-            .map_err(|_| CompileError::Custom("main already set"))?;
+            .map_err(|_| CompileError::Custom("Main already set"))?;
 
         for i in 0..prog.statements.len() {
             let func = self.cf_ctx.get_func(i);
@@ -235,7 +242,7 @@ impl<'a> AstVisitor<Result<(), CompileError>> for NonLoopPass<'a> {
         let func = self
             .cf_ctx
             .get_def_func(self.line_index)
-            .ok_or_else(|| CompileError::Custom("function not defined"))?;
+            .ok_or_else(|| CompileError::FunctionNotDefined(stmt.func))?;
 
         let mut expr_compiler = ExprCompiler::new();
         let expr = expr_compiler.visit_def(stmt)?;
@@ -285,7 +292,7 @@ impl<'a> AstVisitor<Result<(), CompileError>> for NonLoopPass<'a> {
         let label = self.current_label()?;
 
         if Some(func) != self.main {
-            Err(CompileError::Custom("unexpected end"))
+            Err(CompileError::EndInSubroutine)
         } else {
             self.builder.add_return(func, label, None);
             Ok(())
@@ -301,7 +308,7 @@ impl<'a> AstVisitor<Result<(), CompileError>> for NonLoopPass<'a> {
         let label = self.current_label()?;
 
         if Some(func) == self.main {
-            Err(CompileError::Custom("unexpected return"))
+            Err(CompileError::ReturnInMain)
         } else {
             self.builder.add_return(func, label, None);
             Ok(())

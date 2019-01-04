@@ -8,9 +8,9 @@ use rand::FromEntropy;
 use structopt::StructOpt;
 
 mod ast;
-mod compile;
-// mod error_print;
 mod codegen;
+mod compile;
+mod error_print;
 mod ir;
 mod parser;
 mod scanner;
@@ -21,8 +21,7 @@ mod tests;
 
 use crate::codegen::codegen;
 use crate::compile::compile;
-use crate::vm::VM;
-// use crate::error_print::{print_source_error, InterpreterError};
+use crate::error_print::{print_source_error, InterpreterError};
 use crate::parser::Parser;
 use crate::scanner::Scanner;
 
@@ -45,23 +44,18 @@ fn read_source(opt: &Opt) -> Result<String, io::Error> {
     Ok(source)
 }
 
-pub struct InterpreterError;
-
 fn run(source: &str, opt: &Opt) -> Result<(), InterpreterError> {
     let scanner = Scanner::new(source);
-    let ast = Parser::new(scanner).parse().map_err(|_| InterpreterError)?;
+    let ast = Parser::new(scanner).parse()?;
 
-    let mut ir = compile(&ast).map_err(|err| {
-        eprintln!("{}", err);
-        InterpreterError
-    })?;
+    let mut ir = compile(&ast)?;
     ir.optimize();
 
     if opt.disassemble {
         println!("{}", ir);
     }
 
-    let mut vm = codegen(&ir).map_err(|_| InterpreterError)?;
+    let mut vm = codegen(&ir)?;
 
     let stdout = io::stdout();
 
@@ -71,8 +65,7 @@ fn run(source: &str, opt: &Opt) -> Result<(), InterpreterError> {
 
     let mut rng = SmallRng::from_entropy();
 
-    vm.run(stdout.lock(), &mut rng)
-        .map_err(|_| InterpreterError)?;
+    vm.run(stdout.lock(), &mut rng)?;
 
     Ok(())
 }
@@ -83,16 +76,13 @@ fn main() {
         Ok(s) => s,
         Err(err) => return eprintln!("{}", err),
     };
+
     match run(&source, &opt) {
         Ok(_) => {}
-        Err(_) => eprintln!("fail"),
+        Err(e) => match e {
+            InterpreterError::ParseFail(e) => print_source_error(e, &source),
+            InterpreterError::CompileFail(e) => print_source_error(e, &source),
+            _ => eprintln!("{}", e),
+        },
     }
-
-    // match run(&source, &opt) {
-    // Ok(_) => {}
-    // Err(e) => match e {
-    // InterpreterError::ParseFail(e) => print_source_error(e, &source),
-    // _ => eprintln!("{}", e),
-    // },
-    // }
 }

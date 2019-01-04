@@ -5,6 +5,7 @@ use crate::ast::{Visitor as AstVisitor, *};
 use super::control_flow_context::CfCtx;
 use super::error::CompileError;
 use super::expr_compiler::ExprCompiler;
+use super::HasLineState;
 use crate::ir::{
     BinaryOp, Builder, Expr, FunctionName, LValue as LV, Label,
     Statement as IRStatement, ValueType,
@@ -54,6 +55,11 @@ impl<'a> LoopPass<'a> {
         }
     }
 }
+impl<'a> HasLineState<CompileError> for LoopPass<'a> {
+    fn line_state(&self) -> usize {
+        self.line_index
+    }
+}
 
 impl<'a> AstVisitor<Result<(), CompileError>> for LoopPass<'a> {
     fn visit_program(&mut self, prog: &Program) -> Result<(), CompileError> {
@@ -66,9 +72,9 @@ impl<'a> AstVisitor<Result<(), CompileError>> for LoopPass<'a> {
 
             let label = self.current_label()?;
             let func = self.current_func()?;
-            let successor_label = self.next_line_label().ok_or_else(|| {
-                CompileError::Custom("Unexpected end of program")
-            })?;
+            let successor_label = self
+                .next_line_label()
+                .ok_or_else(|| CompileError::ForWithoutNext(stmt.var))?;
             let mut for_compiler = ForCompiler {
                 cf_ctx: &mut *self.cf_ctx,
                 builder: &mut *self.builder,
@@ -119,8 +125,8 @@ impl<'a> AstVisitor<Result<(), CompileError>> for LoopPass<'a> {
                 }
             }
 
-            if for_state.is_some() {
-                return Err(CompileError::Custom("For without Next"));
+            if let Some(for_state) = for_state {
+                return Err(CompileError::ForWithoutNext(for_state.var));
             }
         }
 
@@ -266,7 +272,7 @@ impl<'a> AstVisitor<Result<(), CompileError>> for NextCompiler<'a> {
         } = self
             .for_state
             .take()
-            .ok_or_else(|| CompileError::Custom("next without for"))?;
+            .ok_or_else(|| CompileError::NextWithoutFor(stmt.var))?;
 
         let current_func = self.func;
         let next_label = self.label;
@@ -280,10 +286,10 @@ impl<'a> AstVisitor<Result<(), CompileError>> for NextCompiler<'a> {
         };
 
         if stmt.var != var {
-            return Err(CompileError::Custom("next without for"));
+            return Err(CompileError::NextWithoutFor(stmt.var));
         }
         if current_func != func {
-            return Err(CompileError::Custom("next without for"));
+            return Err(CompileError::NextWithoutFor(stmt.var));
         }
 
         self.builder.add_conditional_branch(
