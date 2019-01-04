@@ -68,6 +68,10 @@ pub fn codegen(
 
 impl ChunkWrite for Function {
     fn write(&self, writer: &mut ChunkWriter) -> Result<(), WriteError> {
+        let n_locals = self.locals.len();
+        writer.chunk.write_opcode(OpCode::DeclLocal);
+        writer.chunk.write(n_locals as u8);
+
         let block_pairs = self
             .iter()
             .zip(self.iter().skip(1).map(Option::Some).chain(Some(None)));

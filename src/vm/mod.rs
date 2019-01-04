@@ -370,7 +370,13 @@ impl VM {
                     };
                     self.call_stack.push_back(new_frame);
                 }
-
+                OpCode::DeclLocal => {
+                    let var: LocalVar = self.read_inline_operand()?;
+                    let n = self.read_byte()?;
+                    for _ in 0..n {
+                        self.push_value(Undefined);
+                    }
+                }
                 OpCode::GetLocal => {
                     let var: LocalVar = self.read_inline_operand()?;
                     let v: Variant = self.get_local(var)?;

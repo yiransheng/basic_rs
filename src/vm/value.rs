@@ -9,6 +9,9 @@ pub struct True;
 #[derive(Copy, Clone)]
 pub struct False;
 
+#[derive(Copy, Clone)]
+pub struct Undefined;
+
 #[derive(
     Debug, Copy, Clone, Hash, Eq, PartialEq, FromPrimitive, ToPrimitive, Default,
 )]
@@ -64,6 +67,16 @@ impl NanBoxable for False {
     }
 }
 
+impl NanBoxable for Undefined {
+    unsafe fn from_nan_box(_n: NanBox) -> Self {
+        Undefined
+    }
+
+    fn into_nan_box(self) -> NanBox {
+        0u64.into_nan_box()
+    }
+}
+
 impl NanBoxable for FuncId {
     unsafe fn from_nan_box(n: NanBox) -> Self {
         FuncId(u8::from_nan_box(n))
@@ -82,14 +95,11 @@ make_nanbox!{
         True(True),
         False(False),
         Function(FuncId),
-        Undefined(())
+        Undefined(Undefined)
     }
 }
 
 impl Value {
-    pub fn undefined() -> Self {
-        Value::from(Variant::Undefined(()))
-    }
     pub fn true_value() -> Self {
         Value::from(Variant::True(True))
     }

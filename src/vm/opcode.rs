@@ -19,6 +19,7 @@ pub enum OpCode {
 
     GetFunc,
     BindFunc,
+    DeclLocal,
     GetGlobal,
     SetGlobal,
     GetGlobalArray,
@@ -86,6 +87,7 @@ impl OpCode {
             GetGlobalArray2d => "get.mat",
             SetGlobalArray2d => "set.mat",
 
+            DeclLocal => "decl.loc",
             GetLocal => "get.loc",
             SetLocal => "set.loc",
 
