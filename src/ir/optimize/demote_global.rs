@@ -8,6 +8,7 @@ use crate::ir::*;
 enum GlobalUsage {
     Single(usize),
     Multiple,
+    None,
 }
 
 struct FunctionUpdater<'a> {
@@ -37,20 +38,23 @@ impl<'a> FunctionUpdater<'a> {
 }
 
 pub fn demote_global(ir: &mut Program) {
-    let mut func_indices: FxHashMap<GlobalKind, GlobalUsage> =
-        FxHashMap::default();
+    let mut func_indices: FxHashMap<GlobalKind, GlobalUsage> = ir
+        .globals
+        .iter()
+        .map(|g| (g.clone(), GlobalUsage::None))
+        .collect();
 
     for g in &ir.globals {
         for (i, func) in ir.functions.iter_mut().enumerate() {
             if !func.contains_global(*g) {
                 continue;
             }
-            match func_indices.get_mut(g) {
-                Some(GlobalUsage::Multiple) => {}
-                Some(u @ GlobalUsage::Single(_)) => {
+            match func_indices.get_mut(g).unwrap_or(&mut GlobalUsage::None) {
+                GlobalUsage::Multiple => {}
+                u @ GlobalUsage::Single(_) => {
                     *u = GlobalUsage::Multiple;
                 }
-                None => {
+                GlobalUsage::None => {
                     func_indices.insert(*g, GlobalUsage::Single(i));
                 }
             }
@@ -70,7 +74,7 @@ pub fn demote_global(ir: &mut Program) {
             GlobalUsage::Single(index) => {
                 updaters[*index].replace_global(g.clone());
             }
-            GlobalUsage::Multiple => {
+            GlobalUsage::Multiple | GlobalUsage::None => {
                 globals.push(g.clone());
             }
         }
@@ -119,7 +123,15 @@ impl TraverseLValue for LValue {
     where
         F: Fn(&mut LValue) -> Option<T> + Clone,
     {
-        f(self)
+        match self {
+            LValue::ArrPtr(_, offset) => match offset {
+                Offset::OneD(expr) => expr.traverse(f),
+                Offset::TwoD(i, j) => {
+                    i.traverse(f.clone()).or_else(|| j.traverse(f))
+                }
+            },
+            _ => f(self),
+        }
     }
 }
 

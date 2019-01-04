@@ -21,16 +21,19 @@ pub enum OpCode {
     DeclLocal,
     GetGlobal,
     SetGlobal,
-    GetGlobalArray,
-    SetGlobalArray,
+    GetGlobalArray1d,
+    SetGlobalArray1d,
     GetGlobalArray2d,
     SetGlobalArray2d,
 
     GetLocal,
     SetLocal,
 
-    InitArray,
+    InitArray1d,
     InitArray2d,
+
+    DefineDim1d,
+    DefineDim2d,
 
     PrintExpr,
     PrintLabel,
@@ -77,8 +80,8 @@ impl OpCode {
             BindFunc => "bind.fn",
             GetGlobal => "get.var",
             SetGlobal => "set.var",
-            GetGlobalArray => "get.arr",
-            SetGlobalArray => "set.arr",
+            GetGlobalArray1d => "get.arr",
+            SetGlobalArray1d => "set.arr",
             GetGlobalArray2d => "get.mat",
             SetGlobalArray2d => "set.mat",
 
@@ -86,8 +89,11 @@ impl OpCode {
             GetLocal => "get.loc",
             SetLocal => "set.loc",
 
-            InitArray => "init.arr",
+            InitArray1d => "init.arr",
             InitArray2d => "init.mat",
+
+            DefineDim1d => "dim.arr",
+            DefineDim2d => "dim.mat",
 
             PrintExpr => "prt.expr",
             PrintLabel => "prt.lab",

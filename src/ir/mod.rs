@@ -512,7 +512,12 @@ mod print {
         fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
             match self {
                 GlobalKind::Variable(var) => write!(f, "Var({})", var),
-                GlobalKind::ArrPtr(var, _) => write!(f, "Array({})", var),
+                GlobalKind::ArrPtr(var, Offset::OneD(..)) => {
+                    write!(f, "Array1d({})", var)
+                }
+                GlobalKind::ArrPtr(var, Offset::TwoD(..)) => {
+                    write!(f, "Array2d({})", var)
+                }
                 GlobalKind::FnPtr(var) => write!(f, "Function({})", var),
             }
         }

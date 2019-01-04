@@ -47,6 +47,24 @@ pub fn codegen(ir: &Program) -> Result<VM, WriteError> {
 
     for function in &ir.functions {
         let mut chunk = Chunk::new();
+        if function.name == ir.main {
+            for global in &ir.globals {
+                match global {
+                    GlobalKind::ArrPtr(var, dim) => match dim {
+                        Offset::OneD(..) => {
+                            chunk.write_opcode(OpCode::InitArray1d);
+                            chunk.add_inline_operand(*var);
+                        }
+                        Offset::TwoD(..) => {
+                            chunk.write_opcode(OpCode::InitArray2d);
+                            chunk.add_inline_operand(*var);
+                        }
+                    },
+                    _ => {}
+                }
+            }
+        }
+
         let id = func_map.get(function.name).cloned().unwrap();
         let mut writer = ChunkWriter {
             func_map: &func_map,
@@ -167,7 +185,7 @@ impl ChunkWrite for Statement {
                     Offset::OneD(i) => {
                         expr.write(writer)?;
                         i.write(writer)?;
-                        writer.chunk.write_opcode(OpCode::SetGlobalArray);
+                        writer.chunk.write_opcode(OpCode::SetGlobalArray1d);
                         writer.chunk.add_inline_operand(*var);
                     }
                     Offset::TwoD(i, j) => {
@@ -215,7 +233,23 @@ impl ChunkWrite for Statement {
             Statement::PrintNewline => {
                 writer.chunk.write_opcode(OpCode::PrintNewline);
             }
-            _ => unimplemented!(),
+            Statement::Alloc1d(lval, expr) => match lval {
+                LValue::ArrPtr(var, _) => {
+                    expr.write(writer)?;
+                    writer.chunk.write_opcode(OpCode::DefineDim1d);
+                    writer.chunk.add_inline_operand(*var);
+                }
+                _ => {}
+            },
+            Statement::Alloc2d(lval, m, n) => match lval {
+                LValue::ArrPtr(var, _) => {
+                    m.write(writer)?;
+                    n.write(writer)?;
+                    writer.chunk.write_opcode(OpCode::DefineDim2d);
+                    writer.chunk.add_inline_operand(*var);
+                }
+                _ => {}
+            },
         }
 
         Ok(())
@@ -251,7 +285,7 @@ impl ChunkWrite for Expr {
                 LValue::ArrPtr(var, offset) => match offset {
                     Offset::OneD(i) => {
                         i.write(writer)?;
-                        writer.chunk.write_opcode(OpCode::GetGlobalArray);
+                        writer.chunk.write_opcode(OpCode::GetGlobalArray1d);
                         writer.chunk.add_inline_operand(*var);
                     }
                     Offset::TwoD(i, j) => {

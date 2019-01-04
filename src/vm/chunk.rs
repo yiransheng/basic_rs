@@ -274,6 +274,15 @@ pub mod disassembler {
                         self.disassemble_function();
                         self.disassemble_function_id();
                     }
+                    Call => {
+                        self.disassemble_function_id();
+                        let _ = write!(&mut self.out, " args:");
+                        self.disassemble_count();
+                    }
+                    CallIndirect => {
+                        let _ = write!(&mut self.out, " args:");
+                        self.disassemble_count();
+                    }
 
                     DeclLocal => {
                         self.disassemble_count();
@@ -283,9 +292,11 @@ pub mod disassembler {
                         self.disassemble_local();
                     }
 
-                    GetGlobal | SetGlobal | GetGlobalArray | SetGlobalArray
-                    | GetGlobalArray2d | SetGlobalArray2d | InitArray
-                    | InitArray2d => self.disassemble_variable(),
+                    GetGlobal | SetGlobal | GetGlobalArray1d | DefineDim1d
+                    | DefineDim2d | SetGlobalArray1d | GetGlobalArray2d
+                    | SetGlobalArray2d | InitArray1d | InitArray2d => {
+                        self.disassemble_variable()
+                    }
 
                     PrintLabel => self.disassemble_label(),
                     _ => {}

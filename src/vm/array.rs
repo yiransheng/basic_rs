@@ -33,7 +33,6 @@ impl Subscript for [usize; 2] {
 pub enum Error {
     OutOfBound,
     RedefineDim,
-    WrongShape,
 }
 
 impl fmt::Display for Error {
@@ -47,7 +46,6 @@ impl error::Error for Error {
         match self {
             Error::OutOfBound => "Index out of bound",
             Error::RedefineDim => "Redefind list/table dimension",
-            Error::WrongShape => "Incorrect dimension",
         }
     }
 }

@@ -245,7 +245,7 @@ impl VM {
                 OpCode::PrintAdvance15 => {
                     printer.advance_to_multiple(15)?;
                 }
-                OpCode::InitArray => {
+                OpCode::InitArray1d => {
                     let var: Variable = self.read_inline_operand()?;
                     let arr = Array::new(DEFAULT_ARRAY_SIZE);
                     self.global_lists.insert(var, arr);
@@ -255,6 +255,40 @@ impl VM {
                     let arr =
                         Array::new([DEFAULT_ARRAY_SIZE, DEFAULT_ARRAY_SIZE]);
                     self.global_tables.insert(var, arr);
+                }
+                OpCode::DefineDim1d => {
+                    let var: Variable = self.read_inline_operand()?;
+                    let n: usize = match self.pop_number() {
+                        Ok(x) => x
+                            .to_usize()
+                            .ok_or_else(|| ExecError::IndexError(var, x))?,
+                        Err(e) => return Err(e),
+                    };
+                    let list = self
+                        .global_lists
+                        .get_mut(&var)
+                        .ok_or_else(|| ExecError::ListNotFound(var))?;
+                    list.set_bound(n)?;
+                }
+                OpCode::DefineDim2d => {
+                    let var: Variable = self.read_inline_operand()?;
+                    let m: usize = match self.pop_number() {
+                        Ok(x) => x
+                            .to_usize()
+                            .ok_or_else(|| ExecError::IndexError(var, x))?,
+                        Err(e) => return Err(e),
+                    };
+                    let n: usize = match self.pop_number() {
+                        Ok(x) => x
+                            .to_usize()
+                            .ok_or_else(|| ExecError::IndexError(var, x))?,
+                        Err(e) => return Err(e),
+                    };
+                    let table = self
+                        .global_tables
+                        .get_mut(&var)
+                        .ok_or_else(|| ExecError::TableNotFound(var))?;
+                    table.set_bound([m, n])?;
                 }
                 OpCode::Jump => {
                     let jump_point: JumpPoint = self.read_operand()?;
@@ -416,7 +450,7 @@ impl VM {
                     let value = self.pop_number()?;
                     self.globals.insert(var, value);
                 }
-                OpCode::GetGlobalArray => {
+                OpCode::GetGlobalArray1d => {
                     let var: Variable = self.read_inline_operand()?;
                     let i: usize = match self.pop_number() {
                         Ok(x) => x
@@ -431,7 +465,7 @@ impl VM {
                     let v = list.get(i)?;
                     self.push_value(v);
                 }
-                OpCode::SetGlobalArray => {
+                OpCode::SetGlobalArray1d => {
                     let var: Variable = self.read_inline_operand()?;
                     let i: usize = match self.pop_number() {
                         Ok(x) => x
