@@ -2,7 +2,7 @@ use crate::ast::{Visitor as AstVisitor, *};
 use either::Either;
 
 use super::error::CompileError;
-use crate::ir::Builder;
+use crate::ir::{Builder, Offset};
 
 pub struct GlobalDefPass<'a> {
     builder: &'a mut Builder,
@@ -96,10 +96,16 @@ impl<'a> AstVisitor<Result<(), CompileError>> for GlobalDefPass<'a> {
         for dim in &stmt.dims {
             match dim {
                 Either::Left(List { var, .. }) => {
-                    self.builder.define_array(*var);
+                    self.builder.define_array(*var, Offset::OneD(())).map_err(
+                        |_| CompileError::ArrayDimentionError("Table as list"),
+                    )?;
                 }
                 Either::Right(Table { var, .. }) => {
-                    self.builder.define_array(*var);
+                    self.builder
+                        .define_array(*var, Offset::TwoD((), ()))
+                        .map_err(|_| {
+                            CompileError::ArrayDimentionError("Table as list")
+                        })?;
                 }
             }
         }
@@ -132,15 +138,15 @@ impl<'a> AstVisitor<Result<(), CompileError>> for GlobalDefPass<'a> {
     }
 
     fn visit_list(&mut self, list: &List) -> Result<(), CompileError> {
-        self.builder.define_array(list.var);
-
-        Ok(())
+        self.builder
+            .define_array(list.var, Offset::OneD(()))
+            .map_err(|_| CompileError::ArrayDimentionError("Table as list"))
     }
 
     fn visit_table(&mut self, table: &Table) -> Result<(), CompileError> {
-        self.builder.define_array(table.var);
-
-        Ok(())
+        self.builder
+            .define_array(table.var, Offset::TwoD((), ()))
+            .map_err(|_| CompileError::ArrayDimentionError("List as table"))
     }
 
     fn visit_expr(&mut self, expr: &Expression) -> Result<(), CompileError> {

@@ -7,7 +7,7 @@ pub trait Subscript {
         Self: Sized;
 }
 
-impl Subscript for u8 {
+impl Subscript for usize {
     fn to_usize(self, arr: &Array<Self>) -> Option<usize> {
         if self < arr.bound {
             Some(self as usize)
@@ -17,7 +17,7 @@ impl Subscript for u8 {
     }
 }
 
-impl Subscript for [u8; 2] {
+impl Subscript for [usize; 2] {
     fn to_usize(self, arr: &Array<Self>) -> Option<usize> {
         let [m, n] = arr.bound;
         let [i, j] = self;
@@ -33,6 +33,7 @@ impl Subscript for [u8; 2] {
 pub enum Error {
     OutOfBound,
     RedefineDim,
+    WrongShape,
 }
 
 impl fmt::Display for Error {
@@ -46,6 +47,7 @@ impl error::Error for Error {
         match self {
             Error::OutOfBound => "Index out of bound",
             Error::RedefineDim => "Redefind list/table dimension",
+            Error::WrongShape => "Incorrect dimension",
         }
     }
 }
@@ -93,7 +95,6 @@ impl<I: Subscript> Array<I> {
         }
     }
 
-    #[inline]
     fn grow_to(&mut self, index: usize) {
         while self.values.len() <= index + 1 {
             self.values.push(0.0);

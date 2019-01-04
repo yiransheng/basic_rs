@@ -15,14 +15,14 @@ new_key_type! { pub struct FunctionName; }
 #[derive(Debug, Copy, Clone, Hash, Eq, PartialEq)]
 pub enum GlobalKind {
     Variable(ast::Variable),
-    ArrPtr(ast::Variable),
+    ArrPtr(ast::Variable, Offset<()>),
     FnPtr(ast::Func),
 }
 impl Into<ValueType> for GlobalKind {
     fn into(self) -> ValueType {
         match self {
             GlobalKind::Variable(_) => ValueType::F64,
-            GlobalKind::ArrPtr(_) => ValueType::ArrPtr,
+            GlobalKind::ArrPtr(..) => ValueType::ArrPtr,
             GlobalKind::FnPtr(_) => ValueType::FnPtr,
         }
     }
@@ -166,10 +166,10 @@ pub enum LValue {
     Local(usize),
 }
 
-#[derive(Debug, Clone)]
-pub enum Offset {
-    OneD(Expr),
-    TwoD(Expr, Expr),
+#[derive(Debug, Copy, Clone, Hash, Eq, PartialEq)]
+pub enum Offset<T = Expr> {
+    OneD(T),
+    TwoD(T, T),
 }
 
 #[derive(Debug, Clone)]
@@ -512,7 +512,7 @@ mod print {
         fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
             match self {
                 GlobalKind::Variable(var) => write!(f, "Var({})", var),
-                GlobalKind::ArrPtr(var) => write!(f, "Array({})", var),
+                GlobalKind::ArrPtr(var, _) => write!(f, "Array({})", var),
                 GlobalKind::FnPtr(var) => write!(f, "Function({})", var),
             }
         }

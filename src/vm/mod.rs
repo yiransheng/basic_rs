@@ -29,7 +29,7 @@ use self::array::{Array, Error as ArrayError};
 use self::print::{PrintError, Printer};
 use self::value::*;
 
-pub const DEFAULT_ARRAY_SIZE: u8 = 11;
+pub const DEFAULT_ARRAY_SIZE: usize = 11;
 
 #[derive(Debug)]
 pub struct CallFrame {
@@ -46,8 +46,8 @@ pub struct VM {
 
     globals: FxHashMap<Variable, Number>,
     functions: FxHashMap<Func, FuncId>,
-    global_lists: FxHashMap<Variable, Array<u8>>,
-    global_tables: FxHashMap<Variable, Array<[u8; 2]>>,
+    global_lists: FxHashMap<Variable, Array<usize>>,
+    global_tables: FxHashMap<Variable, Array<[usize; 2]>>,
 
     stack: VecDeque<Value>,
     call_stack: VecDeque<CallFrame>,
@@ -418,9 +418,9 @@ impl VM {
                 }
                 OpCode::GetGlobalArray => {
                     let var: Variable = self.read_inline_operand()?;
-                    let i: u8 = match self.pop_number() {
+                    let i: usize = match self.pop_number() {
                         Ok(x) => x
-                            .to_u8()
+                            .to_usize()
                             .ok_or_else(|| ExecError::IndexError(var, x))?,
                         Err(e) => return Err(e),
                     };
@@ -433,9 +433,9 @@ impl VM {
                 }
                 OpCode::SetGlobalArray => {
                     let var: Variable = self.read_inline_operand()?;
-                    let i: u8 = match self.pop_number() {
+                    let i: usize = match self.pop_number() {
                         Ok(x) => x
-                            .to_u8()
+                            .to_usize()
                             .ok_or_else(|| ExecError::IndexError(var, x))?,
                         Err(e) => return Err(e),
                     };
@@ -448,15 +448,15 @@ impl VM {
                 }
                 OpCode::GetGlobalArray2d => {
                     let var: Variable = self.read_inline_operand()?;
-                    let i: u8 = match self.pop_number() {
+                    let i: usize = match self.pop_number() {
                         Ok(x) => x
-                            .to_u8()
+                            .to_usize()
                             .ok_or_else(|| ExecError::IndexError(var, x))?,
                         Err(e) => return Err(e),
                     };
-                    let j: u8 = match self.pop_number() {
+                    let j: usize = match self.pop_number() {
                         Ok(x) => x
-                            .to_u8()
+                            .to_usize()
                             .ok_or_else(|| ExecError::IndexError(var, x))?,
                         Err(e) => return Err(e),
                     };
@@ -469,15 +469,15 @@ impl VM {
                 }
                 OpCode::SetGlobalArray2d => {
                     let var: Variable = self.read_inline_operand()?;
-                    let i: u8 = match self.pop_number() {
+                    let i: usize = match self.pop_number() {
                         Ok(x) => x
-                            .to_u8()
+                            .to_usize()
                             .ok_or_else(|| ExecError::IndexError(var, x))?,
                         Err(e) => return Err(e),
                     };
-                    let j: u8 = match self.pop_number() {
+                    let j: usize = match self.pop_number() {
                         Ok(x) => x
-                            .to_u8()
+                            .to_usize()
                             .ok_or_else(|| ExecError::IndexError(var, x))?,
                         Err(e) => return Err(e),
                     };

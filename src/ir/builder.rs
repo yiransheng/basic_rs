@@ -1,5 +1,5 @@
 use crate::ast;
-use rustc_hash::FxHashSet;
+use rustc_hash::{FxHashMap, FxHashSet};
 use slotmap::{SecondaryMap, SlotMap};
 
 use super::*;
@@ -9,7 +9,7 @@ pub struct Builder {
     functions: Vec<Function>,
     main: Option<FunctionName>,
     vars: FxHashSet<ast::Variable>,
-    arrs: FxHashSet<ast::Variable>,
+    arrs: FxHashMap<ast::Variable, Offset<()>>,
     fns: FxHashSet<ast::Func>,
     data: Vec<f64>,
     labels: String,
@@ -21,7 +21,7 @@ impl Builder {
             functions: vec![],
             main: None,
             vars: FxHashSet::default(),
-            arrs: FxHashSet::default(),
+            arrs: FxHashMap::default(),
             fns: FxHashSet::default(),
             data: vec![],
             labels: String::new(),
@@ -34,7 +34,11 @@ impl Builder {
             .map(|var| GlobalKind::Variable(*var))
             .collect();
 
-        globals.extend(self.arrs.iter().map(|var| GlobalKind::ArrPtr(*var)));
+        globals.extend(
+            self.arrs
+                .iter()
+                .map(|(var, dim)| GlobalKind::ArrPtr(*var, *dim)),
+        );
         globals.extend(self.fns.iter().map(|func| GlobalKind::FnPtr(*func)));
 
         self.data.reverse();
@@ -51,8 +55,18 @@ impl Builder {
     pub fn define_global(&mut self, var: ast::Variable) {
         self.vars.insert(var);
     }
-    pub fn define_array(&mut self, var: ast::Variable) {
-        self.arrs.insert(var);
+    pub fn define_array(
+        &mut self,
+        var: ast::Variable,
+        dim: Offset<()>,
+    ) -> Result<(), Offset<()>> {
+        if let Some(prev_dim) = self.arrs.insert(var, dim) {
+            if prev_dim != dim {
+                return Err(prev_dim);
+            }
+        }
+
+        Ok(())
     }
     pub fn define_function(&mut self, func: ast::Func) {
         self.fns.insert(func);

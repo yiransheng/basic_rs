@@ -7,6 +7,7 @@ use crate::ast::LineNo;
 #[derive(Debug)]
 pub enum CompileError {
     UnreachableCode(LineNo),
+    ArrayDimentionError(&'static str),
     Custom(&'static str),
     CfError(CfError),
 }
@@ -28,6 +29,7 @@ impl Error for CompileError {
     fn description(&self) -> &str {
         match self {
             CompileError::Custom(s) => s,
+            CompileError::ArrayDimentionError(_) => "Array dimension conflict",
             CompileError::UnreachableCode(_) => "Unreachable code",
             CompileError::CfError(_) => {
                 "Control flow graph failed to initialize"
