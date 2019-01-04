@@ -81,11 +81,15 @@ make_nanbox!{
         Number(f64),
         True(True),
         False(False),
-        Function(FuncId)
+        Function(FuncId),
+        Undefined(())
     }
 }
 
 impl Value {
+    pub fn undefined() -> Self {
+        Value::from(Variant::Undefined(()))
+    }
     pub fn true_value() -> Self {
         Value::from(Variant::True(True))
     }

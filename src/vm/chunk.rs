@@ -52,6 +52,11 @@ impl Into<[u8; 2]> for LocalVar {
         bytes
     }
 }
+impl Into<usize> for LocalVar {
+    fn into(self) -> usize {
+        self.0 as usize
+    }
+}
 
 impl InlineOperand for LocalVar {
     #[inline(always)]

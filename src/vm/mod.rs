@@ -35,6 +35,7 @@ pub const DEFAULT_ARRAY_SIZE: u8 = 11;
 pub struct CallFrame {
     depth: usize,
     ip: usize,
+    sp: usize,
     context: Option<FuncId>,
     locals: FxHashMap<Variable, Number>,
 }
@@ -136,6 +137,7 @@ impl VM {
         let call_frame = CallFrame {
             depth: 0,
             ip: 0,
+            sp: 0,
             context: None,
             locals: FxHashMap::default(),
         };
@@ -225,12 +227,6 @@ impl VM {
                 .ok_or_else(|| ExecError::DecodeError(byte))?;
             match instr {
                 OpCode::Stop => return Ok(()),
-                OpCode::PrintStart => {
-                    printer.write_start();
-                }
-                OpCode::PrintEnd => {
-                    printer.write_end();
-                }
                 OpCode::PrintExpr => {
                     let value = self.pop_number()?;
                     printer.write_num(value)?;
@@ -289,17 +285,20 @@ impl VM {
                     let value: f64 = self.read_operand()?;
                     self.push_value(value);
                 }
-                OpCode::FnConstant => {
+                OpCode::Read => {
+                    let value = self.read_number()?;
+                    self.push_value(value);
+                }
+                OpCode::BindFunc => {
+                    let func: Func = self.read_inline_operand()?;
                     let func_id: FuncId = self.read_inline_operand()?;
+                    self.functions.insert(func, func_id);
+                }
+                OpCode::GetFunc => {
+                    let fname: Func = self.read_inline_operand()?;
+                    // TODO: error handling
+                    let func_id = self.functions.get(&fname).cloned().unwrap();
                     self.push_value(func_id);
-                }
-                OpCode::Pop => {
-                    let _ = self.pop_value();
-                }
-                OpCode::Dup => {
-                    if let Some(value) = self.peek(0) {
-                        self.push_value(value);
-                    }
                 }
                 OpCode::CallNative => {
                     let func: Func = self.read_inline_operand()?;
@@ -373,80 +372,20 @@ impl VM {
                 }
 
                 OpCode::GetLocal => {
-                    let var: Variable = self.read_inline_operand()?;
-                    let frame = self.current_frame();
+                    let var: LocalVar = self.read_inline_operand()?;
+                    let v: Variant = self.get_local(var)?;
 
-                    let x =
-                        frame.locals.get(&var).cloned().ok_or_else(|| {
-                            ExecError::ValueError("Value not found")
-                        })?;
-
-                    self.push_value(x);
+                    match v {
+                        Variant::Number(x) => {
+                            self.push_value(x);
+                        }
+                        _ => return Err(ExecError::TypeError("not a number")),
+                    }
                 }
                 OpCode::SetLocal => {
                     let x = self.pop_number()?;
-                    let var: Variable = self.read_inline_operand()?;
-                    let frame = self.current_frame_mut();
-
-                    frame.locals.insert(var, x);
-                }
-                OpCode::GetFunc => {
-                    let fname: Func = self.read_inline_operand()?;
-                    // TODO: error handling
-                    let func_id = self.functions.get(&fname).cloned().unwrap();
-                    self.push_value(func_id);
-                }
-                OpCode::SetFunc => {
-                    let fname: Func = self.read_inline_operand()?;
-                    // TODO: error handling
-                    let value = self.pop_value()?;
-                    match value {
-                        Variant::Function(func_id) => {
-                            self.functions.insert(fname, func_id);
-                        }
-                        _ => return Err(ExecError::TypeError("not a function")),
-                    }
-                }
-                OpCode::ReadGlobal => {
-                    let var: Variable = self.read_inline_operand()?;
-                    let value = self.read_number()?;
-                    self.globals.insert(var, value);
-                }
-                OpCode::ReadGlobalArray => {
-                    let var: Variable = self.read_inline_operand()?;
-                    let i: u8 = match self.pop_number() {
-                        Ok(x) => x
-                            .to_u8()
-                            .ok_or_else(|| ExecError::IndexError(var, x))?,
-                        Err(e) => return Err(e),
-                    };
-                    let v = self.read_number()?;
-                    let list = self
-                        .global_lists
-                        .get_mut(&var)
-                        .ok_or_else(|| ExecError::ListNotFound(var))?;
-                    list.set(i, v)?;
-                }
-                OpCode::ReadGlobalArray2d => {
-                    let var: Variable = self.read_inline_operand()?;
-                    let i: u8 = match self.pop_number() {
-                        Ok(x) => x
-                            .to_u8()
-                            .ok_or_else(|| ExecError::IndexError(var, x))?,
-                        Err(e) => return Err(e),
-                    };
-                    let j: u8 = match self.pop_number() {
-                        Ok(x) => x
-                            .to_u8()
-                            .ok_or_else(|| ExecError::IndexError(var, x))?,
-                        Err(e) => return Err(e),
-                    };
-                    let v = self.read_number()?;
-                    let table = self
-                        .global_tables
-                        .get_mut(&var)
-                        .ok_or_else(|| ExecError::TableNotFound(var))?;
-                    table.set([i, j], v)?;
+                    let var: LocalVar = self.read_inline_operand()?;
+                    self.set_local(var, Variant::Number(x))?;
                 }
                 OpCode::GetGlobal => {
                     let var: Variable = self.read_inline_operand()?;
@@ -592,6 +531,10 @@ impl VM {
                     let value = self.binary_op(|a, b| Ok(a / b))?;
                     self.push_value(value);
                 }
+                OpCode::CopySign => {
+                    let value = self.binary_op(|a, b| Ok(a * b.signum()))?;
+                    self.push_value(value);
+                }
                 OpCode::Equal => {
                     let value = self.binary_op(|a, b| {
                         Ok(if (a - b).abs() < f64::EPSILON {
@@ -622,22 +565,6 @@ impl VM {
                     })?;
                     self.push_value(value);
                 }
-                OpCode::LoopTest => {
-                    let current = self.pop_number()?;
-                    let step = self.peek_number(0)?;
-                    let target = self.peek_number(1)?;
-
-                    if (step > 0.0 && current > target)
-                        || (step < 0.0 && current < target)
-                    {
-                        let _ = self.pop_value();
-                        let _ = self.pop_value();
-                        self.push_value(Value::true_value());
-                    } else {
-                        self.push_value(Value::false_value());
-                    }
-                }
-                _ => unimplemented!(),
             }
         }
     }
@@ -705,6 +632,32 @@ impl VM {
         *self.get_ip() += 2;
 
         Ok(o)
+    }
+
+    fn get_local<V: From<Value>>(
+        &self,
+        index: LocalVar,
+    ) -> Result<V, ExecError> {
+        let index = self.current_frame().sp + index.into();
+        if let Some(v) = self.stack.get(index) {
+            Ok(V::from(*v))
+        } else {
+            Err(ExecError::EmptyStack)
+        }
+    }
+
+    fn set_local<V: Into<Value>>(
+        &mut self,
+        index: LocalVar,
+        v: V,
+    ) -> Result<(), ExecError> {
+        let index = self.current_frame().sp + index.into();
+        if let Some(vref) = self.stack.get_mut(index) {
+            *vref = v.into();
+            Ok(())
+        } else {
+            Err(ExecError::EmptyStack)
+        }
     }
 
     fn push_value<V: Into<Value>>(&mut self, v: V) {

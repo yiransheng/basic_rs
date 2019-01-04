@@ -15,6 +15,7 @@ pub enum OpCode {
 
     Pop,
     Read,
+    Rand,
 
     GetFunc,
     BindFunc,
@@ -45,6 +46,7 @@ pub enum OpCode {
     Mul,
     Div,
     Pow,
+    CopySign,
 
     Equal,
     Less,
@@ -72,6 +74,7 @@ impl OpCode {
             Stop => "stop",
 
             Read => "read",
+            Rand => "rand",
 
             Pop => "pop",
             SetFunc => "set.fn",

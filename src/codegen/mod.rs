@@ -222,15 +222,15 @@ impl ChunkWrite for Statement {
 impl ChunkWrite for Expr {
     fn write(&self, writer: &mut ChunkWriter) -> Result<(), WriteError> {
         match self {
-            Expr::ReadData => unimplemented!(),
+            Expr::ReadData => {
+                writer.chunk.write_opcode(OpCode::Read);
+            }
             Expr::Const(n) => {
                 writer.chunk.write_opcode(OpCode::Constant);
                 writer.chunk.add_operand(*n);
             }
             Expr::RandF64 => {
-                // TODO: add OpCode for random instead of call native
-                writer.chunk.write_opcode(OpCode::CallNative);
-                writer.chunk.add_inline_operand(Func::Rnd);
+                writer.chunk.write_opcode(OpCode::Rand);
             }
             Expr::Get(lval) => match lval.deref() {
                 LValue::Global(var) => {
