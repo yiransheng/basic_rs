@@ -286,6 +286,10 @@ pub mod disassembler {
                         self.disassemble_function_id();
                     }
 
+                    DeclLocal => {
+                        self.disassemble_count();
+                    }
+
                     GetLocal | SetLocal => {
                         self.disassemble_local();
                     }
@@ -307,6 +311,13 @@ pub mod disassembler {
             let n: f64 = self.get_operand();
             let _ = write!(&mut self.out, " {}", n);
         }
+
+        fn disassemble_count(&mut self) {
+            let n = self.chunk.read_byte(self.ip);
+            let _ = write!(&mut self.out, " {}", n);
+            self.ip += 1;
+        }
+
         fn disassemble_address(&mut self) {
             let p: JumpPoint = self.get_operand();
             let _ = write!(&mut self.out, " {}", p.0);
@@ -354,20 +365,9 @@ pub mod disassembler {
                 return None;
             }
 
-            let line = self.chunk.line_no(self.ip);
             let byte = self.chunk.code[self.ip];
 
-            let _ = if self.line == line {
-                #[allow(clippy::write_literal)]
-                write!(&mut self.out, "{} {:04}", " |   ", self.ip)
-            } else {
-                // line number info lost at IR level (it used to be supported)
-                // keep this code here in case it's ever brought back
-                // self.line = line;
-                // write!(&mut self.out, "{:<5} {:04}", line, self.ip)
-                #[allow(clippy::write_literal)]
-                write!(&mut self.out, "{} {:04}", " |   ", self.ip)
-            };
+            let _ = write!(&mut self.out, "{:04}", self.ip);
 
             self.ip += 1;
 

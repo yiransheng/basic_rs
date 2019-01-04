@@ -61,10 +61,10 @@ impl OpCode {
         match self {
             Constant => "const",
             Return => "ret",
+            ReturnValue => "ret.val",
             Jump => "jmp",
             JumpTrue => "jmp.t",
             JumpFalse => "jmp.f",
-            Subroutine => "sub",
             CallNative => "call.na",
             CallIndirect => "call_",
             Call => "call",
@@ -73,8 +73,7 @@ impl OpCode {
             Read => "read",
             Rand => "rand",
 
-            Pop => "pop",
-            SetFunc => "set.fn",
+            GetFunc => "get.fn",
             BindFunc => "bind.fn",
             GetGlobal => "get.var",
             SetGlobal => "set.var",
@@ -96,7 +95,6 @@ impl OpCode {
             PrintAdvance15 => "prt,",
             PrintNewline => "prt\\n",
 
-            Dup => "dup",
             Negate => "neg",
             Not => "not",
             Add => "add",

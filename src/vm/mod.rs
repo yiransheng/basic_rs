@@ -323,6 +323,9 @@ impl VM {
                 }
                 OpCode::Return => {
                     let frame = self.call_stack.pop_back().unwrap();
+                    if frame.func.is_none() {
+                        return Ok(());
+                    }
                     while self.stack.len() > frame.sp {
                         self.stack.pop_back();
                     }
@@ -379,7 +382,6 @@ impl VM {
                     self.call_stack.push_back(new_frame);
                 }
                 OpCode::DeclLocal => {
-                    let var: LocalVar = self.read_inline_operand()?;
                     let n = self.read_byte()?;
                     for _ in 0..n {
                         self.push_value(Undefined);
@@ -552,6 +554,15 @@ impl VM {
                     self.push_value(value);
                 }
             }
+            // print!("{:?}   ", instr);
+            // for v in self.stack.iter() {
+            // let v = Variant::from(v.clone());
+            // match v {
+            // Variant::Number(n) => print!("{}, ", n),
+            // _ => print!("_, "),
+            // }
+            // }
+            // println!();
         }
     }
 

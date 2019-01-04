@@ -76,11 +76,12 @@ impl<W: Write> Printer<W> {
 
         let w = UnicodeWidthStr::width(s);
         self.col += w;
+        write!(self.out, "{}", s)?;
 
         Ok(())
     }
     pub fn writeln(&mut self) -> Result<(), PrintError> {
-        write!(self.out, " ")?;
+        writeln!(self.out)?;
         self.col = 0;
 
         Ok(())
