@@ -160,10 +160,6 @@ impl Builder {
     }
 
     pub fn add_branch(&mut self, func: FunctionName, from: Label, to: Label) {
-        if from == to {
-            return;
-        }
-
         if let Some(block) = self
             .get_function_mut(func)
             .and_then(|func| func.blocks.get_mut(from))

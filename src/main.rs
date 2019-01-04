@@ -8,7 +8,6 @@ use rand::FromEntropy;
 use structopt::StructOpt;
 
 mod ast;
-// mod compiler;
 mod compile;
 // mod error_print;
 mod codegen;
@@ -17,8 +16,8 @@ mod parser;
 mod scanner;
 mod vm;
 
-// #[cfg(test)]
-// mod tests;
+#[cfg(test)]
+mod tests;
 
 use crate::codegen::codegen;
 use crate::compile::compile;
