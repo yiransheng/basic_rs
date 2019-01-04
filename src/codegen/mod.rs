@@ -12,6 +12,7 @@ pub struct WriteError(pub &'static str);
 struct ChunkWriter<'a> {
     func_map: &'a SecondaryMap<FunctionName, FuncId>,
     chunk: &'a mut Chunk,
+    strings: &'a str,
 
     jp_label_map: SecondaryMap<Label, JumpPoint>,
     jp_indices: Vec<(u16, Label)>,
@@ -20,6 +21,10 @@ struct ChunkWriter<'a> {
 impl<'a> ChunkWriter<'a> {
     fn mark_jump_point(&mut self, label: Label) {
         self.jp_label_map.insert(label, JumpPoint(self.chunk.len()));
+    }
+    fn get_string_label(&self, offset: usize, len: usize) -> &str {
+        ::std::str::from_utf8(&self.strings.as_bytes()[offset..offset + len])
+            .unwrap()
     }
 }
 
@@ -47,6 +52,7 @@ pub fn codegen(
         let id = func_map.get(function.name).cloned().unwrap();
         let mut writer = ChunkWriter {
             func_map: &func_map,
+            strings: &ir.labels,
             chunk: &mut chunk,
             jp_label_map: SecondaryMap::new(),
             jp_indices: vec![],
@@ -173,12 +179,11 @@ impl ChunkWrite for Statement {
             },
             Statement::DefFn(lval, fname) => match lval {
                 LValue::FnPtr(func) => {
-                    writer.chunk.write_opcode(OpCode::FnConstant);
+                    writer.chunk.write_opcode(OpCode::BindFunc);
+                    writer.chunk.add_inline_operand(*func);
                     writer.chunk.add_inline_operand(
                         writer.func_map.get(*fname).cloned().unwrap(),
                     );
-                    writer.chunk.write_opcode(OpCode::SetFunc);
-                    writer.chunk.add_inline_operand(*func);
                 }
                 _ => {}
             },
@@ -192,10 +197,21 @@ impl ChunkWrite for Statement {
                 expr.write(writer)?;
                 writer.chunk.write_opcode(OpCode::PrintExpr);
             }
-            Statement::PrintLabel(..) => {}
-            Statement::PrintAdvance15 => {}
-            Statement::PrintAdvance3 => {}
-            Statement::PrintNewline => {}
+            Statement::PrintLabel(offset, len) => {
+                writer.chunk.write_opcode(OpCode::PrintLabel);
+                writer.chunk.add_operand(
+                    writer.get_string_label(*offset, *len).to_owned(),
+                );
+            }
+            Statement::PrintAdvance15 => {
+                writer.chunk.write_opcode(OpCode::PrintAdvance15);
+            }
+            Statement::PrintAdvance3 => {
+                writer.chunk.write_opcode(OpCode::PrintAdvance3);
+            }
+            Statement::PrintNewline => {
+                writer.chunk.write_opcode(OpCode::PrintNewline);
+            }
             _ => unimplemented!(),
         }
 

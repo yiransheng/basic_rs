@@ -3,7 +3,6 @@ use num_derive::{FromPrimitive, ToPrimitive};
 #[derive(Debug, Copy, Clone, Eq, PartialEq, FromPrimitive, ToPrimitive)]
 pub enum OpCode {
     Constant = 0x00,
-    FnConstant,
     Return,
     Jump,
     JumpTrue,
@@ -15,12 +14,10 @@ pub enum OpCode {
     Stop,
 
     Pop,
-    ReadGlobal,
-    ReadGlobalArray,
-    ReadGlobalArray2d,
+    Read,
 
-    SetFunc,
     GetFunc,
+    BindFunc,
     GetGlobal,
     SetGlobal,
     GetGlobalArray,
@@ -33,15 +30,12 @@ pub enum OpCode {
 
     InitArray,
     InitArray2d,
-    SetArrayBound,
-    SetArrayBound2d,
 
-    PrintStart,
     PrintExpr,
     PrintLabel,
     PrintAdvance3,
     PrintAdvance15,
-    PrintEnd,
+    PrintNewline,
 
     Dup,
     Negate,
@@ -67,7 +61,6 @@ impl OpCode {
 
         match self {
             Constant => "const",
-            FnConstant => "fn",
             Return => "ret",
             Jump => "jmp",
             JumpTrue => "jmp.t",
@@ -78,13 +71,11 @@ impl OpCode {
             Call => "call",
             Stop => "stop",
 
-            ReadGlobal => "read.var",
-            ReadGlobalArray => "read.arr",
-            ReadGlobalArray2d => "read.mat",
+            Read => "read",
 
             Pop => "pop",
             SetFunc => "set.fn",
-            GetFunc => "get.fn",
+            BindFunc => "bind.fn",
             GetGlobal => "get.var",
             SetGlobal => "set.var",
             GetGlobalArray => "get.arr",
@@ -97,15 +88,12 @@ impl OpCode {
 
             InitArray => "init.arr",
             InitArray2d => "init.mat",
-            SetArrayBound => "set.len",
-            SetArrayBound2d => "set.dim",
 
-            PrintStart => "prt",
             PrintExpr => "prt.expr",
             PrintLabel => "prt.lab",
             PrintAdvance3 => "prt;",
             PrintAdvance15 => "prt,",
-            PrintEnd => "prt.end",
+            PrintNewline => "prt\\n",
 
             Dup => "dup",
             Negate => "neg",
@@ -115,12 +103,11 @@ impl OpCode {
             Mul => "mul",
             Div => "div",
             Pow => "pow",
+            CopySign => "copysign",
 
             Equal => "eq",
             Less => "lt",
             Greater => "gt",
-
-            LoopTest => "loop.test",
 
             Noop => "noop",
         }
