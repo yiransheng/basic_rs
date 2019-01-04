@@ -5,20 +5,105 @@ use crate::ast::Func;
 use crate::ir::*;
 use crate::vm::{Chunk, FuncId, JumpPoint, LocalVar, OpCode};
 
-struct CodeGen<'a> {
-    chunk: &'a mut Chunk,
-    ir: &'a Program,
+#[derive(Debug, Copy, Clone)]
+struct WriteError(pub &'static str);
+
+struct ChunkWriter {
+    chunk: Chunk,
 
     jp_label_map: SecondaryMap<Label, JumpPoint>,
     func_map: SecondaryMap<FunctionName, FuncId>,
     jp_indices: Vec<(u16, Label)>,
 }
 
-#[derive(Debug, Copy, Clone)]
-struct WriteError(pub &'static str);
+impl ChunkWriter {
+    fn mark_jump_point(&mut self, label: Label) {
+        self.jp_label_map.insert(label, JumpPoint(self.chunk.len()));
+    }
+}
 
 trait ChunkWrite {
     fn write(&self, writer: &mut ChunkWriter) -> Result<(), WriteError>;
+}
+
+impl ChunkWrite for Function {
+    fn write(&self, writer: &mut ChunkWriter) -> Result<(), WriteError> {
+        let block_pairs = self
+            .iter()
+            .zip(self.iter().skip(1).map(Option::Some).chain(Some(None)));
+
+        for (current_block, next_block) in block_pairs {
+            let current_label = current_block.label;
+            let next_label = next_block.map(|b| b.label);
+
+            writer.mark_jump_point(current_label);
+            current_block.write(writer)?;
+
+            write_block_exit(&current_block.exit, next_label, writer)?;
+        }
+
+        for (index, label) in &writer.jp_indices {
+            let jp = writer
+                .jp_label_map
+                .get(*label)
+                .cloned()
+                .ok_or_else(|| WriteError("Jumps to nowhere"))?;
+
+            writer.chunk.set_operand(*index, jp);
+        }
+
+        Ok(())
+    }
+}
+
+fn write_block_exit(
+    exit: &BlockExit,
+    next_label: Option<Label>,
+    writer: &mut ChunkWriter,
+) -> Result<(), WriteError> {
+    match exit {
+        BlockExit::Jump(label) if Some(*label) == next_label => {}
+        BlockExit::Jump(label) => {
+            writer.chunk.write_opcode(OpCode::Jump);
+            let jp = JumpPoint(0);
+            let index = writer.chunk.add_operand(jp);
+            writer.jp_indices.push((index, *label));
+        }
+        BlockExit::Return(None) => {
+            writer.chunk.write_opcode(OpCode::Return);
+        }
+        BlockExit::Return(Some(expr)) => {
+            expr.write(writer)?;
+            writer.chunk.write_opcode(OpCode::Return);
+        }
+        BlockExit::Switch(cond, true_br, None) => {
+            cond.write(writer)?;
+            writer.chunk.write_opcode(OpCode::JumpTrue);
+            let jp = JumpPoint(0);
+            let index = writer.chunk.add_operand(jp);
+            writer.jp_indices.push((index, *true_br));
+        }
+        BlockExit::Switch(cond, true_br, Some(false_br)) => {
+            cond.write(writer)?;
+            writer.chunk.write_opcode(OpCode::JumpTrue);
+            let jp = JumpPoint(0);
+            let index = writer.chunk.add_operand(jp);
+            writer.jp_indices.push((index, *true_br));
+
+            write_block_exit(&BlockExit::Jump(*false_br), next_label, writer)?;
+        }
+    }
+
+    Ok(())
+}
+
+impl ChunkWrite for BasicBlock {
+    fn write(&self, writer: &mut ChunkWriter) -> Result<(), WriteError> {
+        for stmt in &self.statements {
+            stmt.write(writer)?;
+        }
+        Ok(())
+    }
 }
 
 impl ChunkWrite for Statement {
@@ -204,24 +289,5 @@ impl ChunkWrite for Expr {
             }
         }
         Ok(())
-    }
-}
-
-struct ChunkWriter {
-    chunk: Chunk,
-
-    jp_label_map: SecondaryMap<Label, JumpPoint>,
-    func_map: SecondaryMap<FunctionName, FuncId>,
-    jp_indices: Vec<(u16, Label)>,
-}
-
-impl<'a> CodeGen<'a> {
-    fn write_statement(&mut self, stmt: &Statement) {}
-
-    fn write_expr(&mut self, expr: &Expr) {}
-
-    fn mark_jump_point(&mut self, label: Label) {
-        let codelen = self.chunk.len();
-        self.jp_label_map.insert(label, JumpPoint(codelen));
     }
 }
