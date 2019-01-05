@@ -185,6 +185,7 @@ impl TraverseLValue for Statement {
             Statement::Assign(ref mut lval, ref mut expr) => {
                 lval.traverse(f.clone()).or_else(|| expr.traverse(f))
             }
+            Statement::Input(ref mut lval) => lval.traverse(f),
             Statement::DefFn(ref mut lval, _) => lval.traverse(f),
             Statement::Alloc1d(ref mut lval, ref mut expr) => {
                 lval.traverse(f.clone()).or_else(|| expr.traverse(f))

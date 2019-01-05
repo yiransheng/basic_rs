@@ -208,7 +208,34 @@ impl ChunkWrite for BasicBlock {
 impl ChunkWrite for Statement {
     fn write(&self, writer: &mut ChunkWriter) -> Result<(), WriteError> {
         match self {
-            Statement::Input(lval) => unimplemented!(),
+            Statement::Input(lval) => match lval {
+                LValue::Global(var) => {
+                    writer.write_opcode(OpCode::Input);
+                    writer.write_opcode(OpCode::SetGlobal);
+                    writer.add_inline_operand(*var);
+                }
+                LValue::Local(index) => {
+                    writer.write_opcode(OpCode::Input);
+                    writer.write_opcode(OpCode::SetLocal);
+                    writer.add_inline_operand(LocalVar::from(*index));
+                }
+                LValue::FnPtr(_) => return Err(WriteError("Type error")),
+                LValue::ArrPtr(var, offset) => match offset {
+                    Offset::OneD(i) => {
+                        writer.write_opcode(OpCode::Input);
+                        i.write(writer)?;
+                        writer.write_opcode(OpCode::SetGlobalArray1d);
+                        writer.add_inline_operand(*var);
+                    }
+                    Offset::TwoD(i, j) => {
+                        writer.write_opcode(OpCode::Input);
+                        i.write(writer)?;
+                        j.write(writer)?;
+                        writer.write_opcode(OpCode::SetGlobalArray2d);
+                        writer.add_inline_operand(*var);
+                    }
+                },
+            },
             Statement::Assign(lval, expr) => match lval {
                 LValue::Global(var) => {
                     expr.write(writer)?;
