@@ -142,7 +142,7 @@ A simple BASIC program using `RND` to estimate PI via Monte Carlo method is used
 Here are the results:
 
 ```
-interpreter:pi.bas      time:   [491.20 us 491.86 us 492.80 us]                         
+interpreter:pi.bas      time:   [388.12 us 389.08 us 390.18 us]                        
 
 extern:pi.py            time:   [202.06 us 203.38 us 205.06 us]                         
 
@@ -153,4 +153,4 @@ rust:pi                 time:   [296.27 ps 296.78 ps 297.42 ps]
 
 
 
-It is only 2.5 times slower than `python`. Nodejs is four magnitude (10000 times compared to python) faster, and `rust` (with `target-cpu = "native"`) is pretty much on a different level. There are some minor penalties to node and python versions due to communicating via stdin/stdout. However, the pattern still holds if iteration is increased from 1000 to 1000_000 and without IO barrier.
+It is only 2 times slower than `python`. Nodejs is four magnitude (10000 times compared to python) faster, and `rust` (with `target-cpu = "native"`) is pretty much on a different level. There are some minor penalties to node and python versions due to communicating via stdin/stdout. However, the pattern still holds if iteration is increased from 1000 to 1000_000 and without IO barrier.

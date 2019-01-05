@@ -608,12 +608,7 @@ impl VM {
         self.call_stack.back().unwrap()
     }
 
-    #[inline]
-    fn current_frame_mut(&mut self) -> &mut CallFrame {
-        self.call_stack.back_mut().unwrap()
-    }
-
-    #[inline]
+    #[inline(always)]
     fn current_chunk(&mut self) -> Result<&mut Chunk, ExecError> {
         let frame = self.call_stack.back().unwrap();
 
@@ -626,12 +621,13 @@ impl VM {
         }
     }
 
-    #[inline]
+    #[inline(always)]
     fn get_ip(&mut self) -> &mut usize {
         let frame = self.call_stack.back_mut().unwrap();
         &mut frame.ip
     }
 
+    #[inline(always)]
     fn read_byte(&mut self) -> Result<u8, ExecError> {
         let ip = *self.get_ip();
         let chunk = self.current_chunk()?;
@@ -641,6 +637,8 @@ impl VM {
 
         Ok(byte)
     }
+
+    #[inline(always)]
     fn read_operand<T: Operand>(&mut self) -> Result<T, ExecError> {
         let ip = *self.get_ip();
         let chunk = self.current_chunk()?;
@@ -649,6 +647,8 @@ impl VM {
 
         Ok(o)
     }
+
+    #[inline(always)]
     fn read_operand_ref<T: Operand>(&mut self) -> Result<&T, ExecError> {
         let ip = *self.get_ip();
         *self.get_ip() += 2;
@@ -657,6 +657,8 @@ impl VM {
 
         Ok(o)
     }
+
+    #[inline(always)]
     fn read_inline_operand<T: InlineOperand>(
         &mut self,
     ) -> Result<T, ExecError> {
