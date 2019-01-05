@@ -24,7 +24,7 @@ impl<'a> NonLoopPass<'a> {
             cf_ctx,
             builder,
             line_index: 0,
-            line_no: 0,
+            line_no: LineNo::default(),
             main: None,
         }
     }

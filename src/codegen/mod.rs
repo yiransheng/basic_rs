@@ -45,16 +45,16 @@ impl<'a> ChunkWriter<'a> {
         self.line_no = line_no;
     }
     fn write_opcode(&mut self, opcode: OpCode) {
-        self.chunk.write_opcode(opcode, self.line_no);
+        self.chunk.write_opcode(opcode, self.line_no.into());
     }
     fn write(&mut self, byte: u8) {
-        self.chunk.write(byte, self.line_no);
+        self.chunk.write(byte, self.line_no.into());
     }
     fn add_operand<O: Operand>(&mut self, o: O) -> u16 {
-        self.chunk.add_operand(o, self.line_no)
+        self.chunk.add_operand(o, self.line_no.into())
     }
     fn add_inline_operand<O: InlineOperand>(&mut self, o: O) {
-        self.chunk.add_inline_operand(o, self.line_no)
+        self.chunk.add_inline_operand(o, self.line_no.into())
     }
     fn get_string_label(&self, offset: usize, len: usize) -> &str {
         ::std::str::from_utf8(&self.strings.as_bytes()[offset..offset + len])
