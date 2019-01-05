@@ -57,6 +57,7 @@ fn test_sample_programs() {
         "bas/let.bas",
         "bas/rem.bas",
         "bas/read.bas",
+        "bas/const_if.bas",
         "bas/for.bas",
         "bas/bad_for.bas",
         "bas/def.bas",
