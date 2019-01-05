@@ -6,6 +6,8 @@ mod display;
 mod token;
 mod visitor;
 
+use std::fmt;
+
 pub use self::token::*;
 pub use self::variable::*;
 pub use self::visitor::Visitor;
@@ -13,7 +15,20 @@ pub use self::visitor::Visitor;
 pub use self::function::Func;
 
 pub type Number = f64;
-pub type LineNo = usize;
+
+#[derive(Debug, Copy, Clone, Default, Hash, Eq, PartialEq, Ord, PartialOrd)]
+pub struct LineNo(pub usize);
+
+impl Into<usize> for LineNo {
+    fn into(self) -> usize {
+        self.0
+    }
+}
+impl fmt::Display for LineNo {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        self.0.fmt(f)
+    }
+}
 
 use crate::scanner::SourceLoc;
 use either::Either;

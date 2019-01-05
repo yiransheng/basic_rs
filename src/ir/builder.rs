@@ -20,7 +20,7 @@ impl Builder {
     pub fn new() -> Self {
         Builder {
             functions: vec![],
-            current_line: 0,
+            current_line: ast::LineNo::default(),
             main: None,
             vars: FxHashSet::default(),
             arrs: FxHashMap::default(),

@@ -557,7 +557,7 @@ impl<'a> Parser<'a> {
 
         self.advance()?;
 
-        Ok(n as usize)
+        Ok(LineNo(n as usize))
     }
 
     fn list_of<T, F>(&mut self, f: F) -> Result<Vec<T>, Error>
