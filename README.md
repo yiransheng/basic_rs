@@ -14,11 +14,15 @@ Matches first version of [Dartmouth Basic](https://en.wikipedia.org/wiki/Dartmou
 * [**Update**] Has an additional crate `basic2wasm` to compile BASIC programs to WebAssembly!
   * Still hacky and buggy, but it is able to compile  [Game of Life](http://nbviewer.jupyter.org/github/norvig/pytudes/blob/master/ipynb/BASIC.ipynb), see it running [here](http://subdued-afternoon.surge.sh/)
 * No input support other than `DATA` statements in source program
+  * [**Update**] Added `INPUT` statement support in #28
+  * Not sure what the official syntax for `INPUT` is,  but statements like `10 INPUT "Prompt" X, Y` works fine
+  * This makes at least some vintage BASIC using only number inputs playable
 * No string / boolean value types, only value type is `f64`
 * Variable names restricted to `[A-Z]\d?` 
 * Function names restricted to `FN[A-Z]`
 * List and table dimension restrictions
-* Otherwise supports all 15 types of statements: `LET`, `READ`, `DATA`, `PRINT`, `GOTO`, `IF`, `FOR`, `NEXT`, `END`, `STOP`, `DEF`, `GOSUB`, `RETURN`, `DIM` and `REM`
+  * [**Update**] Restriction since has been removed
+* Otherwise supports all 15 types of statements: `LET`, `READ`, `DATA`, `PRINT`, `GOTO`, `IF`, `FOR`, `NEXT`, `END`, `STOP`, `DEF`, `GOSUB`, `RETURN`, `DIM` and `REM`, in addition, added `INPUT`
 
 
 
