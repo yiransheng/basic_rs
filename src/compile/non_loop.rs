@@ -145,7 +145,7 @@ impl<'a> AstVisitor<Result<(), CompileError>> for NonLoopPass<'a> {
         let mut expr_compiler = ExprCompiler::new();
         let lval = expr_compiler.lvalue(&stmt.var)?;
 
-        self.add_statement(IRStatement::Input(lval))?;
+        self.add_statement(IRStatement::Assign(lval, Expr::Input))?;
 
         self.add_basic_block_branch()
     }

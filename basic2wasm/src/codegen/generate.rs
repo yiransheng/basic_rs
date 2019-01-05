@@ -284,6 +284,7 @@ impl CodeGen {
         use std::ops::Deref;
 
         match expr {
+            IRExpr::Input => unimplemented!(),
             IRExpr::RandF64 => self.module.call("rand", None, Ty::F64),
             IRExpr::ReadData => self.module.call("read", None, Ty::F64),
             IRExpr::Const(v) => self.module.const_(Literal::F64(*v)),
@@ -336,14 +337,13 @@ impl CodeGen {
                         }
                     }
                 }
-                _ => unimplemented!(),
+                LValue::FnPtr(..) => unimplemented!(),
             },
-            _ => unimplemented!(),
+            IRExpr::Call(..) => unimplemented!(),
         }
     }
     fn statement(&self, stmt: &Statement) -> Expr {
         match stmt {
-            Statement::Input(_) => unimplemented!(),
             Statement::Assign(lval, expr) => match lval {
                 LValue::Global(var) => {
                     self.module.set_global(var.to_string(), self.expr(expr))

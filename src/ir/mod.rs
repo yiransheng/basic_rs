@@ -179,6 +179,7 @@ pub enum Offset<T = Expr> {
 pub enum Expr {
     RandF64,
     ReadData,
+    Input,
     Const(f64),
     Get(Box<LValue>),
     Binary(BinaryOp, Box<Expr>, Box<Expr>),
@@ -280,7 +281,6 @@ impl Expr {
 #[derive(Debug)]
 pub enum Statement {
     Assign(LValue, Expr),
-    Input(LValue),
     DefFn(LValue, FunctionName),
     CallSub(FunctionName),
     Alloc1d(LValue, Expr),
@@ -542,6 +542,7 @@ mod print {
     impl fmt::Display for Expr {
         fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
             match self {
+                Expr::Input => write!(f, "input()"),
                 Expr::ReadData => write!(f, "read()"),
                 Expr::RandF64 => write!(f, "random()"),
                 Expr::Const(n) => write!(f, "{}", n),
@@ -580,9 +581,6 @@ mod print {
             match self {
                 Statement::Assign(v, expr) => {
                     env.fmtln(format_args!("{} <- {}", v, expr))
-                }
-                Statement::Input(v) => {
-                    env.fmtln(format_args!("{} <- input", v))
                 }
                 Statement::DefFn(v, name) => {
                     let name = name.named(&env.names);
