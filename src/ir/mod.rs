@@ -280,6 +280,7 @@ impl Expr {
 #[derive(Debug)]
 pub enum Statement {
     Assign(LValue, Expr),
+    Input(LValue),
     DefFn(LValue, FunctionName),
     CallSub(FunctionName),
     Alloc1d(LValue, Expr),
@@ -579,6 +580,9 @@ mod print {
             match self {
                 Statement::Assign(v, expr) => {
                     env.fmtln(format_args!("{} <- {}", v, expr))
+                }
+                Statement::Input(v) => {
+                    env.fmtln(format_args!("{} <- input", v))
                 }
                 Statement::DefFn(v, name) => {
                     let name = name.named(&env.names);
