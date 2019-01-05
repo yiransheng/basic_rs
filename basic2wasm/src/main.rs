@@ -1,17 +1,13 @@
-mod compile;
-mod ir;
+mod codegen;
 
 use std::fs::File;
 use std::io;
 use std::io::prelude::*;
 use std::path::PathBuf;
 
-use basic_rs::{Parser, Scanner};
+use basic_rs::{compile, Parser, Scanner};
 use binaryen::{set_global_codegen_config, CodegenConfig};
 use structopt::StructOpt;
-
-use crate::compile::compile;
-use crate::ir::codegen;
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "bas2wasm", about = "bas2wasm file")]
