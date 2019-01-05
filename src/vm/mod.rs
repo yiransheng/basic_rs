@@ -716,28 +716,12 @@ impl VM {
         Ok(n)
     }
 
-    fn peek_number(&self, distance: usize) -> Result<Number, ExecError> {
-        match self.peek(distance).map(Variant::from) {
-            Some(Variant::Number(n)) => Ok(n),
-            Some(_) => Err(ExecError::TypeError("not a number")),
-            None => Err(ExecError::EmptyStack),
-        }
-    }
-
     #[inline(always)]
     fn pop_value(&mut self) -> Result<Variant, ExecError> {
         self.stack
             .pop_back()
             .map(Variant::from)
             .ok_or_else(|| ExecError::EmptyStack)
-    }
-
-    #[inline(always)]
-    fn peek(&self, distance: usize) -> Option<Value> {
-        let n = self.stack.len();
-        let index = n.saturating_sub(distance + 1);
-
-        self.stack.get(index).cloned()
     }
 
     fn binary_op<T, F>(&mut self, f: F) -> Result<T, ExecError>

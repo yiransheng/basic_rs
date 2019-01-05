@@ -1,5 +1,4 @@
 use rustc_hash::FxHashMap;
-use std::mem;
 use void::Void;
 
 use crate::ir::*;

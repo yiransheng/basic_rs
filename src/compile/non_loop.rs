@@ -1,14 +1,13 @@
 use crate::ast::{Visitor as AstVisitor, *};
 use either::Either;
-use slotmap::SecondaryMap;
 
 use super::control_flow_context::CfCtx;
 use super::error::CompileError;
 use super::expr_compiler::ExprCompiler;
 use super::HasLineState;
 use crate::ir::{
-    BasicBlock, Builder, Expr, FnType, Function, FunctionName, LValue as LV,
-    Label, Offset, Statement as IRStatement,
+    Builder, Expr, FunctionName, LValue as LV, Label, Offset,
+    Statement as IRStatement,
 };
 
 pub struct NonLoopPass<'a> {

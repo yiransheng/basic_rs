@@ -250,7 +250,6 @@ pub mod disassembler {
         ip: usize,
         line: usize,
         out: W,
-        printing: bool,
     }
 
     impl<'a, W: io::Write> Disassembler<'a, W> {
@@ -260,7 +259,6 @@ pub mod disassembler {
                 ip: 0,
                 line: usize::max_value(),
                 out,
-                printing: false,
             }
         }
         pub fn disassemble(&mut self) {

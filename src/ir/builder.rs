@@ -1,6 +1,6 @@
 use crate::ast;
 use rustc_hash::{FxHashMap, FxHashSet};
-use slotmap::{SecondaryMap, SlotMap};
+use slotmap::SecondaryMap;
 
 use super::*;
 
