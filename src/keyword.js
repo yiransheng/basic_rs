@@ -19,6 +19,7 @@ const keywords = [
   "PRINT",
   "GOTO",
   "IF",
+  "INPUT",
   "FOR",
   "NEXT",
   "END",
