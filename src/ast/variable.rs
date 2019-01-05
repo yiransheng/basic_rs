@@ -38,21 +38,7 @@ impl error::Error for NameError {
     }
 }
 
-fn u16_to_bytes(b: u16) -> [u8; 2] {
-    let b1 = (b & 0xff) as u8;
-    let b2 = ((b >> 8) & 0xff) as u8;
-    [b1, b2]
-}
-
 impl Variable {
-    pub fn from_u16(b: u16) -> Result<Self, NameError> {
-        let [b1, b2] = u16_to_bytes(b);
-        if b2 == 0 {
-            Self::from_byte(b1 as u8)
-        } else {
-            Self::from_bytes(b1 as u8, b2 as u8)
-        }
-    }
     pub fn from_byte(b: u8) -> Result<Self, NameError> {
         match b {
             b'A'...b'Z' => Ok(Variable([b, 0])),
@@ -74,9 +60,6 @@ impl Variable {
 
     pub fn from_bytes_unchecked(bytes: [u8; 2]) -> Self {
         Variable(bytes)
-    }
-    pub fn from_u16_unchecked(b: u16) -> Self {
-        Variable(u16_to_bytes(b))
     }
 
     // Requires List of Table Name to be A-Z (no follow up digit)

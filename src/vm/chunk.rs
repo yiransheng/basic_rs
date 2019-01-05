@@ -17,70 +17,12 @@ pub trait InlineOperand: Into<[u8; 2]> {
     fn from_bytes_unchecked(bytes: [u8; 2]) -> Self;
 }
 
-impl InlineOperand for Variable {
-    #[inline(always)]
-    fn from_bytes_unchecked(bytes: [u8; 2]) -> Self {
-        Variable::from_bytes_unchecked(bytes)
-    }
-}
-
-impl Into<[u8; 2]> for Func {
-    fn into(self) -> [u8; 2] {
-        let b = self.to_u8().unwrap();
-        [b, 0]
-    }
-}
-
-impl InlineOperand for Func {
-    #[inline(always)]
-    fn from_bytes_unchecked(bytes: [u8; 2]) -> Self {
-        Func::from_u8(bytes[0]).unwrap()
-    }
-}
-
-impl From<usize> for LocalVar {
-    fn from(i: usize) -> Self {
-        LocalVar(i as u16)
-    }
-}
-
-impl Into<[u8; 2]> for LocalVar {
-    fn into(self) -> [u8; 2] {
-        let mut bytes: [u8; 2] = [0, 0];
-        (&mut bytes[..]).write_u16::<LittleEndian>(self.0).unwrap();
-        bytes
-    }
-}
-impl Into<usize> for LocalVar {
-    fn into(self) -> usize {
-        self.0 as usize
-    }
-}
-
-impl InlineOperand for LocalVar {
-    #[inline(always)]
-    fn from_bytes_unchecked(bytes: [u8; 2]) -> Self {
-        let i = (&bytes[..]).read_u16::<LittleEndian>().unwrap();
-        LocalVar(i)
-    }
-}
-
-impl Into<[u8; 2]> for FuncId {
-    fn into(self) -> [u8; 2] {
-        let b = self.raw();
-        [b, 0]
-    }
-}
-
-impl InlineOperand for FuncId {
-    #[inline(always)]
-    fn from_bytes_unchecked(bytes: [u8; 2]) -> Self {
-        FuncId::from_u8(bytes[0]).unwrap()
-    }
-}
-
 pub trait Operand: Clone {
-    fn storage(chunk: &mut Chunk) -> &mut Vec<Self>
+    fn storage_mut(chunk: &mut Chunk) -> &mut Vec<Self>
+    where
+        Self: Sized;
+
+    fn storage(chunk: &Chunk) -> &[Self]
     where
         Self: Sized;
 
@@ -88,7 +30,7 @@ pub trait Operand: Clone {
     where
         Self: Sized,
     {
-        let where_to = Self::storage(chunk);
+        let where_to = Self::storage_mut(chunk);
         let index = where_to.len();
         assert!(index < (u16::max_value() as usize));
 
@@ -101,7 +43,7 @@ pub trait Operand: Clone {
         index
     }
 
-    fn read_from_chunk(offset: usize, chunk: &mut Chunk) -> Self
+    fn read_from_chunk(offset: usize, chunk: &Chunk) -> Self
     where
         Self: Sized,
     {
@@ -111,7 +53,7 @@ pub trait Operand: Clone {
         where_to[index].clone()
     }
 
-    fn read_ref_from_chunk(offset: usize, chunk: &mut Chunk) -> &Self
+    fn read_ref_from_chunk(offset: usize, chunk: &Chunk) -> &Self
     where
         Self: Sized,
     {
@@ -123,20 +65,29 @@ pub trait Operand: Clone {
 }
 
 impl Operand for JumpPoint {
-    fn storage(chunk: &mut Chunk) -> &mut Vec<Self> {
+    fn storage_mut(chunk: &mut Chunk) -> &mut Vec<Self> {
         &mut chunk.jump_points
+    }
+    fn storage(chunk: &Chunk) -> &[Self] {
+        &chunk.jump_points
     }
 }
 
 impl Operand for f64 {
-    fn storage(chunk: &mut Chunk) -> &mut Vec<Self> {
+    fn storage_mut(chunk: &mut Chunk) -> &mut Vec<Self> {
         &mut chunk.constants
+    }
+    fn storage(chunk: &Chunk) -> &[Self] {
+        &chunk.constants
     }
 }
 
 impl Operand for String {
-    fn storage(chunk: &mut Chunk) -> &mut Vec<Self> {
+    fn storage_mut(chunk: &mut Chunk) -> &mut Vec<Self> {
         &mut chunk.strings
+    }
+    fn storage(chunk: &Chunk) -> &[Self] {
+        &chunk.strings
     }
 }
 
@@ -187,7 +138,7 @@ impl Chunk {
     }
 
     pub fn set_operand<O: Operand>(&mut self, index: u16, o: O) {
-        let storage = O::storage(self);
+        let storage = O::storage_mut(self);
         storage[index as usize] = o;
     }
 
@@ -228,6 +179,71 @@ impl Chunk {
 
     fn read_index(&self, offset: usize) -> u16 {
         (&self.code[offset..]).read_u16::<LittleEndian>().unwrap()
+    }
+}
+
+impl InlineOperand for Variable {
+    #[inline(always)]
+    fn from_bytes_unchecked(bytes: [u8; 2]) -> Self {
+        Variable::from_bytes_unchecked(bytes)
+    }
+}
+
+impl Into<[u8; 2]> for Func {
+    fn into(self) -> [u8; 2] {
+        let b = self.to_u8().unwrap();
+        [b, 0]
+    }
+}
+
+impl InlineOperand for Func {
+    #[inline(always)]
+    fn from_bytes_unchecked(bytes: [u8; 2]) -> Self {
+        Func::from_u8(bytes[0]).unwrap()
+    }
+}
+
+impl From<usize> for LocalVar {
+    fn from(i: usize) -> Self {
+        LocalVar(i as u16)
+    }
+}
+
+impl Into<[u8; 2]> for LocalVar {
+    fn into(self) -> [u8; 2] {
+        let b = self.0;
+        let blo = (b & 0xff) as u8;
+        let bhi = ((b >> 8) & 0xff) as u8;
+        [blo, bhi]
+    }
+}
+impl Into<usize> for LocalVar {
+    fn into(self) -> usize {
+        self.0 as usize
+    }
+}
+
+impl InlineOperand for LocalVar {
+    #[inline(always)]
+    fn from_bytes_unchecked(bytes: [u8; 2]) -> Self {
+        let [blo, bhi] = bytes;
+        let blo = blo as u16;
+        let bhi = bhi as u16;
+        LocalVar((bhi << 8) + blo)
+    }
+}
+
+impl Into<[u8; 2]> for FuncId {
+    fn into(self) -> [u8; 2] {
+        let b = self.raw();
+        [b, 0]
+    }
+}
+
+impl InlineOperand for FuncId {
+    #[inline(always)]
+    fn from_bytes_unchecked(bytes: [u8; 2]) -> Self {
+        FuncId::from_u8(bytes[0]).unwrap()
     }
 }
 
