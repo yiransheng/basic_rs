@@ -5,7 +5,7 @@ use std::io;
 use std::io::prelude::*;
 use std::path::PathBuf;
 
-use basic_rs::{compile, Parser, Scanner};
+use basic_rs::{compile, print_source_error, Parser, Scanner};
 use binaryen::{set_global_codegen_config, CodegenConfig};
 use structopt::StructOpt;
 
@@ -75,9 +75,16 @@ fn main() {
     set_global_codegen_config(&conf);
 
     let scanner = Scanner::new(&source);
-    let ast = Parser::new(scanner).parse().unwrap();
+    let ast = Parser::new(scanner).parse().unwrap_or_else(|e| {
+        print_source_error(&e, &source);
+        ::std::process::exit(1)
+    });
 
-    let mut ir = compile(&ast).unwrap();
+    let mut ir = compile(&ast).unwrap_or_else(|e| {
+        print_source_error(&e, &source);
+        ::std::process::exit(1)
+    });
+
     ir.optimize();
 
     if opt.print {
