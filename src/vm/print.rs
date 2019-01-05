@@ -9,7 +9,6 @@ use unicode_width::UnicodeWidthStr;
 #[derive(Debug)]
 pub enum PrintError {
     Io(Error),
-    NotPrinting,
 }
 
 impl From<Error> for PrintError {
@@ -22,9 +21,6 @@ impl fmt::Display for PrintError {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         match self {
             PrintError::Io(err) => err.fmt(formatter),
-            PrintError::NotPrinting => {
-                formatter.write_str(error::Error::description(self))
-            }
         }
     }
 }
@@ -33,7 +29,6 @@ impl error::Error for PrintError {
     fn description(&self) -> &str {
         match self {
             PrintError::Io(err) => err.description(),
-            PrintError::NotPrinting => "Print without proper initialization",
         }
     }
 }
