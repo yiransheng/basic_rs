@@ -13,8 +13,7 @@ It took quite a bit of effort, as I was neither familiar with compilers nor web 
 
 At a high level, BASIC concepts are translated into:
 
-* Variable: `wasm` global variable (mutable)
-  * Some form of optimization to demote them into local variables if they are not shared across subroutines (`binaryen` could not perform this as of now) would be nice
+* Variable: `wasm` global variable (mutable), possibly demoted to local variables if possible
 * Subroutine: `wasm` functions
 * `DEF`: currently not supported
 * `PRINT`: api provided by `js` as `wasm` function imports
