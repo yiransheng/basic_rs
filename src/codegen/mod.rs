@@ -5,9 +5,12 @@ use std::ops::Deref;
 use rustc_hash::FxHashMap;
 use slotmap::SecondaryMap;
 
-use crate::ast::Func;
+use crate::ast::{Func, LineNo};
 use crate::ir::*;
-use crate::vm::{Chunk, FuncId, FuncIdGen, JumpPoint, LocalVar, OpCode, VM};
+use crate::vm::{
+    Chunk, FuncId, FuncIdGen, InlineOperand, JumpPoint, LocalVar, OpCode,
+    Operand, VM,
+};
 
 #[derive(Debug, Copy, Clone)]
 pub struct WriteError(pub &'static str);
@@ -27,6 +30,7 @@ impl Error for WriteError {
 struct ChunkWriter<'a> {
     func_map: &'a SecondaryMap<FunctionName, FuncId>,
     chunk: &'a mut Chunk,
+    line_no: LineNo,
     strings: &'a str,
 
     jp_label_map: SecondaryMap<Label, JumpPoint>,
@@ -36,6 +40,21 @@ struct ChunkWriter<'a> {
 impl<'a> ChunkWriter<'a> {
     fn mark_jump_point(&mut self, label: Label) {
         self.jp_label_map.insert(label, JumpPoint(self.chunk.len()));
+    }
+    fn set_line_no(&mut self, line_no: LineNo) {
+        self.line_no = line_no;
+    }
+    fn write_opcode(&mut self, opcode: OpCode) {
+        self.chunk.write_opcode(opcode, self.line_no);
+    }
+    fn write(&mut self, byte: u8) {
+        self.chunk.write(byte, self.line_no);
+    }
+    fn add_operand<O: Operand>(&mut self, o: O) -> u16 {
+        self.chunk.add_operand(o, self.line_no)
+    }
+    fn add_inline_operand<O: InlineOperand>(&mut self, o: O) {
+        self.chunk.add_inline_operand(o, self.line_no)
     }
     fn get_string_label(&self, offset: usize, len: usize) -> &str {
         ::std::str::from_utf8(&self.strings.as_bytes()[offset..offset + len])
@@ -67,12 +86,12 @@ pub fn codegen(ir: &Program) -> Result<VM, WriteError> {
                 match global {
                     GlobalKind::ArrPtr(var, dim) => match dim {
                         Offset::OneD(..) => {
-                            chunk.write_opcode(OpCode::InitArray1d);
-                            chunk.add_inline_operand(*var);
+                            chunk.write_opcode(OpCode::InitArray1d, 0);
+                            chunk.add_inline_operand(*var, 0);
                         }
                         Offset::TwoD(..) => {
-                            chunk.write_opcode(OpCode::InitArray2d);
-                            chunk.add_inline_operand(*var);
+                            chunk.write_opcode(OpCode::InitArray2d, 0);
+                            chunk.add_inline_operand(*var, 0);
                         }
                     },
                     _ => {}
@@ -83,11 +102,13 @@ pub fn codegen(ir: &Program) -> Result<VM, WriteError> {
         let id = func_map.get(function.name).cloned().unwrap();
         let mut writer = ChunkWriter {
             func_map: &func_map,
+            line_no: LineNo::default(),
             strings: &ir.labels,
             chunk: &mut chunk,
             jp_label_map: SecondaryMap::new(),
             jp_indices: vec![],
         };
+        writer.set_line_no(function.line_no);
         function.write(&mut writer)?;
         compiled_functions.insert(id, chunk);
     }
@@ -100,8 +121,8 @@ pub fn codegen(ir: &Program) -> Result<VM, WriteError> {
 impl ChunkWrite for Function {
     fn write(&self, writer: &mut ChunkWriter) -> Result<(), WriteError> {
         let n_locals = self.locals.len();
-        writer.chunk.write_opcode(OpCode::DeclLocal);
-        writer.chunk.write(n_locals as u8);
+        writer.write_opcode(OpCode::DeclLocal);
+        writer.write(n_locals as u8);
 
         let block_pairs = self
             .iter()
@@ -139,30 +160,30 @@ fn write_block_exit(
     match exit {
         BlockExit::Jump(label) if Some(*label) == next_label => {}
         BlockExit::Jump(label) => {
-            writer.chunk.write_opcode(OpCode::Jump);
+            writer.write_opcode(OpCode::Jump);
             let jp = JumpPoint(0);
-            let index = writer.chunk.add_operand(jp);
+            let index = writer.add_operand(jp);
             writer.jp_indices.push((index, *label));
         }
         BlockExit::Return(None) => {
-            writer.chunk.write_opcode(OpCode::Return);
+            writer.write_opcode(OpCode::Return);
         }
         BlockExit::Return(Some(expr)) => {
             expr.write(writer)?;
-            writer.chunk.write_opcode(OpCode::ReturnValue);
+            writer.write_opcode(OpCode::ReturnValue);
         }
         BlockExit::Switch(cond, true_br, None) => {
             cond.write(writer)?;
-            writer.chunk.write_opcode(OpCode::JumpTrue);
+            writer.write_opcode(OpCode::JumpTrue);
             let jp = JumpPoint(0);
-            let index = writer.chunk.add_operand(jp);
+            let index = writer.add_operand(jp);
             writer.jp_indices.push((index, *true_br));
         }
         BlockExit::Switch(cond, true_br, Some(false_br)) => {
             cond.write(writer)?;
-            writer.chunk.write_opcode(OpCode::JumpTrue);
+            writer.write_opcode(OpCode::JumpTrue);
             let jp = JumpPoint(0);
-            let index = writer.chunk.add_operand(jp);
+            let index = writer.add_operand(jp);
             writer.jp_indices.push((index, *true_br));
 
             write_block_exit(&BlockExit::Jump(*false_br), next_label, writer)?;
@@ -174,7 +195,9 @@ fn write_block_exit(
 
 impl ChunkWrite for BasicBlock {
     fn write(&self, writer: &mut ChunkWriter) -> Result<(), WriteError> {
-        for stmt in &self.statements {
+        for (stmt, line_no) in self.statements.iter().zip(self.line_nos.iter())
+        {
+            writer.set_line_no(*line_no);
             stmt.write(writer)?;
         }
         Ok(())
@@ -187,72 +210,72 @@ impl ChunkWrite for Statement {
             Statement::Assign(lval, expr) => match lval {
                 LValue::Global(var) => {
                     expr.write(writer)?;
-                    writer.chunk.write_opcode(OpCode::SetGlobal);
-                    writer.chunk.add_inline_operand(*var);
+                    writer.write_opcode(OpCode::SetGlobal);
+                    writer.add_inline_operand(*var);
                 }
                 LValue::Local(index) => {
                     expr.write(writer)?;
-                    writer.chunk.write_opcode(OpCode::SetLocal);
-                    writer.chunk.add_inline_operand(LocalVar::from(*index));
+                    writer.write_opcode(OpCode::SetLocal);
+                    writer.add_inline_operand(LocalVar::from(*index));
                 }
                 LValue::FnPtr(_) => return Err(WriteError("Type error")),
                 LValue::ArrPtr(var, offset) => match offset {
                     Offset::OneD(i) => {
                         expr.write(writer)?;
                         i.write(writer)?;
-                        writer.chunk.write_opcode(OpCode::SetGlobalArray1d);
-                        writer.chunk.add_inline_operand(*var);
+                        writer.write_opcode(OpCode::SetGlobalArray1d);
+                        writer.add_inline_operand(*var);
                     }
                     Offset::TwoD(i, j) => {
                         expr.write(writer)?;
                         i.write(writer)?;
                         j.write(writer)?;
-                        writer.chunk.write_opcode(OpCode::SetGlobalArray2d);
-                        writer.chunk.add_inline_operand(*var);
+                        writer.write_opcode(OpCode::SetGlobalArray2d);
+                        writer.add_inline_operand(*var);
                     }
                 },
             },
             Statement::DefFn(lval, fname) => match lval {
                 LValue::FnPtr(func) => {
-                    writer.chunk.write_opcode(OpCode::BindFunc);
-                    writer.chunk.add_inline_operand(*func);
-                    writer.chunk.add_inline_operand(
+                    writer.write_opcode(OpCode::BindFunc);
+                    writer.add_inline_operand(*func);
+                    writer.add_inline_operand(
                         writer.func_map.get(*fname).cloned().unwrap(),
                     );
                 }
                 _ => {}
             },
             Statement::CallSub(fname) => {
-                writer.chunk.write_opcode(OpCode::Call);
-                writer.chunk.add_inline_operand(
+                writer.write_opcode(OpCode::Call);
+                writer.add_inline_operand(
                     writer.func_map.get(*fname).cloned().unwrap(),
                 );
-                writer.chunk.write(0); // n args
+                writer.write(0); // n args
             }
             Statement::Print(expr) => {
                 expr.write(writer)?;
-                writer.chunk.write_opcode(OpCode::PrintExpr);
+                writer.write_opcode(OpCode::PrintExpr);
             }
             Statement::PrintLabel(offset, len) => {
-                writer.chunk.write_opcode(OpCode::PrintLabel);
-                writer.chunk.add_operand(
+                writer.write_opcode(OpCode::PrintLabel);
+                writer.add_operand(
                     writer.get_string_label(*offset, *len).to_owned(),
                 );
             }
             Statement::PrintAdvance15 => {
-                writer.chunk.write_opcode(OpCode::PrintAdvance15);
+                writer.write_opcode(OpCode::PrintAdvance15);
             }
             Statement::PrintAdvance3 => {
-                writer.chunk.write_opcode(OpCode::PrintAdvance3);
+                writer.write_opcode(OpCode::PrintAdvance3);
             }
             Statement::PrintNewline => {
-                writer.chunk.write_opcode(OpCode::PrintNewline);
+                writer.write_opcode(OpCode::PrintNewline);
             }
             Statement::Alloc1d(lval, expr) => match lval {
                 LValue::ArrPtr(var, _) => {
                     expr.write(writer)?;
-                    writer.chunk.write_opcode(OpCode::DefineDim1d);
-                    writer.chunk.add_inline_operand(*var);
+                    writer.write_opcode(OpCode::DefineDim1d);
+                    writer.add_inline_operand(*var);
                 }
                 _ => {}
             },
@@ -260,8 +283,8 @@ impl ChunkWrite for Statement {
                 LValue::ArrPtr(var, _) => {
                     m.write(writer)?;
                     n.write(writer)?;
-                    writer.chunk.write_opcode(OpCode::DefineDim2d);
-                    writer.chunk.add_inline_operand(*var);
+                    writer.write_opcode(OpCode::DefineDim2d);
+                    writer.add_inline_operand(*var);
                 }
                 _ => {}
             },
@@ -275,49 +298,49 @@ impl ChunkWrite for Expr {
     fn write(&self, writer: &mut ChunkWriter) -> Result<(), WriteError> {
         match self {
             Expr::ReadData => {
-                writer.chunk.write_opcode(OpCode::Read);
+                writer.write_opcode(OpCode::Read);
             }
             Expr::Const(n) => {
-                writer.chunk.write_opcode(OpCode::Constant);
-                writer.chunk.add_operand(*n);
+                writer.write_opcode(OpCode::Constant);
+                writer.add_operand(*n);
             }
             Expr::RandF64 => {
-                writer.chunk.write_opcode(OpCode::Rand);
+                writer.write_opcode(OpCode::Rand);
             }
             Expr::Get(lval) => match lval.deref() {
                 LValue::Global(var) => {
-                    writer.chunk.write_opcode(OpCode::GetGlobal);
-                    writer.chunk.add_inline_operand(*var);
+                    writer.write_opcode(OpCode::GetGlobal);
+                    writer.add_inline_operand(*var);
                 }
                 LValue::Local(index) => {
-                    writer.chunk.write_opcode(OpCode::GetLocal);
-                    writer.chunk.add_inline_operand(LocalVar::from(*index));
+                    writer.write_opcode(OpCode::GetLocal);
+                    writer.add_inline_operand(LocalVar::from(*index));
                 }
                 LValue::FnPtr(func) => {
-                    writer.chunk.write_opcode(OpCode::GetFunc);
-                    writer.chunk.add_inline_operand(*func);
+                    writer.write_opcode(OpCode::GetFunc);
+                    writer.add_inline_operand(*func);
                 }
                 LValue::ArrPtr(var, offset) => match offset {
                     Offset::OneD(i) => {
                         i.write(writer)?;
-                        writer.chunk.write_opcode(OpCode::GetGlobalArray1d);
-                        writer.chunk.add_inline_operand(*var);
+                        writer.write_opcode(OpCode::GetGlobalArray1d);
+                        writer.add_inline_operand(*var);
                     }
                     Offset::TwoD(i, j) => {
                         i.write(writer)?;
                         j.write(writer)?;
-                        writer.chunk.write_opcode(OpCode::GetGlobalArray2d);
-                        writer.chunk.add_inline_operand(*var);
+                        writer.write_opcode(OpCode::GetGlobalArray2d);
+                        writer.add_inline_operand(*var);
                     }
                 },
             },
             Expr::Call(lval, expr) => match lval.deref() {
                 LValue::FnPtr(func) => {
                     expr.write(writer)?;
-                    writer.chunk.write_opcode(OpCode::GetFunc);
-                    writer.chunk.add_inline_operand(*func);
-                    writer.chunk.write_opcode(OpCode::CallIndirect);
-                    writer.chunk.write(1); // 1 arg
+                    writer.write_opcode(OpCode::GetFunc);
+                    writer.add_inline_operand(*func);
+                    writer.write_opcode(OpCode::CallIndirect);
+                    writer.write(1); // 1 arg
                 }
                 _ => return Err(WriteError("Type error")),
             },
@@ -325,42 +348,42 @@ impl ChunkWrite for Expr {
                 expr.write(writer)?;
                 match op {
                     UnaryOp::Not => {
-                        writer.chunk.write_opcode(OpCode::Not);
+                        writer.write_opcode(OpCode::Not);
                     }
                     UnaryOp::Neg => {
-                        writer.chunk.write_opcode(OpCode::Negate);
+                        writer.write_opcode(OpCode::Negate);
                     }
                     UnaryOp::Sin => {
-                        writer.chunk.write_opcode(OpCode::CallNative);
-                        writer.chunk.add_inline_operand(Func::Sin);
+                        writer.write_opcode(OpCode::CallNative);
+                        writer.add_inline_operand(Func::Sin);
                     }
                     UnaryOp::Cos => {
-                        writer.chunk.write_opcode(OpCode::CallNative);
-                        writer.chunk.add_inline_operand(Func::Cos);
+                        writer.write_opcode(OpCode::CallNative);
+                        writer.add_inline_operand(Func::Cos);
                     }
                     UnaryOp::Atn => {
-                        writer.chunk.write_opcode(OpCode::CallNative);
-                        writer.chunk.add_inline_operand(Func::Atn);
+                        writer.write_opcode(OpCode::CallNative);
+                        writer.add_inline_operand(Func::Atn);
                     }
                     UnaryOp::Exp => {
-                        writer.chunk.write_opcode(OpCode::CallNative);
-                        writer.chunk.add_inline_operand(Func::Exp);
+                        writer.write_opcode(OpCode::CallNative);
+                        writer.add_inline_operand(Func::Exp);
                     }
                     UnaryOp::Abs => {
-                        writer.chunk.write_opcode(OpCode::CallNative);
-                        writer.chunk.add_inline_operand(Func::Abs);
+                        writer.write_opcode(OpCode::CallNative);
+                        writer.add_inline_operand(Func::Abs);
                     }
                     UnaryOp::Log => {
-                        writer.chunk.write_opcode(OpCode::CallNative);
-                        writer.chunk.add_inline_operand(Func::Log);
+                        writer.write_opcode(OpCode::CallNative);
+                        writer.add_inline_operand(Func::Log);
                     }
                     UnaryOp::Sqr => {
-                        writer.chunk.write_opcode(OpCode::CallNative);
-                        writer.chunk.add_inline_operand(Func::Sqr);
+                        writer.write_opcode(OpCode::CallNative);
+                        writer.add_inline_operand(Func::Sqr);
                     }
                     UnaryOp::Trunc => {
-                        writer.chunk.write_opcode(OpCode::CallNative);
-                        writer.chunk.add_inline_operand(Func::Int);
+                        writer.write_opcode(OpCode::CallNative);
+                        writer.add_inline_operand(Func::Int);
                     }
                 }
             }
@@ -369,31 +392,31 @@ impl ChunkWrite for Expr {
                 rhs.write(writer)?;
                 match op {
                     BinaryOp::Add => {
-                        writer.chunk.write_opcode(OpCode::Add);
+                        writer.write_opcode(OpCode::Add);
                     }
                     BinaryOp::Sub => {
-                        writer.chunk.write_opcode(OpCode::Sub);
+                        writer.write_opcode(OpCode::Sub);
                     }
                     BinaryOp::Mul => {
-                        writer.chunk.write_opcode(OpCode::Mul);
+                        writer.write_opcode(OpCode::Mul);
                     }
                     BinaryOp::Div => {
-                        writer.chunk.write_opcode(OpCode::Div);
+                        writer.write_opcode(OpCode::Div);
                     }
                     BinaryOp::Pow => {
-                        writer.chunk.write_opcode(OpCode::Pow);
+                        writer.write_opcode(OpCode::Pow);
                     }
                     BinaryOp::Less => {
-                        writer.chunk.write_opcode(OpCode::Less);
+                        writer.write_opcode(OpCode::Less);
                     }
                     BinaryOp::Greater => {
-                        writer.chunk.write_opcode(OpCode::Greater);
+                        writer.write_opcode(OpCode::Greater);
                     }
                     BinaryOp::Equal => {
-                        writer.chunk.write_opcode(OpCode::Equal);
+                        writer.write_opcode(OpCode::Equal);
                     }
                     BinaryOp::CopySign => {
-                        writer.chunk.write_opcode(OpCode::CopySign);
+                        writer.write_opcode(OpCode::CopySign);
                     }
                 }
             }

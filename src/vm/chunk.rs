@@ -1,7 +1,6 @@
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use num_traits::{FromPrimitive, ToPrimitive};
 
-use super::data::DataStack;
 use super::line_mapping::LineMapping;
 use super::opcode::OpCode;
 use super::value::FuncId;
@@ -168,21 +167,22 @@ impl Chunk {
         self.code.len()
     }
 
-    #[inline(always)]
-    pub fn write_opcode(&mut self, code: OpCode) {
-        self.write(code as u8)
+    pub fn write_opcode(&mut self, code: OpCode, line: usize) {
+        self.write(code as u8, line)
     }
 
-    pub fn write(&mut self, byte: u8) {
-        self.code.push(byte);
+    pub fn write(&mut self, byte: u8, line: usize) {
+        self.code.push(byte.into());
+        self.line_map.add_mapping(line, self.len());
     }
 
     pub fn line_no(&self, offset: usize) -> usize {
-        0
+        self.line_map.find_line(offset)
     }
 
-    pub fn add_operand<O: Operand>(&mut self, o: O) -> u16 {
+    pub fn add_operand<O: Operand>(&mut self, o: O, line: usize) -> u16 {
         let slot = o.add_to_chunk(self);
+        self.line_map.add_mapping(line, self.len());
         slot
     }
 
@@ -191,11 +191,11 @@ impl Chunk {
         storage[index as usize] = o;
     }
 
-    pub fn add_inline_operand<O: InlineOperand>(&mut self, o: O) {
+    pub fn add_inline_operand<O: InlineOperand>(&mut self, o: O, line: usize) {
         let bytes = o.into();
-        self.write(bytes[0]);
-        self.write(bytes[1]);
-        // self.line_map.add_mapping(line, self.len());
+        self.write(bytes[0], line);
+        self.write(bytes[1], line);
+        self.line_map.add_mapping(line, self.len());
     }
 
     #[inline(always)]
@@ -365,9 +365,16 @@ pub mod disassembler {
                 return None;
             }
 
+            let line = self.chunk.line_no(self.ip);
             let byte = self.chunk.code[self.ip];
 
-            let _ = write!(&mut self.out, "{:04}", self.ip);
+            let _ = if self.line == line {
+                #[allow(clippy::write_literal)]
+                write!(&mut self.out, "{} {:04}", " |   ", self.ip)
+            } else {
+                self.line = line;
+                write!(&mut self.out, "{:<5} {:04}", line, self.ip)
+            };
 
             self.ip += 1;
 
