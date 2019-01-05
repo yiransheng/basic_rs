@@ -109,6 +109,9 @@ impl<'a> AstVisitor<Result<(), CompileError>> for LoopPass<'a> {
                         let label = self.current_label()?;
                         let func = self.current_func()?;
                         let successor_label = self.next_line_label();
+
+                        self.builder.set_line_no(prog.statements[j].line_no);
+
                         let mut next_compiler = NextCompiler {
                             cf_ctx: &mut *self.cf_ctx,
                             builder: &mut *self.builder,

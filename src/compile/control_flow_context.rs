@@ -278,14 +278,18 @@ impl CfCtx {
 
     pub fn functions<'a>(
         &'a self,
-    ) -> impl Iterator<Item = (FunctionName, Label, FnType)> + 'a {
+    ) -> impl Iterator<Item = (LineNo, FunctionName, Label, FnType)> + 'a {
         let lines = &self.lines;
 
         self.functions
             .iter()
             .filter_map(move |(k, i)| match lines[*i].label {
                 Some(label) => {
-                    self.fn_types.get(k).cloned().map(|ty| (k, label, ty))
+                    let line_no = self.find_line_no(*i);
+                    self.fn_types
+                        .get(k)
+                        .cloned()
+                        .map(|ty| (line_no, k, label, ty))
                 }
                 _ => None,
             })

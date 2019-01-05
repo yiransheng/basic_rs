@@ -7,6 +7,7 @@ use super::*;
 #[derive(Debug)]
 pub struct Builder {
     functions: Vec<Function>,
+    current_line: ast::LineNo,
     main: Option<FunctionName>,
     vars: FxHashSet<ast::Variable>,
     arrs: FxHashMap<ast::Variable, Offset<()>>,
@@ -19,6 +20,7 @@ impl Builder {
     pub fn new() -> Self {
         Builder {
             functions: vec![],
+            current_line: 0,
             main: None,
             vars: FxHashSet::default(),
             arrs: FxHashMap::default(),
@@ -50,6 +52,9 @@ impl Builder {
             data: self.data,
             labels: self.labels,
         }
+    }
+    pub fn set_line_no(&mut self, line_no: ast::LineNo) {
+        self.current_line = line_no;
     }
 
     pub fn define_global(&mut self, var: ast::Variable) {
@@ -95,6 +100,7 @@ impl Builder {
 
         let function = Function {
             name,
+            line_no: self.current_line,
             ty,
             locals: vec![],
             entry,
@@ -147,12 +153,14 @@ impl Builder {
         label: Label,
         statement: Statement,
     ) -> Result<(), Statement> {
+        let current_line = self.current_line;
         match self
             .get_function_mut(func)
             .and_then(|func| func.blocks.get_mut(label))
         {
             Some(block) => {
                 block.statements.push(statement);
+                block.line_nos.push(current_line);
                 Ok(())
             }
             _ => Err(statement),

@@ -16,6 +16,7 @@ pub struct NonLoopPass<'a> {
     builder: &'a mut Builder,
 
     line_index: usize,
+    line_no: LineNo,
     main: Option<FunctionName>,
 }
 impl<'a> NonLoopPass<'a> {
@@ -24,11 +25,13 @@ impl<'a> NonLoopPass<'a> {
             cf_ctx,
             builder,
             line_index: 0,
+            line_no: 0,
             main: None,
         }
     }
 
     fn add_statement(&mut self, stmt: IRStatement) -> Result<(), CompileError> {
+        self.builder.set_line_no(self.line_no);
         self.builder
             .add_statement(self.current_func()?, self.current_label()?, stmt)
             .map_err(|_| CompileError::Custom("function or block not found"))
@@ -88,7 +91,8 @@ impl<'a> HasLineState<CompileError> for NonLoopPass<'a> {
 
 impl<'a> AstVisitor<Result<(), CompileError>> for NonLoopPass<'a> {
     fn visit_program(&mut self, prog: &Program) -> Result<(), CompileError> {
-        for (func, entry, ty) in self.cf_ctx.functions() {
+        for (line_no, func, entry, ty) in self.cf_ctx.functions() {
+            self.builder.set_line_no(line_no);
             self.builder
                 .add_function(ty.clone(), func, entry)
                 .map_err(|_| CompileError::Custom("Function already exist"))?;
@@ -114,6 +118,7 @@ impl<'a> AstVisitor<Result<(), CompileError>> for NonLoopPass<'a> {
 
         for (i, stmt) in prog.statements.iter().enumerate() {
             self.line_index = i;
+            self.line_no = stmt.line_no;
 
             let func = self.cf_ctx.get_func(i);
             let label = self.cf_ctx.get_label(i);

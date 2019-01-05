@@ -68,6 +68,7 @@ pub struct Program {
 #[derive(Debug)]
 pub struct Function {
     pub name: FunctionName,
+    pub line_no: ast::LineNo,
     pub ty: FnType,
     pub locals: Vec<ValueType>,
     pub entry: Label,
@@ -137,6 +138,7 @@ impl<'a> Iterator for BlockIter<'a> {
 pub struct BasicBlock {
     pub label: Label,
     pub statements: Vec<Statement>,
+    pub line_nos: Vec<ast::LineNo>,
     pub exit: BlockExit,
 }
 
@@ -145,6 +147,7 @@ impl BasicBlock {
         BasicBlock {
             label,
             statements: vec![],
+            line_nos: vec![],
             exit: BlockExit::Return(None),
         }
     }
@@ -610,9 +613,11 @@ mod print {
     impl Printable for Function {
         fn print(&self, env: &mut PrintEnv) -> Result<(), fmt::Error> {
             let name = self.name.named(&env.names);
+            let line_no = self.line_no;
             env.fmtln(format_args!("function {}", name,))?;
 
             env.indented(|env| {
+                env.fmtln(format_args!("defined on Line: {}", line_no))?;
                 env.fmtln(format_args!("type: {}", self.ty))?;
                 for (i, local) in self.locals.iter().enumerate() {
                     env.fmtln(format_args!("local({}): {}", i, local))?;
