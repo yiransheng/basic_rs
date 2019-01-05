@@ -747,7 +747,15 @@ mod tests {
 
     #[test]
     fn test_parse_print() {
-        test_parse_statement!(Print, "10 PRINT X, D(1, Z),;");
+        test_parse_statement!(Print, "10 PRINT \"label\" X, D(1, Z),;");
+    }
+
+    #[test]
+    fn test_parse_input() {
+        test_parse_statement!(Input, "10 INPUT X");
+        test_parse_statement!(Input, "10 INPUT X, Y, Z");
+        test_parse_statement!(Input, "10 INPUT \"label\" X, Y, Z");
+        test_parse_statement!(Input, "10 INPUT \"label:\", \"Ok\"; X, Y, Z");
     }
 
     #[test]
