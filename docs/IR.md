@@ -112,7 +112,50 @@ This form of IR is cobbled together to make `binaryen` powered `wasm` codegen ea
 
 
 
-For stack `VM` codegen in main crate, it's also fairly easy - even if it's a bit unnecessary. Emitting code directly from `AST` is straightforward, and does not require control flow analysis to handl
+For stack `VM` codegen in main crate, it's also fairly easy - even if it's a bit unnecessary. Emitting code directly from `AST` is straightforward, and does not require control flow analysis to handle non-lexical `FOR`s and `GOSUB` as functions. In fact, earlier version of `basic_rs` runs exactly that way.
+
+
+
+## How it's Done
+
+Roughly like so:
+
+### Step 1: Control Flow Context
+
+Program AST is traversed in a `DFS` order, each line of statement is considered as a node in CFG graph, and assigned a label and function id.`GOTO` and `IF` statements adds branches (edges) in the obvious manner. The target line of `GOTO` and `IF` gets marked with a new label.
+
+In this stage, `FOR` and `NEXT` are considered non-branching statements, and do not add back edges to the CFG. Each `GOSUB` target gets marked as a new function, and any reachable line for entry is marked as the same function id, traversal stops when encountering a `RETURN` statement.
+
+### Step 2: Global Defs
+
+Visits the AST to collect all usage/references of global variables, arrays and `DEF` functions. Only caveat is the visitor needs to be aware of `DEF` local variable shadowing, eg. `DEF FNZ(X) = X + 1` does not introduce a global variable named `X`.
+
+### Step 3: Non-loop pass
+
+First create functions and all their basic blocks (initialized to be empty), based on information collected in step 1; this is doable since each line has been assigned labels and function ids. Afterwards traverse the AST in line order, and look up corresponding function and block for each line, and push statements into it. Unreachable code raises a compile error as of now.
+
+Most statements are translated mechanically via pattern matching, `GOSUB` becomes a `CALL`  IR statement for example. For `IF` and `GOTO`, lookup the basic block label based on line number, and assign it to current basic block's exit property.
+
+`FOR` and `NEXT` are skipped.
+
+### Step 4: Loop pass
+
+In this pass, AST are traversed not in line order. Rather, for each `FOR` statement, compile it into something akin to:
+
+```visual basic
+10 FOR I = 1 TO 10
+```
+
+becomes:
+
+```visual basic
+10   LET I = 1
+10.1 IF I - 10 > 0 THEN ???
+```
+
+After this, traverse all reachable lines or current `FOR` line (following back edges as well), until a `NEXT` statement with the same index variable (`I` in this case) is encountered, and matches it to the `FOR` statement, filling the `???` part above as the label of the basic block succeeding this `NEXT`. The traversal does not stop here, it continues until all reachable lines of current `FOR` has been examined, suppose there is another `NEXT` with the same index variable, a compile error is raised.
+
+A loose end here is extra `NEXT`s, since the compiler only examines `FOR` statements, a rouge `NEXT` not matched with any `FOR`s will simply be ignored (effectively becomes a `Nop`), if it is not reachable by any `FOR`s. 
 
 
 
