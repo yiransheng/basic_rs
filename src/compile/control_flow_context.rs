@@ -1,6 +1,8 @@
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::collections::VecDeque;
+use std::error::Error;
+use std::fmt;
 
 use crate::ast::*;
 use slotmap::{SecondaryMap, SlotMap};
@@ -32,6 +34,26 @@ pub struct CfCtx {
 pub enum CfError {
     MissingLine(LineNo),
     JumpInsideSubroutine(LineNo),
+}
+
+impl fmt::Display for CfError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let desc = self.description();
+        match self {
+            CfError::MissingLine(line_no) => write!(f, "{}: {}", desc, line_no),
+            CfError::JumpInsideSubroutine(line_no) => {
+                write!(f, "{}: {}", desc, line_no)
+            }
+        }
+    }
+}
+impl Error for CfError {
+    fn description(&self) -> &str {
+        match self {
+            CfError::MissingLine(_) => "Missing line",
+            CfError::JumpInsideSubroutine(_) => "Jump inside subroutine",
+        }
+    }
 }
 
 impl CfCtx {

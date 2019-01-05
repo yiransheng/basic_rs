@@ -45,7 +45,7 @@ impl fmt::Display for CompileError {
             CompileError::UnreachableCode(line) => {
                 write!(f, "Unreachable code at Line: {}", line)
             }
-            CompileError::CfError(_) => write!(f, "{}", desc),
+            CompileError::CfError(e) => write!(f, "{}, {}", desc, e),
         }
     }
 }
