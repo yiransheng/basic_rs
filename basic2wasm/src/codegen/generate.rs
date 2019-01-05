@@ -394,8 +394,11 @@ impl CodeGen {
                 };
                 let arr_start = array_memory_start(&self.ir);
                 let arr_start = self.module.const_(Literal::I32(arr_start));
-                let size =
-                    self.module.unary(UnaryOp::TruncUF64ToI32, self.expr(size));
+                let size = self.module.binary(
+                    BinaryOp::AddI32,
+                    self.module.unary(UnaryOp::TruncUF64ToI32, self.expr(size)),
+                    self.module.const_(Literal::I32(1)),
+                );
 
                 let ptr =
                     self.module.call("alloc1d", vec![arr_start, size], Ty::I32);
@@ -409,10 +412,17 @@ impl CodeGen {
                 };
                 let arr_start = array_memory_start(&self.ir);
                 let arr_start = self.module.const_(Literal::I32(arr_start));
-                let nrow =
-                    self.module.unary(UnaryOp::TruncUF64ToI32, self.expr(nrow));
-                let ncol =
-                    self.module.unary(UnaryOp::TruncUF64ToI32, self.expr(ncol));
+
+                let nrow = self.module.binary(
+                    BinaryOp::AddI32,
+                    self.module.unary(UnaryOp::TruncUF64ToI32, self.expr(nrow)),
+                    self.module.const_(Literal::I32(1)),
+                );
+                let ncol = self.module.binary(
+                    BinaryOp::AddI32,
+                    self.module.unary(UnaryOp::TruncUF64ToI32, self.expr(ncol)),
+                    self.module.const_(Literal::I32(1)),
+                );
                 let ptr = self.module.call(
                     "alloc2d",
                     vec![arr_start, nrow, ncol],
