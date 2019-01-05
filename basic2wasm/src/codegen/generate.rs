@@ -343,6 +343,7 @@ impl CodeGen {
     }
     fn statement(&self, stmt: &Statement) -> Expr {
         match stmt {
+            Statement::Input(_) => unimplemented!(),
             Statement::Assign(lval, expr) => match lval {
                 LValue::Global(var) => {
                     self.module.set_global(var.to_string(), self.expr(expr))
