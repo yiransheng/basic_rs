@@ -69,7 +69,7 @@ impl CodeGen {
         );
         let print_control_api =
             self.module.add_fn_type(None::<&str>, &[], Ty::None);
-        let rand_api = self.module.add_fn_type(None::<&str>, &[], Ty::F64);
+        let input_api = self.module.add_fn_type(None::<&str>, &[], Ty::F64);
         let pow_api = self.module.add_fn_type(
             None::<&str>,
             &[ValueTy::F64, ValueTy::F64],
@@ -102,7 +102,9 @@ impl CodeGen {
             &print_control_api,
         );
 
-        self.module.add_fn_import("rand", "env", "rand", &rand_api);
+        self.module
+            .add_fn_import("input", "env", "input", &input_api);
+        self.module.add_fn_import("rand", "env", "rand", &input_api);
         self.module.add_fn_import("pow", "env", "pow", &pow_api);
 
         self.gen_data();
@@ -214,6 +216,7 @@ impl CodeGen {
             let plain_block = relooper.add_block(block_expr);
             plain_blocks.insert(label, plain_block);
         }
+
         for (label, block) in function.blocks.iter() {
             let from_block = plain_blocks.get(label).unwrap().clone();
             match &block.exit {
@@ -284,6 +287,7 @@ impl CodeGen {
         use std::ops::Deref;
 
         match expr {
+            IRExpr::Input => self.module.call("input", None, Ty::F64),
             IRExpr::RandF64 => self.module.call("rand", None, Ty::F64),
             IRExpr::ReadData => self.module.call("read", None, Ty::F64),
             IRExpr::Const(v) => self.module.const_(Literal::F64(*v)),
@@ -336,9 +340,9 @@ impl CodeGen {
                         }
                     }
                 }
-                _ => unimplemented!(),
+                LValue::FnPtr(..) => unimplemented!(),
             },
-            _ => unimplemented!(),
+            IRExpr::Call(..) => unimplemented!(),
         }
     }
     fn statement(&self, stmt: &Statement) -> Expr {
@@ -390,8 +394,11 @@ impl CodeGen {
                 };
                 let arr_start = array_memory_start(&self.ir);
                 let arr_start = self.module.const_(Literal::I32(arr_start));
-                let size =
-                    self.module.unary(UnaryOp::TruncUF64ToI32, self.expr(size));
+                let size = self.module.binary(
+                    BinaryOp::AddI32,
+                    self.module.unary(UnaryOp::TruncUF64ToI32, self.expr(size)),
+                    self.module.const_(Literal::I32(1)),
+                );
 
                 let ptr =
                     self.module.call("alloc1d", vec![arr_start, size], Ty::I32);
@@ -405,10 +412,17 @@ impl CodeGen {
                 };
                 let arr_start = array_memory_start(&self.ir);
                 let arr_start = self.module.const_(Literal::I32(arr_start));
-                let nrow =
-                    self.module.unary(UnaryOp::TruncUF64ToI32, self.expr(nrow));
-                let ncol =
-                    self.module.unary(UnaryOp::TruncUF64ToI32, self.expr(ncol));
+
+                let nrow = self.module.binary(
+                    BinaryOp::AddI32,
+                    self.module.unary(UnaryOp::TruncUF64ToI32, self.expr(nrow)),
+                    self.module.const_(Literal::I32(1)),
+                );
+                let ncol = self.module.binary(
+                    BinaryOp::AddI32,
+                    self.module.unary(UnaryOp::TruncUF64ToI32, self.expr(ncol)),
+                    self.module.const_(Literal::I32(1)),
+                );
                 let ptr = self.module.call(
                     "alloc2d",
                     vec![arr_start, nrow, ncol],

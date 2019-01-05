@@ -14,6 +14,7 @@ pub enum OpCode {
     Stop,
 
     Read,
+    Input,
     Rand,
 
     GetFunc,
@@ -74,6 +75,7 @@ impl OpCode {
             Stop => "stop",
 
             Read => "read",
+            Input => "input",
             Rand => "rand",
 
             GetFunc => "get.fn",

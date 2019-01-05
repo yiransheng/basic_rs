@@ -14,6 +14,7 @@ pub trait Visitor<T> {
             Stmt::Goto(s) => self.visit_goto(s),
             Stmt::Gosub(s) => self.visit_gosub(s),
             Stmt::If(s) => self.visit_if(s),
+            Stmt::Input(s) => self.visit_input(s),
             Stmt::For(s) => self.visit_for(s),
             Stmt::Next(s) => self.visit_next(s),
             Stmt::Def(s) => self.visit_def(s),
@@ -50,6 +51,10 @@ pub trait Visitor<T> {
     }
 
     fn visit_if(&mut self, _stmt: &IfStmt) -> T {
+        unimplemented!()
+    }
+
+    fn visit_input(&mut self, _stmt: &InputStmt) -> T {
         unimplemented!()
     }
 

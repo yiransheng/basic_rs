@@ -296,6 +296,9 @@ impl ChunkWrite for Statement {
 impl ChunkWrite for Expr {
     fn write(&self, writer: &mut ChunkWriter) -> Result<(), WriteError> {
         match self {
+            Expr::Input => {
+                writer.write_opcode(OpCode::Input);
+            }
             Expr::ReadData => {
                 writer.write_opcode(OpCode::Read);
             }

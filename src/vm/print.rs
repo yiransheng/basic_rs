@@ -55,6 +55,11 @@ impl<W: Write> Printer<W> {
             col: 0,
         }
     }
+    pub fn flush(&mut self) -> Result<(), PrintError> {
+        self.out.flush()?;
+
+        Ok(())
+    }
     pub fn write_num(&mut self, n: f64) -> Result<(), PrintError> {
         let mut num = mem::replace(&mut self.num, Vec::new());
         num.clear();

@@ -6,6 +6,7 @@ class Printer {
     this._col = 0;
     this._decoder = new TextDecoder("utf-8");
     this._buffer = null;
+    this._currentLine = [];
 
     this.newline();
 
@@ -34,6 +35,8 @@ class Printer {
   }
 
   newline() {
+    console.log(this._currentLine.join(""));
+    this._currentLine.length = 0;
     const line = document.createElement("CODE");
     this._container.appendChild(line);
 
@@ -50,6 +53,7 @@ class Printer {
   }
 
   _write(str) {
+    this._currentLine.push(str);
     this._element.textContent += str;
     this._col += this._widthOf(str);
   }
@@ -76,6 +80,17 @@ const importObject = {
     },
     rand: () => {
       return Math.random();
+    },
+    input: () => {
+      const v = window
+        .prompt("Please open console (F12) to view program output.")
+        .trim();
+      const n = v.length ? parseFloat(v) : 0;
+      if (Number.isNaN(n)) {
+        throw TypeError("Not a number");
+      } else {
+        return n;
+      }
     },
     pow: (a, b) => {
       return Math.pow(a, b);
