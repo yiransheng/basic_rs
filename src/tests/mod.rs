@@ -60,6 +60,7 @@ fn test_sample_programs() {
         "bas/for.bas",
         "bas/bad_for.bas",
         "bas/def.bas",
+        "bas/empty_print.bas",
         "bas/power.bas",
         "bas/lin_eq.bas",
         "bas/sales.bas",

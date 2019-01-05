@@ -268,7 +268,7 @@ impl VM {
                         .global_lists
                         .get_mut(&var)
                         .ok_or_else(|| ExecError::ListNotFound(var))?;
-                    list.set_bound(n)?;
+                    list.set_bound(n + 1)?;
                 }
                 OpCode::DefineDim2d => {
                     let var: Variable = self.read_inline_operand()?;
@@ -288,7 +288,7 @@ impl VM {
                         .global_tables
                         .get_mut(&var)
                         .ok_or_else(|| ExecError::TableNotFound(var))?;
-                    table.set_bound([m, n])?;
+                    table.set_bound([m + 1, n + 1])?;
                 }
                 OpCode::Jump => {
                     let jump_point: JumpPoint = self.read_operand()?;
