@@ -155,20 +155,17 @@ impl Chunk {
     }
 
     #[inline(always)]
-    pub fn read_operand<O: Operand>(&mut self, offset: usize) -> O {
+    pub fn read_operand<O: Operand>(&self, offset: usize) -> O {
         O::read_from_chunk(offset, self)
     }
 
     #[inline(always)]
-    pub fn read_operand_ref<O: Operand>(&mut self, offset: usize) -> &O {
+    pub fn read_operand_ref<O: Operand>(&self, offset: usize) -> &O {
         O::read_ref_from_chunk(offset, self)
     }
 
     #[inline(always)]
-    pub fn read_inline_operand<O: InlineOperand>(
-        &mut self,
-        offset: usize,
-    ) -> O {
+    pub fn read_inline_operand<O: InlineOperand>(&self, offset: usize) -> O {
         let bytes = [self.read_byte(offset), self.read_byte(offset + 1)];
         O::from_bytes_unchecked(bytes)
     }
@@ -262,14 +259,14 @@ pub mod disassembler {
     //TODO: update Operand trait to eliminate &mut Chunk
     // requirement here
     pub struct Disassembler<'a, W> {
-        chunk: &'a mut Chunk,
+        chunk: &'a Chunk,
         ip: usize,
         line: usize,
         out: W,
     }
 
     impl<'a, W: io::Write> Disassembler<'a, W> {
-        pub fn new(chunk: &'a mut Chunk, out: W) -> Self {
+        pub fn new(chunk: &'a Chunk, out: W) -> Self {
             Disassembler {
                 chunk,
                 ip: 0,

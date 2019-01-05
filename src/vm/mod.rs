@@ -160,13 +160,13 @@ impl VM {
         }
     }
 
-    pub fn disassemble<W: io::Write>(&mut self, mut out: W) {
+    pub fn disassemble<W: io::Write>(&self, mut out: W) {
         use self::disassembler::Disassembler;
 
-        let mut main_chunk = Disassembler::new(&mut self.chunk, &mut out);
+        let mut main_chunk = Disassembler::new(&self.chunk, &mut out);
         main_chunk.disassemble();
 
-        for (func_id, chunk) in self.fn_chunks.iter_mut() {
+        for (func_id, chunk) in self.fn_chunks.iter() {
             let _ = writeln!(&mut out, "Chunk: {}\n", func_id);
             let mut fn_chunk = Disassembler::new(chunk, &mut out);
             fn_chunk.disassemble();
