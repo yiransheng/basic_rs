@@ -638,13 +638,20 @@ mod print {
     impl Printable for BasicBlock {
         fn print(&self, env: &mut PrintEnv) -> Result<(), fmt::Error> {
             let label = self.label.named(&env.names);
-            env.fmtln(label)?;
+            if !self.line_nos.is_empty() {
+                let first = self.line_nos.first().unwrap();
+                let last = self.line_nos.last().unwrap();
+                env.fmtln(format_args!(
+                    "{} Line {} - {}: ",
+                    label, first, last
+                ))?;
+            } else {
+                env.fmtln(label)?;
+            }
+
             env.indented(|env| {
                 for stmt in &self.statements {
-                    match stmt.print(env) {
-                        Ok(_) => {}
-                        Err(err) => return Err(err),
-                    }
+                    stmt.print(env)?;
                 }
                 match &self.exit {
                     BlockExit::Return(None) => env.fmtln("return"),

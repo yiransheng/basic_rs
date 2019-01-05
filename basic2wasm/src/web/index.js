@@ -77,6 +77,15 @@ const importObject = {
     rand: () => {
       return Math.random();
     },
+    input: () => {
+      const v = window.prompt().trim();
+      const n = parseFloat(v);
+      if (Number.isNaN(n)) {
+        throw TypeError("Not a number");
+      } else {
+        return n;
+      }
+    },
     pow: (a, b) => {
       return Math.pow(a, b);
     }
