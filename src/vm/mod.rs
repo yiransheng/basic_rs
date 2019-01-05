@@ -359,10 +359,13 @@ impl VM {
 
                     inp.read_line(&mut input_string)
                         .map_err(|_| ExecError::InputError)?;
-                    let v: f64 = input_string
-                        .trim()
-                        .parse()
-                        .map_err(|_| ExecError::InputError)?;
+
+                    let s = &input_string.trim();
+                    let v: f64 = if s.is_empty() {
+                        0.0
+                    } else {
+                        s.parse().map_err(|_| ExecError::InputError)?
+                    };
 
                     self.push_value(v);
                 }
