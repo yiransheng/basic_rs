@@ -1,9 +1,6 @@
-use std::collections::VecDeque;
-
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use num_traits::{FromPrimitive, ToPrimitive};
 
-use super::data::DataStack;
 use super::line_mapping::LineMapping;
 use super::opcode::OpCode;
 use super::value::FuncId;
@@ -12,6 +9,9 @@ use crate::ast::variable::Variable;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct JumpPoint(pub usize);
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub struct LocalVar(pub u16);
 
 pub trait InlineOperand: Into<[u8; 2]> {
     fn from_bytes_unchecked(bytes: [u8; 2]) -> Self;
@@ -35,6 +35,33 @@ impl InlineOperand for Func {
     #[inline(always)]
     fn from_bytes_unchecked(bytes: [u8; 2]) -> Self {
         Func::from_u8(bytes[0]).unwrap()
+    }
+}
+
+impl From<usize> for LocalVar {
+    fn from(i: usize) -> Self {
+        LocalVar(i as u16)
+    }
+}
+
+impl Into<[u8; 2]> for LocalVar {
+    fn into(self) -> [u8; 2] {
+        let mut bytes: [u8; 2] = [0, 0];
+        (&mut bytes[..]).write_u16::<LittleEndian>(self.0).unwrap();
+        bytes
+    }
+}
+impl Into<usize> for LocalVar {
+    fn into(self) -> usize {
+        self.0 as usize
+    }
+}
+
+impl InlineOperand for LocalVar {
+    #[inline(always)]
+    fn from_bytes_unchecked(bytes: [u8; 2]) -> Self {
+        let i = (&bytes[..]).read_u16::<LittleEndian>().unwrap();
+        LocalVar(i)
     }
 }
 
@@ -116,7 +143,6 @@ impl Operand for String {
 pub struct Chunk {
     code: Vec<u8>,
 
-    data: DataStack<f64>,
     constants: Vec<f64>,
 
     jump_points: Vec<JumpPoint>,
@@ -129,7 +155,6 @@ impl Chunk {
         Chunk {
             code: Vec::new(),
 
-            data: DataStack::new(),
             constants: Vec::new(),
 
             jump_points: Vec::new(),
@@ -138,15 +163,10 @@ impl Chunk {
         }
     }
 
-    pub fn reset(&mut self) {
-        self.data.reset();
-    }
-
     pub fn len(&self) -> usize {
         self.code.len()
     }
 
-    #[inline(always)]
     pub fn write_opcode(&mut self, code: OpCode, line: usize) {
         self.write(code as u8, line)
     }
@@ -202,11 +222,6 @@ impl Chunk {
         O::from_bytes_unchecked(bytes)
     }
 
-    #[inline(always)]
-    pub fn pop_data(&mut self) -> Option<f64> {
-        self.data.pop_front()
-    }
-
     fn write_index(&mut self, index: u16) {
         self.code.write_u16::<LittleEndian>(index).unwrap();
     }
@@ -214,242 +229,6 @@ impl Chunk {
     fn read_index(&self, offset: usize) -> u16 {
         (&self.code[offset..]).read_u16::<LittleEndian>().unwrap()
     }
-}
-
-pub mod from_ir {
-    use rustc_hash::FxHashMap;
-
-    use super::*;
-    use crate::ir::*;
-
-    //TODO: add a &'static str field for easy debugging
-    #[derive(Debug, Copy, Clone)]
-    pub struct WriteError;
-
-    pub struct ChunkWriter {
-        jp_label_map: FxHashMap<Label, JumpPoint>,
-        jp_indices: Vec<(u16, Label)>,
-        chunk: Chunk,
-    }
-    impl Default for ChunkWriter {
-        fn default() -> Self {
-            ChunkWriter {
-                jp_label_map: FxHashMap::default(),
-                jp_indices: Vec::new(),
-                chunk: Chunk::new(),
-            }
-        }
-    }
-
-    impl Visitor for ChunkWriter {
-        type Output = Chunk;
-        type Error = WriteError;
-
-        fn finish(mut self) -> Result<Self::Output, WriteError> {
-            for (index, label) in self.jp_indices.iter() {
-                let jp = self.jp_label_map.get(label).ok_or(WriteError)?;
-                self.chunk.set_operand(*index, *jp);
-            }
-            Ok(self.chunk)
-        }
-
-        fn visit_instruction(
-            &mut self,
-            instr: Instruction,
-        ) -> Result<(), WriteError> {
-            use self::InstructionKind::*;
-
-            let Instruction {
-                kind,
-                line_no,
-                label,
-            } = instr;
-
-            if let Some(label) = label {
-                let jp = JumpPoint(self.chunk.len());
-                if let Some(_) = self.jp_label_map.insert(label, jp) {
-                    return Err(WriteError);
-                }
-            }
-
-            match kind {
-                Data(n) => self.chunk.data.push_back(n),
-                Constant(n) => {
-                    self.chunk.write_opcode(OpCode::Constant, line_no);
-                    self.chunk.add_operand(n, line_no);
-                }
-                Return => {
-                    self.chunk.write_opcode(OpCode::Return, line_no);
-                }
-                Stop => {
-                    self.chunk.write_opcode(OpCode::Stop, line_no);
-                }
-                Jump(label) => {
-                    self.chunk.write_opcode(OpCode::Jump, line_no);
-                    let jp_index =
-                        self.chunk.add_operand(JumpPoint(0), line_no);
-                    self.jp_indices.push((jp_index, label));
-                }
-                JumpTrue(label) => {
-                    self.chunk.write_opcode(OpCode::JumpTrue, line_no);
-                    let jp_index =
-                        self.chunk.add_operand(JumpPoint(0), line_no);
-                    self.jp_indices.push((jp_index, label));
-                }
-                JumpFalse(label) => {
-                    self.chunk.write_opcode(OpCode::JumpFalse, line_no);
-                    let jp_index =
-                        self.chunk.add_operand(JumpPoint(0), line_no);
-                    self.jp_indices.push((jp_index, label));
-                }
-                Subroutine(label) => {
-                    self.chunk.write_opcode(OpCode::Subroutine, line_no);
-                    let jp_index =
-                        self.chunk.add_operand(JumpPoint(0), line_no);
-                    self.jp_indices.push((jp_index, label));
-                }
-                CallNative(func) => {
-                    self.chunk.write_opcode(OpCode::CallNative, line_no);
-                    self.chunk.add_inline_operand(func, line_no);
-                }
-                MapFunc(func, func_id) => {
-                    self.chunk.write_opcode(OpCode::FnConstant, line_no);
-                    self.chunk.add_inline_operand(func_id, line_no);
-                    self.chunk.write_opcode(OpCode::SetFunc, line_no);
-                    self.chunk.add_inline_operand(func, line_no);
-                }
-                Call(func) => {
-                    self.chunk.write_opcode(OpCode::GetFunc, line_no);
-                    self.chunk.add_inline_operand(func, line_no);
-                    self.chunk.write_opcode(OpCode::Call, line_no);
-                }
-                DefineGlobal(_) => {}
-                DefineLocal(_) => {}
-                SetLocal(var) => {
-                    self.chunk.write_opcode(OpCode::SetLocal, line_no);
-                    self.chunk.add_inline_operand(var, line_no);
-                }
-                ReadGlobal(var) => {
-                    self.chunk.write_opcode(OpCode::ReadGlobal, line_no);
-                    self.chunk.add_inline_operand(var, line_no);
-                }
-                ReadGlobalArray(var) => {
-                    self.chunk.write_opcode(OpCode::ReadGlobalArray, line_no);
-                    self.chunk.add_inline_operand(var, line_no);
-                }
-                ReadGlobalArray2d(var) => {
-                    self.chunk.write_opcode(OpCode::ReadGlobalArray2d, line_no);
-                    self.chunk.add_inline_operand(var, line_no);
-                }
-                GetLocal(var) => {
-                    self.chunk.write_opcode(OpCode::GetLocal, line_no);
-                    self.chunk.add_inline_operand(var, line_no);
-                }
-                GetGlobal(var) => {
-                    self.chunk.write_opcode(OpCode::GetGlobal, line_no);
-                    self.chunk.add_inline_operand(var, line_no);
-                }
-                SetGlobal(var) => {
-                    self.chunk.write_opcode(OpCode::SetGlobal, line_no);
-                    self.chunk.add_inline_operand(var, line_no);
-                }
-                GetGlobalArray(var) => {
-                    self.chunk.write_opcode(OpCode::GetGlobalArray, line_no);
-                    self.chunk.add_inline_operand(var, line_no);
-                }
-                SetGlobalArray(var) => {
-                    self.chunk.write_opcode(OpCode::SetGlobalArray, line_no);
-                    self.chunk.add_inline_operand(var, line_no);
-                }
-                GetGlobalArray2d(var) => {
-                    self.chunk.write_opcode(OpCode::GetGlobalArray2d, line_no);
-                    self.chunk.add_inline_operand(var, line_no);
-                }
-                SetGlobalArray2d(var) => {
-                    self.chunk.write_opcode(OpCode::SetGlobalArray2d, line_no);
-                    self.chunk.add_inline_operand(var, line_no);
-                }
-                // TODO: locals
-                InitArray(var) => {
-                    self.chunk.write_opcode(OpCode::InitArray, line_no);
-                    self.chunk.add_inline_operand(var, line_no);
-                }
-                InitArray2d(var) => {
-                    self.chunk.write_opcode(OpCode::InitArray2d, line_no);
-                    self.chunk.add_inline_operand(var, line_no);
-                }
-                SetArrayBound(var) => {
-                    self.chunk.write_opcode(OpCode::SetArrayBound, line_no);
-                    self.chunk.add_inline_operand(var, line_no);
-                }
-                SetArrayBound2d(var) => {
-                    self.chunk.write_opcode(OpCode::SetArrayBound2d, line_no);
-                    self.chunk.add_inline_operand(var, line_no);
-                }
-                PrintStart => {
-                    self.chunk.write_opcode(OpCode::PrintStart, line_no);
-                }
-                PrintEnd => {
-                    self.chunk.write_opcode(OpCode::PrintEnd, line_no);
-                }
-                PrintExpr => {
-                    self.chunk.write_opcode(OpCode::PrintExpr, line_no);
-                }
-                PrintLabel(s) => {
-                    self.chunk.write_opcode(OpCode::PrintLabel, line_no);
-                    self.chunk.add_operand(s, line_no);
-                }
-                PrintAdvance3 => {
-                    self.chunk.write_opcode(OpCode::PrintAdvance3, line_no);
-                }
-                PrintAdvance15 => {
-                    self.chunk.write_opcode(OpCode::PrintAdvance15, line_no);
-                }
-                Dup => {
-                    self.chunk.write_opcode(OpCode::Dup, line_no);
-                }
-                Negate => {
-                    self.chunk.write_opcode(OpCode::Negate, line_no);
-                }
-                Not => {
-                    self.chunk.write_opcode(OpCode::Not, line_no);
-                }
-                Add => {
-                    self.chunk.write_opcode(OpCode::Add, line_no);
-                }
-                Sub => {
-                    self.chunk.write_opcode(OpCode::Sub, line_no);
-                }
-                Mul => {
-                    self.chunk.write_opcode(OpCode::Mul, line_no);
-                }
-                Div => {
-                    self.chunk.write_opcode(OpCode::Div, line_no);
-                }
-                Pow => {
-                    self.chunk.write_opcode(OpCode::Pow, line_no);
-                }
-                Equal => {
-                    self.chunk.write_opcode(OpCode::Equal, line_no);
-                }
-                Less => {
-                    self.chunk.write_opcode(OpCode::Less, line_no);
-                }
-                Greater => {
-                    self.chunk.write_opcode(OpCode::Greater, line_no);
-                }
-                LoopTest => {
-                    self.chunk.write_opcode(OpCode::LoopTest, line_no);
-                }
-                Noop => {
-                    self.chunk.write_opcode(OpCode::Noop, line_no);
-                }
-            }
-
-            Ok(())
-        }
-    }
-
 }
 
 pub mod disassembler {
@@ -488,20 +267,34 @@ pub mod disassembler {
             while let Some(instr) = self.disassemble_instruction() {
                 match instr {
                     Constant => self.disassemble_constant(),
-                    Subroutine | Jump | JumpTrue | JumpFalse => {
-                        self.disassemble_address()
+                    Jump | JumpTrue | JumpFalse => self.disassemble_address(),
+                    CallNative | GetFunc => self.disassemble_function(),
+
+                    BindFunc => {
+                        self.disassemble_function();
+                        self.disassemble_function_id();
                     }
-                    CallNative | GetFunc | SetFunc => {
-                        self.disassemble_function()
+                    Call => {
+                        self.disassemble_function_id();
+                        let _ = write!(&mut self.out, " args:");
+                        self.disassemble_count();
+                    }
+                    CallIndirect => {
+                        let _ = write!(&mut self.out, " args:");
+                        self.disassemble_count();
                     }
 
-                    FnConstant => self.disassemble_function_id(),
+                    DeclLocal => {
+                        self.disassemble_count();
+                    }
 
-                    GetGlobal | SetGlobal | GetLocal | SetLocal
-                    | ReadGlobal | ReadGlobalArray | ReadGlobalArray2d
-                    | GetGlobalArray | SetGlobalArray | GetGlobalArray2d
-                    | SetGlobalArray2d | InitArray | InitArray2d
-                    | SetArrayBound | SetArrayBound2d => {
+                    GetLocal | SetLocal => {
+                        self.disassemble_local();
+                    }
+
+                    GetGlobal | SetGlobal | GetGlobalArray1d | DefineDim1d
+                    | DefineDim2d | SetGlobalArray1d | GetGlobalArray2d
+                    | SetGlobalArray2d | InitArray1d | InitArray2d => {
                         self.disassemble_variable()
                     }
 
@@ -518,6 +311,13 @@ pub mod disassembler {
             let n: f64 = self.get_operand();
             let _ = write!(&mut self.out, " {}", n);
         }
+
+        fn disassemble_count(&mut self) {
+            let n = self.chunk.read_byte(self.ip);
+            let _ = write!(&mut self.out, " {}", n);
+            self.ip += 1;
+        }
+
         fn disassemble_address(&mut self) {
             let p: JumpPoint = self.get_operand();
             let _ = write!(&mut self.out, " {}", p.0);
@@ -526,6 +326,11 @@ pub mod disassembler {
         fn disassemble_label(&mut self) {
             let label: String = self.get_operand();
             let _ = write!(&mut self.out, " \"{}\"", label);
+        }
+
+        fn disassemble_local(&mut self) {
+            let var: LocalVar = self.get_inline_operand();
+            let _ = write!(&mut self.out, " ${}", var.0);
         }
 
         fn disassemble_variable(&mut self) {
@@ -574,25 +379,7 @@ pub mod disassembler {
             self.ip += 1;
 
             OpCode::from_u8(byte).map(|instr| {
-                match instr {
-                    OpCode::PrintEnd => {
-                        self.printing = false;
-                    }
-                    _ => {}
-                }
-
-                if self.printing {
-                    let _ = write!(&mut self.out, "      {:8}", instr.short());
-                } else {
-                    let _ = write!(&mut self.out, "    {:10}", instr.short());
-                }
-
-                match instr {
-                    OpCode::PrintStart => {
-                        self.printing = true;
-                    }
-                    _ => {}
-                }
+                let _ = write!(&mut self.out, "    {:10}", instr.short());
 
                 instr
             })

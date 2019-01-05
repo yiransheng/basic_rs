@@ -124,6 +124,7 @@ impl<'a> Parser<'a> {
         }
 
         let line_no = self.line_no()?;
+        let loc = self.current_loc;
 
         if let Some(prev_line_no) = self.current_line_no {
             if line_no == prev_line_no {
@@ -175,6 +176,7 @@ impl<'a> Parser<'a> {
         Ok(Statement {
             statement: stmt,
             line_no,
+            loc,
         })
     }
 

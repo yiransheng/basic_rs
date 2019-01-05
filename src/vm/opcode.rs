@@ -3,46 +3,44 @@ use num_derive::{FromPrimitive, ToPrimitive};
 #[derive(Debug, Copy, Clone, Eq, PartialEq, FromPrimitive, ToPrimitive)]
 pub enum OpCode {
     Constant = 0x00,
-    FnConstant,
     Return,
+    ReturnValue,
     Jump,
     JumpTrue,
     JumpFalse,
-    Subroutine,
     CallNative,
+    CallIndirect,
     Call,
     Stop,
 
-    Pop,
-    ReadGlobal,
-    ReadGlobalArray,
-    ReadGlobalArray2d,
+    Read,
+    Rand,
 
-    SetFunc,
     GetFunc,
+    BindFunc,
+    DeclLocal,
     GetGlobal,
     SetGlobal,
-    GetGlobalArray,
-    SetGlobalArray,
+    GetGlobalArray1d,
+    SetGlobalArray1d,
     GetGlobalArray2d,
     SetGlobalArray2d,
 
     GetLocal,
     SetLocal,
 
-    InitArray,
+    InitArray1d,
     InitArray2d,
-    SetArrayBound,
-    SetArrayBound2d,
 
-    PrintStart,
+    DefineDim1d,
+    DefineDim2d,
+
     PrintExpr,
     PrintLabel,
     PrintAdvance3,
     PrintAdvance15,
-    PrintEnd,
+    PrintNewline,
 
-    Dup,
     Negate,
     Not,
     Add,
@@ -50,12 +48,11 @@ pub enum OpCode {
     Mul,
     Div,
     Pow,
+    CopySign,
 
     Equal,
     Less,
     Greater,
-
-    LoopTest,
 
     Noop,
 }
@@ -66,46 +63,44 @@ impl OpCode {
 
         match self {
             Constant => "const",
-            FnConstant => "fn",
             Return => "ret",
+            ReturnValue => "ret.val",
             Jump => "jmp",
             JumpTrue => "jmp.t",
             JumpFalse => "jmp.f",
-            Subroutine => "sub",
             CallNative => "call.na",
+            CallIndirect => "call_",
             Call => "call",
             Stop => "stop",
 
-            ReadGlobal => "read.var",
-            ReadGlobalArray => "read.arr",
-            ReadGlobalArray2d => "read.mat",
+            Read => "read",
+            Rand => "rand",
 
-            Pop => "pop",
-            SetFunc => "set.fn",
             GetFunc => "get.fn",
+            BindFunc => "bind.fn",
             GetGlobal => "get.var",
             SetGlobal => "set.var",
-            GetGlobalArray => "get.arr",
-            SetGlobalArray => "set.arr",
+            GetGlobalArray1d => "get.arr",
+            SetGlobalArray1d => "set.arr",
             GetGlobalArray2d => "get.mat",
             SetGlobalArray2d => "set.mat",
 
+            DeclLocal => "decl.loc",
             GetLocal => "get.loc",
             SetLocal => "set.loc",
 
-            InitArray => "init.arr",
+            InitArray1d => "init.arr",
             InitArray2d => "init.mat",
-            SetArrayBound => "set.len",
-            SetArrayBound2d => "set.dim",
 
-            PrintStart => "prt",
+            DefineDim1d => "dim.arr",
+            DefineDim2d => "dim.mat",
+
             PrintExpr => "prt.expr",
             PrintLabel => "prt.lab",
             PrintAdvance3 => "prt;",
             PrintAdvance15 => "prt,",
-            PrintEnd => "prt.end",
+            PrintNewline => "prt\\n",
 
-            Dup => "dup",
             Negate => "neg",
             Not => "not",
             Add => "add",
@@ -113,12 +108,11 @@ impl OpCode {
             Mul => "mul",
             Div => "div",
             Pow => "pow",
+            CopySign => "copysign",
 
             Equal => "eq",
             Less => "lt",
             Greater => "gt",
-
-            LoopTest => "loop.test",
 
             Noop => "noop",
         }

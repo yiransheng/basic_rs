@@ -2,7 +2,8 @@ use matches::*;
 use rand::rngs::SmallRng;
 use rand::SeedableRng;
 
-use crate::compiler::compile;
+use crate::codegen::codegen;
+use crate::compile::compile;
 use crate::parser::{ErrorInner, Parser};
 use crate::scanner::{Error as ScannerError, Scanner, SourceLoc};
 
@@ -26,7 +27,8 @@ fn test_correct_program(name: &str, prog_and_output: &str) {
     let scanner = Scanner::new(prog);
     let ast = Parser::new(scanner).parse().unwrap();
 
-    let mut vm = compile(&ast).expect("it should compile successfuly");
+    let ir = compile(&ast).expect("it should compile successfuly");
+    let mut vm = codegen(&ir).unwrap();
 
     let mut printed = Vec::new();
     let mut rng = SmallRng::from_seed([123; 16]);
@@ -56,6 +58,7 @@ fn test_sample_programs() {
         "bas/rem.bas",
         "bas/read.bas",
         "bas/for.bas",
+        "bas/bad_for.bas",
         "bas/def.bas",
         "bas/power.bas",
         "bas/lin_eq.bas",

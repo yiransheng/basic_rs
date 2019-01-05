@@ -8,6 +8,7 @@ use crate::ir::*;
 enum GlobalUsage {
     Single(usize),
     Multiple,
+    None,
 }
 
 struct FunctionUpdater<'a> {
@@ -27,30 +28,40 @@ impl<'a> FunctionUpdater<'a> {
     }
     fn done(mut self) {
         if !self.init_statements.is_empty() {
+            let n = self.init_statements.len();
             let entry = self.function.entry;
-            let entry_statements =
-                &mut self.function.blocks.get_mut(entry).unwrap().statements;
-            self.init_statements.append(entry_statements);
-            *entry_statements = self.init_statements;
+            let entry_line = self.function.line_no;
+            let entry_block = self.function.blocks.get_mut(entry).unwrap();
+
+            let mut entry_lines = vec![entry_line; n];
+
+            self.init_statements.append(&mut entry_block.statements);
+            entry_lines.append(&mut entry_block.line_nos);
+
+            entry_block.statements = self.init_statements;
+            entry_block.line_nos = entry_lines;
         }
     }
 }
 
 pub fn demote_global(ir: &mut Program) {
-    let mut func_indices: FxHashMap<GlobalKind, GlobalUsage> =
-        FxHashMap::default();
+    let mut func_indices: FxHashMap<GlobalKind, GlobalUsage> = ir
+        .globals
+        .iter()
+        .map(|g| (g.clone(), GlobalUsage::None))
+        .collect();
 
     for g in &ir.globals {
         for (i, func) in ir.functions.iter_mut().enumerate() {
             if !func.contains_global(*g) {
                 continue;
             }
-            match func_indices.get_mut(g) {
-                Some(GlobalUsage::Multiple) => {}
-                Some(u @ GlobalUsage::Single(_)) => {
+            match func_indices.get_mut(g).unwrap_or(&mut GlobalUsage::None) {
+                GlobalUsage::Multiple => {}
+                u @ GlobalUsage::Single(_) => {
                     *u = GlobalUsage::Multiple;
                 }
-                None => {
+                GlobalUsage::None => {
                     func_indices.insert(*g, GlobalUsage::Single(i));
                 }
             }
@@ -70,7 +81,7 @@ pub fn demote_global(ir: &mut Program) {
             GlobalUsage::Single(index) => {
                 updaters[*index].replace_global(g.clone());
             }
-            GlobalUsage::Multiple => {
+            GlobalUsage::Multiple | GlobalUsage::None => {
                 globals.push(g.clone());
             }
         }
@@ -119,7 +130,19 @@ impl TraverseLValue for LValue {
     where
         F: Fn(&mut LValue) -> Option<T> + Clone,
     {
-        f(self)
+        if let Some(x) = f(self) {
+            return Some(x);
+        }
+
+        match self {
+            LValue::ArrPtr(_, offset) => match offset {
+                Offset::OneD(expr) => expr.traverse(f),
+                Offset::TwoD(i, j) => {
+                    i.traverse(f.clone()).or_else(|| j.traverse(f))
+                }
+            },
+            _ => None,
+        }
     }
 }
 
@@ -144,7 +167,7 @@ impl TraverseLValue for Expr {
         F: Fn(&mut LValue) -> Option<T> + Clone,
     {
         match self {
-            Expr::Get(ref mut lval) => f(lval),
+            Expr::Get(ref mut lval) => lval.traverse(f),
             Expr::Unary(_, expr) => expr.traverse(f),
             Expr::Binary(_, ref mut lhs, ref mut rhs) => {
                 lhs.traverse(f.clone()).or_else(|| rhs.traverse(f))
@@ -166,7 +189,7 @@ impl TraverseLValue for Statement {
             Statement::Assign(ref mut lval, ref mut expr) => {
                 lval.traverse(f.clone()).or_else(|| expr.traverse(f))
             }
-            Statement::DefFn(ref mut lval, _) => f(lval),
+            Statement::DefFn(ref mut lval, _) => lval.traverse(f),
             Statement::Alloc1d(ref mut lval, ref mut expr) => {
                 lval.traverse(f.clone()).or_else(|| expr.traverse(f))
             }

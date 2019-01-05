@@ -10,12 +10,13 @@ pub use self::token::*;
 pub use self::variable::*;
 pub use self::visitor::Visitor;
 
-use either::Either;
-
 pub use self::function::Func;
 
 pub type Number = f64;
 pub type LineNo = usize;
+
+use crate::scanner::SourceLoc;
+use either::Either;
 
 #[derive(Debug)]
 pub struct List {
@@ -75,7 +76,8 @@ pub struct Program {
 #[derive(Debug)]
 pub struct Statement {
     pub statement: Stmt,
-    pub line_no: LineNo,
+    pub line_no: LineNo, // BASIC line number
+    pub loc: SourceLoc,
 }
 
 #[derive(Debug)]

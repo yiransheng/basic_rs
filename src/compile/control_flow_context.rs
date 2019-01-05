@@ -1,8 +1,10 @@
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::collections::VecDeque;
+use std::error::Error;
+use std::fmt;
 
-use basic_rs::ast::*;
+use crate::ast::*;
 use slotmap::{SecondaryMap, SlotMap};
 
 use crate::ir::{FnType, FunctionName, Label};
@@ -32,6 +34,26 @@ pub struct CfCtx {
 pub enum CfError {
     MissingLine(LineNo),
     JumpInsideSubroutine(LineNo),
+}
+
+impl fmt::Display for CfError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let desc = self.description();
+        match self {
+            CfError::MissingLine(line_no) => write!(f, "{}: {}", desc, line_no),
+            CfError::JumpInsideSubroutine(line_no) => {
+                write!(f, "{}: {}", desc, line_no)
+            }
+        }
+    }
+}
+impl Error for CfError {
+    fn description(&self) -> &str {
+        match self {
+            CfError::MissingLine(_) => "Missing line",
+            CfError::JumpInsideSubroutine(_) => "Jump inside subroutine",
+        }
+    }
 }
 
 impl CfCtx {
@@ -163,12 +185,15 @@ impl CfCtx {
                         cf_ctx.set_func(next_line_index, current_func)?;
 
                         stack.push_back(next_line_index);
-                        cf_ctx.branches.push((index, next_line_index));
                     }
+
+                    cf_ctx.branches.push((index, next_line_index));
                 }
                 // conditional branch
                 Stmt::If(stmt) => {
                     let to_index = cf_ctx.find_line_index(stmt.then).unwrap();
+                    cf_ctx.branches.push((index, to_index));
+                    cf_ctx.branches.push((index, next_line_index));
 
                     if !visited!(to_index) {
                         let new_label = cf_ctx.add_label();
@@ -177,7 +202,6 @@ impl CfCtx {
                         cf_ctx.set_func(to_index, current_func)?;
 
                         stack.push_back(to_index);
-                        cf_ctx.branches.push((index, to_index));
                     }
 
                     if !visited!(next_line_index) {
@@ -187,12 +211,12 @@ impl CfCtx {
                         cf_ctx.set_func(next_line_index, current_func)?;
 
                         stack.push_back(next_line_index);
-                        cf_ctx.branches.push((index, next_line_index));
                     }
                 }
                 // unconditional branch
                 Stmt::Goto(stmt) => {
                     let to_index = cf_ctx.find_line_index(stmt.goto).unwrap();
+                    cf_ctx.branches.push((index, to_index));
 
                     if !visited!(to_index) {
                         let new_label = cf_ctx.add_label();
@@ -201,12 +225,12 @@ impl CfCtx {
                         cf_ctx.set_func(to_index, current_func)?;
 
                         stack.push_back(to_index);
-                        cf_ctx.branches.push((index, to_index));
                     }
                 }
                 Stmt::Next(_) | Stmt::For(_) => {
                     let new_label = cf_ctx.add_label();
                     cf_ctx.set_label(index, new_label);
+                    cf_ctx.branches.push((index, next_line_index));
 
                     if !visited!(next_line_index) {
                         let new_label = cf_ctx.add_label();
@@ -215,7 +239,6 @@ impl CfCtx {
                         cf_ctx.set_func(next_line_index, current_func)?;
 
                         stack.push_back(next_line_index);
-                        cf_ctx.branches.push((index, next_line_index));
                     }
                 }
             }
@@ -277,14 +300,18 @@ impl CfCtx {
 
     pub fn functions<'a>(
         &'a self,
-    ) -> impl Iterator<Item = (FunctionName, Label, FnType)> + 'a {
+    ) -> impl Iterator<Item = (LineNo, FunctionName, Label, FnType)> + 'a {
         let lines = &self.lines;
 
         self.functions
             .iter()
             .filter_map(move |(k, i)| match lines[*i].label {
                 Some(label) => {
-                    self.fn_types.get(k).cloned().map(|ty| (k, label, ty))
+                    let line_no = self.find_line_no(*i);
+                    self.fn_types
+                        .get(k)
+                        .cloned()
+                        .map(|ty| (line_no, k, label, ty))
                 }
                 _ => None,
             })

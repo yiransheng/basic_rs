@@ -8,7 +8,8 @@ use rand::FromEntropy;
 use structopt::StructOpt;
 
 mod ast;
-mod compiler;
+mod codegen;
+mod compile;
 mod error_print;
 mod ir;
 mod parser;
@@ -18,7 +19,8 @@ mod vm;
 #[cfg(test)]
 mod tests;
 
-use crate::compiler::compile;
+use crate::codegen::codegen;
+use crate::compile::compile;
 use crate::error_print::{print_source_error, InterpreterError};
 use crate::parser::Parser;
 use crate::scanner::Scanner;
@@ -34,7 +36,7 @@ struct Opt {
     disassemble: bool,
 }
 
-fn read_source(opt: &Opt) -> Result<String, InterpreterError> {
+fn read_source(opt: &Opt) -> Result<String, io::Error> {
     let mut file = File::open(&opt.input)?;
     let mut source = String::new();
     file.read_to_string(&mut source)?;
@@ -46,7 +48,14 @@ fn run(source: &str, opt: &Opt) -> Result<(), InterpreterError> {
     let scanner = Scanner::new(source);
     let ast = Parser::new(scanner).parse()?;
 
-    let mut vm = compile(&ast)?;
+    let mut ir = compile(&ast)?;
+    ir.optimize();
+
+    if opt.disassemble {
+        println!("{}", ir);
+    }
+
+    let mut vm = codegen(&ir)?;
 
     let stdout = io::stdout();
 
@@ -72,6 +81,7 @@ fn main() {
         Ok(_) => {}
         Err(e) => match e {
             InterpreterError::ParseFail(e) => print_source_error(e, &source),
+            InterpreterError::CompileFail(e) => print_source_error(e, &source),
             _ => eprintln!("{}", e),
         },
     }

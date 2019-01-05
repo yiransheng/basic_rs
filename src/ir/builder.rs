@@ -1,5 +1,5 @@
-use basic_rs::ast;
-use rustc_hash::FxHashSet;
+use crate::ast;
+use rustc_hash::{FxHashMap, FxHashSet};
 use slotmap::{SecondaryMap, SlotMap};
 
 use super::*;
@@ -7,9 +7,10 @@ use super::*;
 #[derive(Debug)]
 pub struct Builder {
     functions: Vec<Function>,
+    current_line: ast::LineNo,
     main: Option<FunctionName>,
     vars: FxHashSet<ast::Variable>,
-    arrs: FxHashSet<ast::Variable>,
+    arrs: FxHashMap<ast::Variable, Offset<()>>,
     fns: FxHashSet<ast::Func>,
     data: Vec<f64>,
     labels: String,
@@ -19,9 +20,10 @@ impl Builder {
     pub fn new() -> Self {
         Builder {
             functions: vec![],
+            current_line: 0,
             main: None,
             vars: FxHashSet::default(),
-            arrs: FxHashSet::default(),
+            arrs: FxHashMap::default(),
             fns: FxHashSet::default(),
             data: vec![],
             labels: String::new(),
@@ -34,7 +36,11 @@ impl Builder {
             .map(|var| GlobalKind::Variable(*var))
             .collect();
 
-        globals.extend(self.arrs.iter().map(|var| GlobalKind::ArrPtr(*var)));
+        globals.extend(
+            self.arrs
+                .iter()
+                .map(|(var, dim)| GlobalKind::ArrPtr(*var, *dim)),
+        );
         globals.extend(self.fns.iter().map(|func| GlobalKind::FnPtr(*func)));
 
         self.data.reverse();
@@ -47,12 +53,25 @@ impl Builder {
             labels: self.labels,
         }
     }
+    pub fn set_line_no(&mut self, line_no: ast::LineNo) {
+        self.current_line = line_no;
+    }
 
     pub fn define_global(&mut self, var: ast::Variable) {
         self.vars.insert(var);
     }
-    pub fn define_array(&mut self, var: ast::Variable) {
-        self.arrs.insert(var);
+    pub fn define_array(
+        &mut self,
+        var: ast::Variable,
+        dim: Offset<()>,
+    ) -> Result<(), Offset<()>> {
+        if let Some(prev_dim) = self.arrs.insert(var, dim) {
+            if prev_dim != dim {
+                return Err(prev_dim);
+            }
+        }
+
+        Ok(())
     }
     pub fn define_function(&mut self, func: ast::Func) {
         self.fns.insert(func);
@@ -81,6 +100,7 @@ impl Builder {
 
         let function = Function {
             name,
+            line_no: self.current_line,
             ty,
             locals: vec![],
             entry,
@@ -133,12 +153,14 @@ impl Builder {
         label: Label,
         statement: Statement,
     ) -> Result<(), Statement> {
+        let current_line = self.current_line;
         match self
             .get_function_mut(func)
             .and_then(|func| func.blocks.get_mut(label))
         {
             Some(block) => {
                 block.statements.push(statement);
+                block.line_nos.push(current_line);
                 Ok(())
             }
             _ => Err(statement),
@@ -146,10 +168,6 @@ impl Builder {
     }
 
     pub fn add_branch(&mut self, func: FunctionName, from: Label, to: Label) {
-        if from == to {
-            return;
-        }
-
         if let Some(block) = self
             .get_function_mut(func)
             .and_then(|func| func.blocks.get_mut(from))

@@ -1,10 +1,11 @@
 use std::collections::VecDeque;
 
-use basic_rs::ast::{Visitor as AstVisitor, *};
+use crate::ast::{Visitor as AstVisitor, *};
 
 use super::control_flow_context::CfCtx;
 use super::error::CompileError;
 use super::expr_compiler::ExprCompiler;
+use super::HasLineState;
 use crate::ir::{
     BinaryOp, Builder, Expr, FunctionName, LValue as LV, Label,
     Statement as IRStatement, ValueType,
@@ -54,6 +55,11 @@ impl<'a> LoopPass<'a> {
         }
     }
 }
+impl<'a> HasLineState<CompileError> for LoopPass<'a> {
+    fn line_state(&self) -> usize {
+        self.line_index
+    }
+}
 
 impl<'a> AstVisitor<Result<(), CompileError>> for LoopPass<'a> {
     fn visit_program(&mut self, prog: &Program) -> Result<(), CompileError> {
@@ -66,9 +72,9 @@ impl<'a> AstVisitor<Result<(), CompileError>> for LoopPass<'a> {
 
             let label = self.current_label()?;
             let func = self.current_func()?;
-            let successor_label = self.next_line_label().ok_or_else(|| {
-                CompileError::Custom("Unexpected end of program")
-            })?;
+            let successor_label = self
+                .next_line_label()
+                .ok_or_else(|| CompileError::ForWithoutNext(stmt.var))?;
             let mut for_compiler = ForCompiler {
                 cf_ctx: &mut *self.cf_ctx,
                 builder: &mut *self.builder,
@@ -76,6 +82,7 @@ impl<'a> AstVisitor<Result<(), CompileError>> for LoopPass<'a> {
                 label,
                 successor_label,
             };
+            let for_var = stmt.var;
             let mut for_state = Some(for_compiler.visit_for(stmt)?);
             let mut successors: VecDeque<usize> =
                 self.cf_ctx.line_successors(i).collect();
@@ -96,11 +103,15 @@ impl<'a> AstVisitor<Result<(), CompileError>> for LoopPass<'a> {
                 };
 
                 self.line_index = j;
+
                 match &prog.statements[j].statement {
-                    Stmt::Next(stmt) => {
+                    Stmt::Next(stmt) if stmt.var == for_var => {
                         let label = self.current_label()?;
                         let func = self.current_func()?;
                         let successor_label = self.next_line_label();
+
+                        self.builder.set_line_no(prog.statements[j].line_no);
+
                         let mut next_compiler = NextCompiler {
                             cf_ctx: &mut *self.cf_ctx,
                             builder: &mut *self.builder,
@@ -117,8 +128,8 @@ impl<'a> AstVisitor<Result<(), CompileError>> for LoopPass<'a> {
                 }
             }
 
-            if for_state.is_some() {
-                return Err(CompileError::Custom("For without Next"));
+            if let Some(for_state) = for_state {
+                return Err(CompileError::ForWithoutNext(for_state.var));
             }
         }
 
@@ -131,7 +142,7 @@ struct ForState {
     test: Label,
     body: Label,
     var: Variable,
-    step_local: usize,
+    step: Expr,
     cond: Expr,
 }
 
@@ -161,30 +172,45 @@ impl<'a> AstVisitor<Result<ForState, CompileError>> for ForCompiler<'a> {
             _ => Expr::Const(1.0),
         };
 
-        let step_local = self
-            .builder
-            .add_local(ValueType::F64, func)
-            .map_err(|_| CompileError::Custom("function not found"))?;
-        let target_local = self
-            .builder
-            .add_local(ValueType::F64, func)
-            .map_err(|_| CompileError::Custom("function not found"))?;
+        let step = match step {
+            expr @ Expr::Const(_) => expr,
+            expr @ _ => {
+                let step_local =
+                    self.builder.add_local(ValueType::F64, func).map_err(
+                        |_| CompileError::Custom("function not found"),
+                    )?;
+                self.builder
+                    .add_statement(
+                        func,
+                        header,
+                        IRStatement::Assign(LV::Local(step_local), expr),
+                    )
+                    .map_err(|_| CompileError::Custom("block not found"))?;
+
+                Expr::Get(Box::new(LV::Local(step_local)))
+            }
+        };
+
+        let target = match to {
+            expr @ Expr::Const(_) => expr,
+            expr @ _ => {
+                let target_local = self
+                    .builder
+                    .add_local(ValueType::F64, func)
+                    .map_err(|_| CompileError::Custom("function not found"))?;
+                self.builder
+                    .add_statement(
+                        func,
+                        header,
+                        IRStatement::Assign(LV::Local(target_local), expr),
+                    )
+                    .map_err(|_| CompileError::Custom("block not found"))?;
+
+                Expr::Get(Box::new(LV::Local(target_local)))
+            }
+        };
 
         // setup
-        self.builder
-            .add_statement(
-                func,
-                header,
-                IRStatement::Assign(LV::Local(step_local), step),
-            )
-            .map_err(|_| CompileError::Custom("block not found"))?;
-        self.builder
-            .add_statement(
-                func,
-                header,
-                IRStatement::Assign(LV::Local(target_local), to),
-            )
-            .map_err(|_| CompileError::Custom("block not found"))?;
         self.builder
             .add_statement(
                 func,
@@ -197,17 +223,19 @@ impl<'a> AstVisitor<Result<ForState, CompileError>> for ForCompiler<'a> {
         self.builder.add_branch(func, header, test);
 
         // condition test
-        let step = Expr::Get(Box::new(LV::Local(step_local)));
         let dir = Expr::Binary(
             BinaryOp::CopySign,
             Box::new(Expr::Const(1.0)),
-            Box::new(step),
+            Box::new(step.clone()),
         );
-        let target = Expr::Get(Box::new(LV::Local(target_local)));
         let current = Expr::Get(Box::new(LV::Global(var)));
         let dist =
             Expr::Binary(BinaryOp::Sub, Box::new(current), Box::new(target));
-        let dist = Expr::Binary(BinaryOp::Mul, Box::new(dist), Box::new(dir));
+        let mut dist =
+            Expr::Binary(BinaryOp::Mul, Box::new(dist), Box::new(dir));
+
+        dist.evaluate_const();
+
         let done = Expr::Binary(
             BinaryOp::Greater,
             Box::new(dist),
@@ -219,7 +247,7 @@ impl<'a> AstVisitor<Result<ForState, CompileError>> for ForCompiler<'a> {
             test,
             body,
             var,
-            step_local,
+            step,
         };
 
         Ok(for_state)
@@ -243,11 +271,11 @@ impl<'a> AstVisitor<Result<(), CompileError>> for NextCompiler<'a> {
             test,
             body,
             var,
-            step_local,
+            step,
         } = self
             .for_state
             .take()
-            .ok_or_else(|| CompileError::Custom("next without for"))?;
+            .ok_or_else(|| CompileError::NextWithoutFor(stmt.var))?;
 
         let current_func = self.func;
         let next_label = self.label;
@@ -261,10 +289,10 @@ impl<'a> AstVisitor<Result<(), CompileError>> for NextCompiler<'a> {
         };
 
         if stmt.var != var {
-            return Err(CompileError::Custom("next without for"));
+            return Err(CompileError::NextWithoutFor(stmt.var));
         }
         if current_func != func {
-            return Err(CompileError::Custom("next without for"));
+            return Err(CompileError::NextWithoutFor(stmt.var));
         }
 
         self.builder.add_conditional_branch(
@@ -283,7 +311,7 @@ impl<'a> AstVisitor<Result<(), CompileError>> for NextCompiler<'a> {
                 Expr::Binary(
                     BinaryOp::Add,
                     Box::new(Expr::Get(Box::new(LV::Global(var)))),
-                    Box::new(Expr::Get(Box::new(LV::Local(step_local)))),
+                    Box::new(step),
                 ),
             ),
         );

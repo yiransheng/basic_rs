@@ -1,14 +1,14 @@
 use std::fmt::Display;
 
 use super::runtime::runtime_api;
-use crate::ir::{
+use basic_rs::ir::{
     BasicBlock, BinaryOp as IRBinaryOp, BlockExit, Expr as IRExpr, Function,
     FunctionName, GlobalKind, LValue, Label, Offset, Program, Statement,
     UnaryOp as IRUnaryOp, ValueType,
 };
 
 use binaryen::*;
-use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
+use byteorder::{LittleEndian, WriteBytesExt};
 use slotmap::SecondaryMap;
 
 const F64_SIZE: usize = 8;
@@ -119,7 +119,7 @@ impl CodeGen {
                         init_expr,
                     );
                 }
-                GlobalKind::ArrPtr(var) => {
+                GlobalKind::ArrPtr(var, _) => {
                     self.module.add_global(
                         array_name(var),
                         ValueTy::I32,
@@ -289,7 +289,7 @@ impl CodeGen {
             IRExpr::Const(v) => self.module.const_(Literal::F64(*v)),
             IRExpr::Unary(op, rhs) => {
                 let rhs = self.expr(rhs);
-                self.module.unary((*op).into(), rhs)
+                self.module.unary(convert_unary_op(*op), rhs)
             }
             IRExpr::Binary(op, lhs, rhs) => {
                 let lhs = self.expr(lhs);
@@ -299,7 +299,7 @@ impl CodeGen {
                     IRBinaryOp::Pow => {
                         self.module.call("pow", vec![lhs, rhs], Ty::F64)
                     }
-                    _ => self.module.binary((*op).into(), lhs, rhs),
+                    _ => self.module.binary(convert_binary_op(*op), lhs, rhs),
                 }
             }
             IRExpr::Get(lval) => match lval.deref() {
@@ -454,31 +454,26 @@ impl CodeGen {
     }
 }
 
-impl Into<UnaryOp> for IRUnaryOp {
-    fn into(self) -> UnaryOp {
-        match self {
-            IRUnaryOp::Neg => UnaryOp::NegF64,
-            IRUnaryOp::Not => UnaryOp::EqZI32,
-            IRUnaryOp::Abs => UnaryOp::AbsF64,
-            IRUnaryOp::Sqr => UnaryOp::SqrtF64,
-            IRUnaryOp::Trunc => UnaryOp::TruncF64,
-            _ => panic!("unsupported op"),
-        }
+fn convert_unary_op(op: IRUnaryOp) -> UnaryOp {
+    match op {
+        IRUnaryOp::Neg => UnaryOp::NegF64,
+        IRUnaryOp::Not => UnaryOp::EqZI32,
+        IRUnaryOp::Abs => UnaryOp::AbsF64,
+        IRUnaryOp::Sqr => UnaryOp::SqrtF64,
+        IRUnaryOp::Trunc => UnaryOp::TruncF64,
+        _ => panic!("unsupported op"),
     }
 }
-
-impl Into<BinaryOp> for IRBinaryOp {
-    fn into(self) -> BinaryOp {
-        match self {
-            IRBinaryOp::Add => BinaryOp::AddF64,
-            IRBinaryOp::Sub => BinaryOp::SubF64,
-            IRBinaryOp::Mul => BinaryOp::MulF64,
-            IRBinaryOp::Div => BinaryOp::DivF64,
-            IRBinaryOp::Less => BinaryOp::LtF64,
-            IRBinaryOp::Greater => BinaryOp::GtF64,
-            IRBinaryOp::Equal => BinaryOp::EqF64,
-            IRBinaryOp::CopySign => BinaryOp::CopySignF64,
-            _ => panic!("unsupported op"),
-        }
+fn convert_binary_op(op: IRBinaryOp) -> BinaryOp {
+    match op {
+        IRBinaryOp::Add => BinaryOp::AddF64,
+        IRBinaryOp::Sub => BinaryOp::SubF64,
+        IRBinaryOp::Mul => BinaryOp::MulF64,
+        IRBinaryOp::Div => BinaryOp::DivF64,
+        IRBinaryOp::Less => BinaryOp::LtF64,
+        IRBinaryOp::Greater => BinaryOp::GtF64,
+        IRBinaryOp::Equal => BinaryOp::EqF64,
+        IRBinaryOp::CopySign => BinaryOp::CopySignF64,
+        _ => panic!("unsupported op"),
     }
 }
