@@ -14,6 +14,7 @@ impl fmt::Display for Keyword {
             Print => write!(f, "PRINT"),
             Goto => write!(f, "GOTO"),
             If => write!(f, "IF"),
+            Input => write!(f, "INPUT"),
             For => write!(f, "FOR"),
             Next => write!(f, "NEXT"),
             End => write!(f, "END"),
@@ -212,6 +213,7 @@ impl fmt::Display for Stmt {
             Goto(ref v) => v.fmt(f),
             Gosub(ref v) => v.fmt(f),
             If(ref v) => v.fmt(f),
+            Input(ref v) => v.fmt(f),
             For(ref v) => v.fmt(f),
             Next(ref v) => v.fmt(f),
             Def(ref v) => v.fmt(f),
@@ -237,6 +239,13 @@ impl fmt::Display for ReadStmt {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         write!(f, "READ ")?;
         intersperse(&self.vars, &COMMA_SEP, f)
+    }
+}
+
+impl fmt::Display for InputStmt {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(f, "INPUT ")?;
+        self.var.fmt(f)
     }
 }
 

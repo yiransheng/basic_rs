@@ -153,6 +153,7 @@ impl<'a> Parser<'a> {
             Keyword::Goto => Stmt::Goto(self.goto_statement()?),
             Keyword::Gosub => Stmt::Gosub(self.gosub_statement()?),
             Keyword::If => Stmt::If(self.if_statement()?),
+            Keyword::Input => Stmt::Input(self.input_statement()?),
             Keyword::For => Stmt::For(self.for_statement()?),
             Keyword::Next => Stmt::Next(self.next_statement()?),
             Keyword::Def => Stmt::Def(self.def_statement()?),
@@ -200,6 +201,13 @@ impl<'a> Parser<'a> {
         });
 
         Ok(DataStmt { vals })
+    }
+
+    fn input_statement(&mut self) -> Result<InputStmt, Error> {
+        parse_statement!(self, Input, {
+            let var = self.variable()?;
+            Ok(InputStmt { var })
+        })
     }
 
     fn print_statement(&mut self) -> Result<PrintStmt, Error> {
