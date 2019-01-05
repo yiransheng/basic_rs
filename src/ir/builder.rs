@@ -107,7 +107,7 @@ impl Builder {
             blocks,
         };
 
-        if let Some(_) = self.get_function_mut(name) {
+        if self.get_function_mut(name).is_some() {
             Err(function)
         } else {
             self.functions.push(function);

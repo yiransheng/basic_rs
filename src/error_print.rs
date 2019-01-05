@@ -86,7 +86,7 @@ impl Error for InterpreterError {
     }
 }
 
-pub fn print_source_error<E: Error>(err: SourceMapped<E>, source: &str) {
+pub fn print_source_error<E: Error>(err: &SourceMapped<E>, source: &str) {
     let line = source.lines().enumerate().find_map(|(i, l)| {
         if i == err.loc.line {
             Some(l)

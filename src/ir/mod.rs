@@ -263,7 +263,7 @@ impl Expr {
                         *self = Expr::Unary(UnaryOp::Neg, Box::new(lhs));
                         return;
                     }
-                    (ref op @ _, Expr::Const(lhs), Expr::Const(rhs)) => {
+                    (ref op, Expr::Const(lhs), Expr::Const(rhs)) => {
                         if let Some(n) = f64::evaluate_binary(**op, *lhs, *rhs)
                         {
                             *self = Expr::Const(n);

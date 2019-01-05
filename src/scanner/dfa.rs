@@ -64,9 +64,8 @@ where
     type Output = T::Output;
 
     fn match_str(&mut self, s: &str) -> Option<(Self::Output, usize)> {
-        match self.left.match_str(s) {
-            Some((x, c)) => return Some((x, c)),
-            _ => {}
+        if let Some((x, c)) = self.left.match_str(s) {
+            return Some((x, c));
         }
 
         let mut right = U::default();

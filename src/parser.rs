@@ -116,11 +116,8 @@ impl<'a> Parser<'a> {
 
     fn statement(&mut self) -> Result<Statement, Error> {
         // skip empty lines
-        match &self.current {
-            Token::Eol => {
-                self.advance()?;
-            }
-            _ => {}
+        if let Token::Eol = self.current {
+            self.advance()?;
         }
 
         let line_no = self.line_no()?;
@@ -166,11 +163,8 @@ impl<'a> Parser<'a> {
         };
 
         // skip empty lines
-        match &self.current {
-            Token::Eol => {
-                self.advance()?;
-            }
-            _ => {}
+        if let Token::Eol = self.current {
+            self.advance()?;
         }
 
         Ok(Statement {
@@ -397,13 +391,10 @@ impl<'a> Parser<'a> {
     fn power(&mut self) -> Result<Expression, Error> {
         // ^ is right associative, use recursion
         let mut lhs = self.unary()?;
-        match &self.current {
-            Token::CaretUp => {
-                self.advance()?;
-                let rhs = self.power()?;
-                lhs = Expression::Pow(Box::new(lhs), Box::new(rhs));
-            }
-            _ => {}
+        if let Token::CaretUp = self.current {
+            self.advance()?;
+            let rhs = self.power()?;
+            lhs = Expression::Pow(Box::new(lhs), Box::new(rhs));
         }
 
         Ok(lhs)
@@ -551,7 +542,7 @@ impl<'a> Parser<'a> {
 
     fn line_no(&mut self) -> Result<LineNo, Error> {
         let n = match &self.current {
-            Token::Natural(n) => n.clone(),
+            Token::Natural(n) => *n,
             _ => return self.error_current(ErrorInner::BadLineNo),
         };
 
@@ -567,15 +558,10 @@ impl<'a> Parser<'a> {
         let first = f(self)?;
         let mut results = vec![first];
 
-        loop {
-            match &self.current {
-                Token::Comma => {
-                    self.advance()?;
-                    let item = f(self)?;
-                    results.push(item);
-                }
-                _ => break,
-            }
+        while let Token::Comma = self.current {
+            self.advance()?;
+            let item = f(self)?;
+            results.push(item);
         }
 
         Ok(results)
@@ -588,7 +574,7 @@ impl<'a> Parser<'a> {
         let first = f(self)?;
         let mut results = vec![first];
 
-        'outter: loop {
+        loop {
             match &self.current {
                 Token::Eof | Token::Eol => {
                     break;

@@ -80,8 +80,8 @@ fn main() {
     match run(&source, &opt) {
         Ok(_) => {}
         Err(e) => match e {
-            InterpreterError::ParseFail(e) => print_source_error(e, &source),
-            InterpreterError::CompileFail(e) => print_source_error(e, &source),
+            InterpreterError::ParseFail(e) => print_source_error(&e, &source),
+            InterpreterError::CompileFail(e) => print_source_error(&e, &source),
             _ => eprintln!("{}", e),
         },
     }

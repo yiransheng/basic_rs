@@ -37,4 +37,3 @@ criterion = "0.2"
 
 [profile.bench]
 lto = true
-target-cpu = "native"

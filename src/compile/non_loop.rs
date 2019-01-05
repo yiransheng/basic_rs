@@ -93,7 +93,7 @@ impl<'a> AstVisitor<Result<(), CompileError>> for NonLoopPass<'a> {
         for (line_no, func, entry, ty) in self.cf_ctx.functions() {
             self.builder.set_line_no(line_no);
             self.builder
-                .add_function(ty.clone(), func, entry)
+                .add_function(ty, func, entry)
                 .map_err(|_| CompileError::Custom("Function already exist"))?;
         }
 
@@ -107,11 +107,8 @@ impl<'a> AstVisitor<Result<(), CompileError>> for NonLoopPass<'a> {
             let func = self.cf_ctx.get_func(i);
             let label = self.cf_ctx.get_label(i);
 
-            match (func, label) {
-                (Some(func), Some(label)) => {
-                    let _ = self.builder.add_block(func, label);
-                }
-                _ => {}
+            if let (Some(func), Some(label)) = (func, label) {
+                let _ = self.builder.add_block(func, label);
             }
         }
 
@@ -122,11 +119,8 @@ impl<'a> AstVisitor<Result<(), CompileError>> for NonLoopPass<'a> {
             let func = self.cf_ctx.get_func(i);
             let label = self.cf_ctx.get_label(i);
 
-            match (func, label) {
-                (Some(_), Some(_)) => {
-                    self.visit_statement(stmt)?;
-                }
-                _ => {}
+            if let (Some(_), Some(_)) = (func, label) {
+                self.visit_statement(stmt)?;
             }
         }
 
@@ -142,7 +136,7 @@ impl<'a> AstVisitor<Result<(), CompileError>> for NonLoopPass<'a> {
         self.add_basic_block_branch()
     }
     fn visit_data(&mut self, stmt: &DataStmt) -> Result<(), CompileError> {
-        self.builder.add_data(stmt.vals.iter().map(|v| *v));
+        self.builder.add_data(stmt.vals.iter().cloned());
 
         self.add_basic_block_branch()
     }

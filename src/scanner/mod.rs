@@ -158,10 +158,11 @@ impl<'a> Iterator for ScannerIter<'a> {
         let item = self.inner.as_mut().map(|s| s.scan());
 
         match item {
-            Some(Ok(ref t)) => match &t.value {
-                Token::Eof => self.inner = None,
-                _ => {}
-            },
+            Some(Ok(ref t)) => {
+                if let Token::Eof = &t.value {
+                    self.inner = None;
+                }
+            }
             Some(Err(_)) => {
                 self.inner = None;
             }
@@ -260,7 +261,7 @@ impl<'a> Scanner<'a> {
                     Token::Varname(var)
                 }
             },
-            c @ _ => return Err(Error::UnexpectedChar(c)),
+            c => return Err(Error::UnexpectedChar(c)),
         };
 
         Ok(token)

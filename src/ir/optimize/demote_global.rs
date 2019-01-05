@@ -44,11 +44,8 @@ impl<'a> FunctionUpdater<'a> {
 }
 
 pub fn demote_global(ir: &mut Program) {
-    let mut func_indices: FxHashMap<GlobalKind, GlobalUsage> = ir
-        .globals
-        .iter()
-        .map(|g| (g.clone(), GlobalUsage::None))
-        .collect();
+    let mut func_indices: FxHashMap<GlobalKind, GlobalUsage> =
+        ir.globals.iter().map(|g| (*g, GlobalUsage::None)).collect();
 
     for g in &ir.globals {
         for (i, func) in ir.functions.iter_mut().enumerate() {

@@ -89,18 +89,12 @@ impl<'a> AstVisitor<Result<(), CompileError>> for LoopPass<'a> {
             let mut visited: Vec<bool> =
                 prog.statements.iter().map(|_| false).collect();
 
-            loop {
-                let j = match successors.pop_back() {
-                    Some(j) => {
-                        if visited[j] {
-                            continue;
-                        } else {
-                            visited[j] = true;
-                            j
-                        }
-                    }
-                    None => break,
-                };
+            while let Some(j) = successors.pop_back() {
+                if visited[j] {
+                    continue;
+                } else {
+                    visited[j] = true;
+                }
 
                 self.line_index = j;
 
@@ -174,7 +168,7 @@ impl<'a> AstVisitor<Result<ForState, CompileError>> for ForCompiler<'a> {
 
         let step = match step {
             expr @ Expr::Const(_) => expr,
-            expr @ _ => {
+            expr => {
                 let step_local =
                     self.builder.add_local(ValueType::F64, func).map_err(
                         |_| CompileError::Custom("function not found"),
@@ -193,7 +187,7 @@ impl<'a> AstVisitor<Result<ForState, CompileError>> for ForCompiler<'a> {
 
         let target = match to {
             expr @ Expr::Const(_) => expr,
-            expr @ _ => {
+            expr => {
                 let target_local = self
                     .builder
                     .add_local(ValueType::F64, func)

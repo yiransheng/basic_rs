@@ -83,8 +83,8 @@ pub fn codegen(ir: &Program) -> Result<VM, WriteError> {
         let mut chunk = Chunk::new();
         if function.name == ir.main {
             for global in &ir.globals {
-                match global {
-                    GlobalKind::ArrPtr(var, dim) => match dim {
+                if let GlobalKind::ArrPtr(var, dim) = global {
+                    match dim {
                         Offset::OneD(..) => {
                             chunk.write_opcode(OpCode::InitArray1d, 0);
                             chunk.add_inline_operand(*var, 0);
@@ -93,8 +93,7 @@ pub fn codegen(ir: &Program) -> Result<VM, WriteError> {
                             chunk.write_opcode(OpCode::InitArray2d, 0);
                             chunk.add_inline_operand(*var, 0);
                         }
-                    },
-                    _ => {}
+                    }
                 }
             }
         }
@@ -237,16 +236,16 @@ impl ChunkWrite for Statement {
                     }
                 },
             },
-            Statement::DefFn(lval, fname) => match lval {
-                LValue::FnPtr(func) => {
+            Statement::DefFn(lval, fname) => {
+                if let LValue::FnPtr(func) = lval {
                     writer.write_opcode(OpCode::BindFunc);
                     writer.add_inline_operand(*func);
                     writer.add_inline_operand(
                         writer.func_map.get(*fname).cloned().unwrap(),
                     );
                 }
-                _ => {}
-            },
+            }
+
             Statement::CallSub(fname) => {
                 writer.write_opcode(OpCode::Call);
                 writer.add_inline_operand(
@@ -273,23 +272,21 @@ impl ChunkWrite for Statement {
             Statement::PrintNewline => {
                 writer.write_opcode(OpCode::PrintNewline);
             }
-            Statement::Alloc1d(lval, expr) => match lval {
-                LValue::ArrPtr(var, _) => {
+            Statement::Alloc1d(lval, expr) => {
+                if let LValue::ArrPtr(var, _) = lval {
                     expr.write(writer)?;
                     writer.write_opcode(OpCode::DefineDim1d);
                     writer.add_inline_operand(*var);
                 }
-                _ => {}
-            },
-            Statement::Alloc2d(lval, m, n) => match lval {
-                LValue::ArrPtr(var, _) => {
+            }
+            Statement::Alloc2d(lval, m, n) => {
+                if let LValue::ArrPtr(var, _) = lval {
                     m.write(writer)?;
                     n.write(writer)?;
                     writer.write_opcode(OpCode::DefineDim2d);
                     writer.add_inline_operand(*var);
                 }
-                _ => {}
-            },
+            }
         }
 
         Ok(())

@@ -101,6 +101,12 @@ pub struct Chunk {
     line_map: LineMapping,
 }
 
+impl Default for Chunk {
+    fn default() -> Self {
+        Chunk::new()
+    }
+}
+
 impl Chunk {
     pub fn new() -> Self {
         Chunk {
@@ -123,7 +129,7 @@ impl Chunk {
     }
 
     pub fn write(&mut self, byte: u8, line: usize) {
-        self.code.push(byte.into());
+        self.code.push(byte);
         self.line_map.add_mapping(line, self.len());
     }
 
