@@ -176,6 +176,7 @@ impl CfCtx {
                 | Stmt::Let(_)
                 | Stmt::Read(_)
                 | Stmt::Data(_)
+                | Stmt::Input(_)
                 | Stmt::Print(_)
                 | Stmt::Def(_)
                 | Stmt::Dim(_)

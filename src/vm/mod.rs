@@ -65,6 +65,7 @@ pub enum ExecError {
     EmptyStack,
     ListNotFound(Variable),
     TableNotFound(Variable),
+    InputError,
     IndexError(Variable, f64),
     TypeError(&'static str),
     ValueError(&'static str),
@@ -80,6 +81,7 @@ impl fmt::Display for ExecError {
 
         let desc = self.description();
         match self {
+            ExecError::InputError => write!(f, "{}", desc),
             ExecError::ListNotFound(var) => write!(f, "{}: {}", desc, var),
             ExecError::TableNotFound(var) => write!(f, "{}: {}", desc, var),
             ExecError::IndexError(var, v) => {
@@ -102,6 +104,7 @@ impl fmt::Display for ExecError {
 impl error::Error for ExecError {
     fn description(&self) -> &str {
         match self {
+            ExecError::InputError => "Input error",
             ExecError::NoData => "No data",
             ExecError::EmptyStack => "Empty stack",
             ExecError::ListNotFound(_) => "Use uninitialized list",
@@ -191,13 +194,13 @@ impl VM {
         self.call_stack.push_back(call_frame);
     }
 
-    #[inline]
-    pub fn run<W: io::Write, R: Rng>(
+    pub fn run_with_input<W: io::Write, R: Rng>(
         &mut self,
+        inp: io::StdinLock,
         out: W,
         rng: &mut R,
     ) -> Result<(), RuntimeError> {
-        match self.exec(out, rng) {
+        match self.exec(inp, out, rng) {
             Ok(_) => Ok(()),
             Err(err) => {
                 let ip = *self.get_ip() - 1;
@@ -212,14 +215,38 @@ impl VM {
             }
         }
     }
-    fn exec<W: io::Write, R: Rng>(
+
+    pub fn run<W: io::Write, R: Rng>(
         &mut self,
+        out: W,
+        rng: &mut R,
+    ) -> Result<(), RuntimeError> {
+        match self.exec(io::BufReader::new(io::empty()), out, rng) {
+            Ok(_) => Ok(()),
+            Err(err) => {
+                let ip = *self.get_ip() - 1;
+                match err {
+                    // BASIC program exits normally when READ has no more data
+                    ExecError::NoData => Ok(()),
+                    _ => Err(RuntimeError {
+                        error: err,
+                        line_no: self.chunk.line_no(ip),
+                    }),
+                }
+            }
+        }
+    }
+
+    fn exec<I: io::BufRead, W: io::Write, R: Rng>(
+        &mut self,
+        mut inp: I,
         out: W,
         rng: &mut R,
     ) -> Result<(), ExecError> {
         assert!(self.chunk.len() > 0, "Empty chunk");
 
         let mut printer = Printer::new_buffered(out);
+        let mut input_string = String::new();
 
         loop {
             let byte = self.read_byte()?;
@@ -268,7 +295,7 @@ impl VM {
                         .global_lists
                         .get_mut(&var)
                         .ok_or_else(|| ExecError::ListNotFound(var))?;
-                    list.set_bound(n)?;
+                    list.set_bound(n + 1)?;
                 }
                 OpCode::DefineDim2d => {
                     let var: Variable = self.read_inline_operand()?;
@@ -288,7 +315,7 @@ impl VM {
                         .global_tables
                         .get_mut(&var)
                         .ok_or_else(|| ExecError::TableNotFound(var))?;
-                    table.set_bound([m, n])?;
+                    table.set_bound([m + 1, n + 1])?;
                 }
                 OpCode::Jump => {
                     let jump_point: JumpPoint = self.read_operand()?;
@@ -325,6 +352,22 @@ impl VM {
                 OpCode::Read => {
                     let value = self.read_number()?;
                     self.push_value(value);
+                }
+                OpCode::Input => {
+                    printer.flush()?;
+                    input_string.clear();
+
+                    inp.read_line(&mut input_string)
+                        .map_err(|_| ExecError::InputError)?;
+
+                    let s = &input_string.trim();
+                    let v: f64 = if s.is_empty() {
+                        0.0
+                    } else {
+                        s.parse().map_err(|_| ExecError::InputError)?
+                    };
+
+                    self.push_value(v);
                 }
                 OpCode::Rand => {
                     let v: f64 = rng.gen();

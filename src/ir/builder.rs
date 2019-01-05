@@ -194,7 +194,14 @@ impl Builder {
             .get_function_mut(func)
             .and_then(|func| func.blocks.get_mut(from))
         {
-            block.exit = BlockExit::Switch(cond, true_br, false_br)
+            // conditional jump is a actual uncondiational jump, this check
+            // is important not only for efficiency, but also without it,
+            // binaryen panic!
+            if false_br == Some(true_br) {
+                block.exit = BlockExit::Jump(true_br)
+            } else {
+                block.exit = BlockExit::Switch(cond, true_br, false_br)
+            }
         }
     }
     pub fn add_return(

@@ -41,6 +41,14 @@ impl<'a> AstVisitor<Result<(), CompileError>> for GlobalDefPass<'a> {
         self.visit_expr(&stmt.expr)
     }
 
+    fn visit_input(&mut self, stmt: &InputStmt) -> Result<(), CompileError> {
+        for var in &stmt.vars {
+            self.visit_lvalue(var)?;
+        }
+
+        Ok(())
+    }
+
     fn visit_read(&mut self, stmt: &ReadStmt) -> Result<(), CompileError> {
         for var in &stmt.vars {
             self.visit_lvalue(var)?;

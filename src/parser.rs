@@ -19,6 +19,7 @@ pub enum ErrorInner {
     BadArgument(String),
     DuplicatedLines(LineNo),
     LinesOutOfOrder(LineNo, LineNo),
+    NoInputVariable,
     BadLineNo,
 }
 
@@ -40,6 +41,7 @@ impl fmt::Display for ErrorInner {
                 write!(f, "{}: {} and {}", desc, line1, line2)
             }
             ErrorInner::BadLineNo => write!(f, "{}", desc),
+            ErrorInner::NoInputVariable => write!(f, "{}", desc),
         }
     }
 }
@@ -55,6 +57,7 @@ impl error::Error for ErrorInner {
             ErrorInner::DuplicatedLines(_) => "Duplicated line numbers",
             ErrorInner::LinesOutOfOrder(..) => "Line numbers out of order",
             ErrorInner::BadLineNo => "Expected line number",
+            ErrorInner::NoInputVariable => "Missing input variable",
         }
     }
 }
@@ -153,6 +156,7 @@ impl<'a> Parser<'a> {
             Keyword::Goto => Stmt::Goto(self.goto_statement()?),
             Keyword::Gosub => Stmt::Gosub(self.gosub_statement()?),
             Keyword::If => Stmt::If(self.if_statement()?),
+            Keyword::Input => Stmt::Input(self.input_statement()?),
             Keyword::For => Stmt::For(self.for_statement()?),
             Keyword::Next => Stmt::Next(self.next_statement()?),
             Keyword::Def => Stmt::Def(self.def_statement()?),
@@ -200,6 +204,27 @@ impl<'a> Parser<'a> {
         });
 
         Ok(DataStmt { vals })
+    }
+
+    fn input_statement(&mut self) -> Result<InputStmt, Error> {
+        parse_statement!(self, Input, {
+            let mut prompts = vec![];
+            loop {
+                match self.current {
+                    Token::Label(_) | Token::Comma | Token::SemiColon => {
+                        prompts.push(self.static_printable()?);
+                    }
+                    _ => break,
+                }
+            }
+
+            if let Token::Varname(_) = self.current {
+                let vars = self.list_of(Self::variable)?;
+                Ok(InputStmt { prompts, vars })
+            } else {
+                self.error_current(ErrorInner::NoInputVariable)
+            }
+        })
     }
 
     fn print_statement(&mut self) -> Result<PrintStmt, Error> {
@@ -341,6 +366,24 @@ impl<'a> Parser<'a> {
                 let expr = self.expression()?;
                 Ok(Printable::Expr(expr))
             }
+        }
+    }
+
+    fn static_printable(&mut self) -> Result<Printable, Error> {
+        match self.current.take() {
+            Token::Label(label) => {
+                self.advance()?;
+                Ok(Printable::Label(label))
+            }
+            Token::Comma => {
+                self.advance()?;
+                Ok(Printable::Advance15)
+            }
+            Token::SemiColon => {
+                self.advance()?;
+                Ok(Printable::Advance3)
+            }
+            _ => self.unexpected_token(),
         }
     }
 
@@ -704,7 +747,15 @@ mod tests {
 
     #[test]
     fn test_parse_print() {
-        test_parse_statement!(Print, "10 PRINT X, D(1, Z),;");
+        test_parse_statement!(Print, "10 PRINT \"label\" X, D(1, Z),;");
+    }
+
+    #[test]
+    fn test_parse_input() {
+        test_parse_statement!(Input, "10 INPUT X");
+        test_parse_statement!(Input, "10 INPUT X, Y, Z");
+        test_parse_statement!(Input, "10 INPUT \"label\" X, Y, Z");
+        test_parse_statement!(Input, "10 INPUT \"label:\", \"Ok\"; X, Y, Z");
     }
 
     #[test]

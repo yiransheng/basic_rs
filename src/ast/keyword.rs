@@ -10,6 +10,7 @@ pub enum Keyword {
     Print,
     Goto,
     If,
+    Input,
     For,
     Next,
     End,

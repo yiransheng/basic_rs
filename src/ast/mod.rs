@@ -104,6 +104,7 @@ pub enum Stmt {
     Goto(GotoStmt),
     Gosub(GosubStmt),
     If(IfStmt),
+    Input(InputStmt),
     For(ForStmt),
     Next(NextStmt),
     Def(DefStmt),
@@ -176,4 +177,10 @@ pub struct DefStmt {
 #[derive(Debug)]
 pub struct DimStmt {
     pub dims: Vec<Either<List, Table>>,
+}
+
+#[derive(Debug)]
+pub struct InputStmt {
+    pub prompts: Vec<Printable>,
+    pub vars: Vec<LValue>,
 }

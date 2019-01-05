@@ -58,6 +58,7 @@ fn run(source: &str, opt: &Opt) -> Result<(), InterpreterError> {
     let mut vm = codegen(&ir)?;
 
     let stdout = io::stdout();
+    let stdin = io::stdin();
 
     if opt.disassemble {
         vm.disassemble(stdout.lock());
@@ -65,7 +66,7 @@ fn run(source: &str, opt: &Opt) -> Result<(), InterpreterError> {
 
     let mut rng = SmallRng::from_entropy();
 
-    vm.run(stdout.lock(), &mut rng)?;
+    vm.run_with_input(stdin.lock(), stdout.lock(), &mut rng)?;
 
     Ok(())
 }
