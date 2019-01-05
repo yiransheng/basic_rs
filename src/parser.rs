@@ -19,6 +19,7 @@ pub enum ErrorInner {
     BadArgument(String),
     DuplicatedLines(LineNo),
     LinesOutOfOrder(LineNo, LineNo),
+    NoInputVariable,
     BadLineNo,
 }
 
@@ -40,6 +41,7 @@ impl fmt::Display for ErrorInner {
                 write!(f, "{}: {} and {}", desc, line1, line2)
             }
             ErrorInner::BadLineNo => write!(f, "{}", desc),
+            ErrorInner::NoInputVariable => write!(f, "{}", desc),
         }
     }
 }
@@ -55,6 +57,7 @@ impl error::Error for ErrorInner {
             ErrorInner::DuplicatedLines(_) => "Duplicated line numbers",
             ErrorInner::LinesOutOfOrder(..) => "Line numbers out of order",
             ErrorInner::BadLineNo => "Expected line number",
+            ErrorInner::NoInputVariable => "Missing input variable",
         }
     }
 }
@@ -205,8 +208,22 @@ impl<'a> Parser<'a> {
 
     fn input_statement(&mut self) -> Result<InputStmt, Error> {
         parse_statement!(self, Input, {
-            let var = self.variable()?;
-            Ok(InputStmt { var })
+            let mut prompts = vec![];
+            loop {
+                match self.current {
+                    Token::Label(_) | Token::Comma | Token::SemiColon => {
+                        prompts.push(self.static_printable()?);
+                    }
+                    _ => break,
+                }
+            }
+
+            if let Token::Varname(_) = self.current {
+                let vars = self.list_of(Self::variable)?;
+                Ok(InputStmt { prompts, vars })
+            } else {
+                self.error_current(ErrorInner::NoInputVariable)
+            }
         })
     }
 
@@ -349,6 +366,24 @@ impl<'a> Parser<'a> {
                 let expr = self.expression()?;
                 Ok(Printable::Expr(expr))
             }
+        }
+    }
+
+    fn static_printable(&mut self) -> Result<Printable, Error> {
+        match self.current.take() {
+            Token::Label(label) => {
+                self.advance()?;
+                Ok(Printable::Label(label))
+            }
+            Token::Comma => {
+                self.advance()?;
+                Ok(Printable::Advance15)
+            }
+            Token::SemiColon => {
+                self.advance()?;
+                Ok(Printable::Advance3)
+            }
+            _ => self.unexpected_token(),
         }
     }
 

@@ -181,5 +181,6 @@ pub struct DimStmt {
 
 #[derive(Debug)]
 pub struct InputStmt {
-    pub var: LValue,
+    pub prompts: Vec<Printable>,
+    pub vars: Vec<LValue>,
 }

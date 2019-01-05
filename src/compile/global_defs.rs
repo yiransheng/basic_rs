@@ -42,7 +42,11 @@ impl<'a> AstVisitor<Result<(), CompileError>> for GlobalDefPass<'a> {
     }
 
     fn visit_input(&mut self, stmt: &InputStmt) -> Result<(), CompileError> {
-        self.visit_lvalue(&stmt.var)
+        for var in &stmt.vars {
+            self.visit_lvalue(var)?;
+        }
+
+        Ok(())
     }
 
     fn visit_read(&mut self, stmt: &ReadStmt) -> Result<(), CompileError> {

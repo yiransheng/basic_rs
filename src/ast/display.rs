@@ -245,7 +245,9 @@ impl fmt::Display for ReadStmt {
 impl fmt::Display for InputStmt {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         write!(f, "INPUT ")?;
-        self.var.fmt(f)
+        intersperse(&self.prompts, &SPACE_SEP, f)?;
+        write!(f, "{}", &SPACE_SEP)?;
+        intersperse(&self.vars, &COMMA_SEP, f)
     }
 }
 

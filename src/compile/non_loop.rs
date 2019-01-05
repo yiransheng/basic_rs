@@ -143,9 +143,27 @@ impl<'a> AstVisitor<Result<(), CompileError>> for NonLoopPass<'a> {
 
     fn visit_input(&mut self, stmt: &InputStmt) -> Result<(), CompileError> {
         let mut expr_compiler = ExprCompiler::new();
-        let lval = expr_compiler.lvalue(&stmt.var)?;
 
-        self.add_statement(IRStatement::Assign(lval, Expr::Input))?;
+        for part in &stmt.prompts {
+            let stmt = match part {
+                Printable::Label(s) => {
+                    let (offset, length) = self.builder.add_string_label(&*s);
+                    IRStatement::PrintLabel(offset, length)
+                }
+                Printable::Advance3 => IRStatement::PrintAdvance3,
+                Printable::Advance15 => IRStatement::PrintAdvance15,
+                Printable::Expr(_) => unreachable!(),
+            };
+
+            self.add_statement(stmt)?;
+        }
+
+        self.add_statement(IRStatement::PrintNewline)?;
+
+        for var in &stmt.vars {
+            let lval = expr_compiler.lvalue(var)?;
+            self.add_statement(IRStatement::Assign(lval, Expr::Input))?;
+        }
 
         self.add_basic_block_branch()
     }
