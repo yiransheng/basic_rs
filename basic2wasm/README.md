@@ -71,6 +71,10 @@ Produces:
 
 ```wast
 (module
+ (type $1 (func (param f64)))
+ (type $2 (func (param i32 i32)))
+ (type $3 (func))
+ (type $4 (func (result f64)))
  (memory $0 1 1)
  (data (i32.const 0) "PI =/")
  (import "env" "print" (func $print (param f64)))
@@ -78,19 +82,21 @@ Produces:
  (import "env" "printNewline" (func $printNewline))
  (import "env" "printAdvance15" (func $printAdvance15))
  (import "env" "rand" (func $rand (result f64)))
- ;; omitted runtime functions and types
- (func $main (; 1 ;) (; has Stack IR ;) (type $9)
+ (global $data_end (mut i32) (i32.const 0))
+ (export "data" (memory $0))
+ (export "main" (func $main))
+ (func $main (; 5 ;) (; has Stack IR ;) (type $3)
   (local $0 f64)
-  (set_global $C
-   (f64.const 0)
+  (local $1 f64)
+  (local $2 f64)
+  (set_global $data_end
+   (i32.const 0)
   )
-  (set_global $N
-   (f64.const 1e3)
+  (i32.store
+   (i32.const 8)
+   (i32.const 16)
   )
-  (set_local $0
-   (get_global $N)
-  )
-  (set_global $I
+  (set_local $1
    (f64.const 1)
   )
   (block $block$6$break
@@ -98,60 +104,46 @@ Produces:
     (br_if $block$6$break
      (f64.gt
       (f64.sub
-       (get_global $I)
-       (get_local $0)
+       (get_local $1)
+       (f64.const 1e3)
       )
       (f64.const 0)
-     )
-    )
-    (set_global $X
-     (call $rand)
-    )
-    (set_global $Y
-     (call $rand)
-    )
-    (set_global $D
-     (f64.add
-      (f64.mul
-       (get_global $X)
-       (get_global $X)
-      )
-      (f64.mul
-       (get_global $Y)
-       (get_global $Y)
-      )
      )
     )
     (if
      (i32.eqz
       (f64.gt
-       (get_global $D)
+       (f64.add
+        (f64.mul
+         (tee_local $2
+          (call $rand)
+         )
+         (get_local $2)
+        )
+        (f64.mul
+         (tee_local $2
+          (call $rand)
+         )
+         (get_local $2)
+        )
+       )
        (f64.const 1)
       )
      )
-     (set_global $C
+     (set_local $0
       (f64.add
-       (get_global $C)
+       (get_local $0)
        (f64.const 1)
       )
      )
     )
-    (set_global $I
+    (set_local $1
      (f64.add
-      (get_global $I)
+      (get_local $1)
       (f64.const 1)
      )
     )
     (br $shape$3$continue)
-   )
-  )
-  (set_global $P
-   (f64.div
-    (f64.mul
-     (f64.const 4)
-     (get_global $C)
-    )
-    (get_global $N)
    )
   )
   (call $printLabel
@@ -160,18 +152,24 @@ Produces:
   )
   (call $printAdvance15)
   (call $print
-   (get_global $P)
+   (f64.div
+    (f64.mul
+     (f64.const 4)
+     (get_local $0)
+    )
+    (f64.const 1e3)
+   )
   )
   (call $printAdvance15)
   (call $print
-   (get_global $C)
+   (get_local $0)
   )
   (call $printLabel
    (i32.const 4)
    (i32.const 1)
   )
   (call $print
-   (get_global $N)
+   (f64.const 1e3)
   )
   (call $printNewline)
  )
