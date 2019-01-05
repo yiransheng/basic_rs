@@ -104,6 +104,7 @@ At IR level, the following are assumed to be foreign apis provided by runtime:
 * Array allocations: runtime environment should support:
   * `alloc1d $X <expr>`
   * `alloc2d $Y <expr>, <expr>`
+  * This IR does not have a working, memory model, so there is no `load` and `store` instructions, in `wasm` code gen, array operations are provided by pre-compiled `wasm` functions (written in unsafe rust)
 * `READ`:  runtime env should collect numbers defined in `DATA` , and track how many values have been consumed as the program is executing
 
 ## Codegen
@@ -124,7 +125,7 @@ Roughly like so:
 
 Program AST is traversed in a `DFS` order, each line of statement is considered as a node in CFG graph, and assigned a label and function id.`GOTO` and `IF` statements adds branches (edges) in the obvious manner. The target line of `GOTO` and `IF` gets marked with a new label.
 
-In this stage, `FOR` and `NEXT` are considered non-branching statements, and do not add back edges to the CFG. Each `GOSUB` target gets marked as a new function, and any reachable line for entry is marked as the same function id, traversal stops when encountering a `RETURN` statement.
+In this stage, `FOR` and `NEXT` are considered non-branching statements, and do not add back edges to the CFG. Each `GOSUB` target gets marked as a new function, and any reachable line from entry is marked with the same function id, traversal stops when encountering a `RETURN` statement.
 
 ### Step 2: Global Defs
 
