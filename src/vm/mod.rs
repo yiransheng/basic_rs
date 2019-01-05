@@ -354,7 +354,7 @@ impl VM {
                     self.push_value(value);
                 }
                 OpCode::Input => {
-                    printer.flush();
+                    printer.flush()?;
                     input_string.clear();
 
                     inp.read_line(&mut input_string)
