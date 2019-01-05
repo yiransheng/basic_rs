@@ -208,6 +208,7 @@ impl ChunkWrite for BasicBlock {
 impl ChunkWrite for Statement {
     fn write(&self, writer: &mut ChunkWriter) -> Result<(), WriteError> {
         match self {
+            Statement::Input(lval) => unimplemented!(),
             Statement::Assign(lval, expr) => match lval {
                 LValue::Global(var) => {
                     expr.write(writer)?;
