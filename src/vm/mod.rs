@@ -591,15 +591,6 @@ impl VM {
                     self.push_value(value);
                 }
             }
-            // print!("{:?}   ", instr);
-            // for v in self.stack.iter() {
-            // let v = Variant::from(v.clone());
-            // match v {
-            // Variant::Number(n) => print!("{}, ", n),
-            // _ => print!("_, "),
-            // }
-            // }
-            // println!();
         }
     }
 
