@@ -60,43 +60,64 @@ BASIC source code is _lexed_, _parsed_ and _compiled_ into a custom stack based 
 Some sample disassembler output. (Source of this program is `sample_programs/func_redefine.bas`).
 
 ```
-10    0000    noop      
-15    0001    fn         <compiled function 1>
- |    0004    set.fn     FNZ
-20    0007    fn         <compiled function 2>
- |    0010    set.fn     FNA
-25    0013    const      10
- |    0016    get.fn     FNA
- |    0019    call      
- |    0020    set.var    Y1
-30    0023    prt       
- |    0024      prt.lab  "FNA(10) ="
- |    0027      prt;    
- |    0028      get.var  Y1
- |    0031      prt.expr
- |    0032    prt.end   
- ...
- |    0082    stop      
+10    0000    decl.loc   2
+15    0002    const      0
+ |    0005    set.loc    $0
+20    0008    const      0
+ |    0011    set.loc    $1
+25    0014    bind.fn    FNZ <compiled function 0>
+30    0019    bind.fn    FNA <compiled function 1>
+ |    0024    const      10
+ |    0027    get.fn     FNA
+ |    0030    call_      args: 1
+ |    0032    set.loc    $0
+ |    0035    prt.lab    "FNA(10) ="
+ |    0038    prt;      
+40    0039    get.loc    $0
+ |    0042    prt.expr  
+45    0043    prt\n     
+50    0044    bind.fn    FNA <compiled function 2>
+ |    0049    const      10
+ |    0052    get.fn     FNA
+ |    0055    call_      args: 1
+ |    0057    set.loc    $1
+ |    0060    prt.lab    "FNA(10) ="
+ |    0063    prt;      
+ |    0064    get.loc    $0
+ |    0067    get.loc    $1
+ |    0070    eq        
+ |    0071    not       
+ |    0072    jmp.t      80
+70    0075    prt.lab    "FAILED"
+ |    0078    prt\n     
+ |    0079    ret       
+100   0080    prt.lab    "Ok"
+ |    0083    prt\n     
+ |    0084    ret       
 
-Chunk: <compiled function 1>
+Chunk: <compiled function 0>
 
-15    0000    set.loc    X
- |    0003    get.loc    X
- |    0006    ret       
+15    0000    decl.loc   0
+ |    0002    get.loc    $0
+ |    0005    ret.val   
 
 Chunk: <compiled function 2>
 
-20    0000    set.loc    X
- |    0003    const      1
- |    0006    get.loc    X
- |    0009    add       
- |    0010    ret       
+40    0000    decl.loc   0
+ |    0002    get.loc    $0
+ |    0005    get.fn     FNZ
+ |    0008    call_      args: 1
+ |    0010    const      1
+ |    0013    sub       
+ |    0014    ret.val   
 
-Chunk: <compiled function 3>
+Chunk: <compiled function 1>
 
-40    0000    set.loc    X
- |    0003    get.loc    X
-...    
+20    0000    decl.loc   0
+ |    0002    const      1
+ |    0005    get.loc    $0
+ |    0008    add       
+ |    0009    ret.val   
 ```
 
 

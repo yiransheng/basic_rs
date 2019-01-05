@@ -28,11 +28,18 @@ impl<'a> FunctionUpdater<'a> {
     }
     fn done(mut self) {
         if !self.init_statements.is_empty() {
+            let n = self.init_statements.len();
             let entry = self.function.entry;
-            let entry_statements =
-                &mut self.function.blocks.get_mut(entry).unwrap().statements;
-            self.init_statements.append(entry_statements);
-            *entry_statements = self.init_statements;
+            let entry_line = self.function.line_no;
+            let entry_block = self.function.blocks.get_mut(entry).unwrap();
+
+            let mut entry_lines = vec![entry_line; n];
+
+            self.init_statements.append(&mut entry_block.statements);
+            entry_lines.append(&mut entry_block.line_nos);
+
+            entry_block.statements = self.init_statements;
+            entry_block.line_nos = entry_lines;
         }
     }
 }

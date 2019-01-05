@@ -195,6 +195,8 @@ fn write_block_exit(
 
 impl ChunkWrite for BasicBlock {
     fn write(&self, writer: &mut ChunkWriter) -> Result<(), WriteError> {
+        assert!(self.statements.len() == self.line_nos.len());
+
         for (stmt, line_no) in self.statements.iter().zip(self.line_nos.iter())
         {
             writer.set_line_no(*line_no);
