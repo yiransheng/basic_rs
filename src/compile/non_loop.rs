@@ -1,94 +1,22 @@
 use crate::ast::{Visitor as AstVisitor, *};
 use either::Either;
 
+use super::compiler::{Compiler, Pass};
 use super::control_flow_context::CfCtx;
 use super::error::CompileError;
 use super::expr_compiler::ExprCompiler;
 use super::HasLineState;
 use crate::ir::{
-    Builder, Expr, FunctionName, LValue as LV, Label, Offset,
-    Statement as IRStatement,
+    Expr, FunctionName, LValue as LV, Label, Offset, Statement as IRStatement,
 };
 
-pub struct NonLoopPass<'a> {
-    cf_ctx: &'a CfCtx,
-    builder: &'a mut Builder,
+pub enum NonLoopPass {}
 
-    line_index: usize,
-    line_no: LineNo,
-    main: Option<FunctionName>,
-}
-impl<'a> NonLoopPass<'a> {
-    pub fn new(cf_ctx: &'a CfCtx, builder: &'a mut Builder) -> Self {
-        NonLoopPass {
-            cf_ctx,
-            builder,
-            line_index: 0,
-            line_no: LineNo::default(),
-            main: None,
-        }
-    }
-
-    fn add_statement(&mut self, stmt: IRStatement) -> Result<(), CompileError> {
-        self.builder.set_line_no(self.line_no);
-        self.builder
-            .add_statement(self.current_func()?, self.current_label()?, stmt)
-            .map_err(|_| CompileError::Custom("function or block not found"))
-    }
-
-    fn add_basic_block_branch(&mut self) -> Result<(), CompileError> {
-        let current_label = self.current_label()?;
-        let next_label = self.next_line_label();
-
-        if let Some(next_label) = next_label {
-            if next_label != current_label {
-                self.builder.add_branch(
-                    self.current_func()?,
-                    current_label,
-                    next_label,
-                );
-            }
-        }
-
-        Ok(())
-    }
-
-    fn current_label(&self) -> Result<Label, CompileError> {
-        self.cf_ctx.get_label(self.line_index).ok_or_else(|| {
-            let line_no = self.cf_ctx.find_line_no(self.line_index);
-            CompileError::UnreachableCode(line_no)
-        })
-    }
-
-    fn current_func(&self) -> Result<FunctionName, CompileError> {
-        self.cf_ctx.get_func(self.line_index).ok_or_else(|| {
-            let line_no = self.cf_ctx.find_line_no(self.line_index);
-            CompileError::UnreachableCode(line_no)
-        })
-    }
-
-    fn next_line_label(&self) -> Option<Label> {
-        match (
-            self.current_func(),
-            self.cf_ctx.get_func(self.line_index + 1),
-        ) {
-            (Ok(current_func), Some(next_func))
-                if current_func == next_func =>
-            {
-                self.cf_ctx.get_label(self.line_index + 1)
-            }
-            _ => None,
-        }
-    }
+impl Pass for NonLoopPass {
+    type State = Option<FunctionName>;
 }
 
-impl<'a> HasLineState<CompileError> for NonLoopPass<'a> {
-    fn line_state(&self) -> usize {
-        self.line_index
-    }
-}
-
-impl<'a> AstVisitor<Result<(), CompileError>> for NonLoopPass<'a> {
+impl<'a> AstVisitor<Result<(), CompileError>> for Compiler<'a, NonLoopPass> {
     fn visit_program(&mut self, prog: &Program) -> Result<(), CompileError> {
         for (line_no, func, entry, ty) in self.cf_ctx.functions() {
             self.builder.set_line_no(line_no);
@@ -98,7 +26,7 @@ impl<'a> AstVisitor<Result<(), CompileError>> for NonLoopPass<'a> {
         }
 
         let main_func = self.cf_ctx.get_func(0).unwrap();
-        self.main = Some(main_func);
+        self.state = Some(main_func);
         self.builder
             .set_main(main_func)
             .map_err(|_| CompileError::Custom("Main already set"))?;
@@ -316,7 +244,7 @@ impl<'a> AstVisitor<Result<(), CompileError>> for NonLoopPass<'a> {
         let func = self.current_func()?;
         let label = self.current_label()?;
 
-        if Some(func) != self.main {
+        if Some(func) != self.state {
             Err(CompileError::EndInSubroutine)
         } else {
             self.builder.add_return(func, label, None);
@@ -332,7 +260,7 @@ impl<'a> AstVisitor<Result<(), CompileError>> for NonLoopPass<'a> {
         let func = self.current_func()?;
         let label = self.current_label()?;
 
-        if Some(func) == self.main {
+        if Some(func) == self.state {
             Err(CompileError::ReturnInMain)
         } else {
             self.builder.add_return(func, label, None);
@@ -344,6 +272,7 @@ impl<'a> AstVisitor<Result<(), CompileError>> for NonLoopPass<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ir::Builder;
     use crate::{Parser, Scanner};
     use indoc::*;
 
@@ -360,9 +289,10 @@ mod tests {
         let ast = Parser::new(scanner).parse().unwrap();
 
         let mut builder = Builder::new();
-        let cf_ctx = CfCtx::from_program(&ast).unwrap();
+        let mut cf_ctx = CfCtx::from_program(&ast).unwrap();
 
-        let mut pass = NonLoopPass::new(&cf_ctx, &mut builder);
+        let mut pass: Compiler<NonLoopPass> =
+            Compiler::new(&mut cf_ctx, &mut builder);
 
         let r = pass.visit_program(&ast);
 
@@ -382,9 +312,10 @@ mod tests {
         let ast = Parser::new(scanner).parse().unwrap();
 
         let mut builder = Builder::new();
-        let cf_ctx = CfCtx::from_program(&ast).unwrap();
+        let mut cf_ctx = CfCtx::from_program(&ast).unwrap();
 
-        let mut pass = NonLoopPass::new(&cf_ctx, &mut builder);
+        let mut pass: Compiler<NonLoopPass> =
+            Compiler::new(&mut cf_ctx, &mut builder);
 
         let r = pass.visit_program(&ast);
 
@@ -404,9 +335,10 @@ mod tests {
         let ast = Parser::new(scanner).parse().unwrap();
 
         let mut builder = Builder::new();
-        let cf_ctx = CfCtx::from_program(&ast).unwrap();
+        let mut cf_ctx = CfCtx::from_program(&ast).unwrap();
 
-        let mut pass = NonLoopPass::new(&cf_ctx, &mut builder);
+        let mut pass: Compiler<NonLoopPass> =
+            Compiler::new(&mut cf_ctx, &mut builder);
 
         let r = pass.visit_program(&ast);
 
@@ -428,9 +360,10 @@ mod tests {
         let ast = Parser::new(scanner).parse().unwrap();
 
         let mut builder = Builder::new();
-        let cf_ctx = CfCtx::from_program(&ast).unwrap();
+        let mut cf_ctx = CfCtx::from_program(&ast).unwrap();
 
-        let mut pass = NonLoopPass::new(&cf_ctx, &mut builder);
+        let mut pass: Compiler<NonLoopPass> =
+            Compiler::new(&mut cf_ctx, &mut builder);
 
         let r = pass.visit_program(&ast);
         let program = builder.build();

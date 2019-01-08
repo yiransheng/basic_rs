@@ -1,33 +1,17 @@
 use crate::ast::{Visitor as AstVisitor, *};
+use crate::ir::{Builder, Offset};
 use either::Either;
 
+use super::compiler::{Compiler, Pass};
 use super::error::CompileError;
-use super::HasLineState;
-use crate::ir::{Builder, Offset};
 
-pub struct GlobalDefPass<'a> {
-    builder: &'a mut Builder,
-    local: Option<Variable>,
-    line_index: usize,
+pub enum GlobalDefPass {}
+
+impl Pass for GlobalDefPass {
+    type State = Option<Variable>;
 }
 
-impl<'a> GlobalDefPass<'a> {
-    pub fn new(builder: &'a mut Builder) -> Self {
-        GlobalDefPass {
-            builder,
-            line_index: 0,
-            local: None,
-        }
-    }
-}
-
-impl<'a> HasLineState<CompileError> for GlobalDefPass<'a> {
-    fn line_state(&self) -> usize {
-        self.line_index
-    }
-}
-
-impl<'a> AstVisitor<Result<(), CompileError>> for GlobalDefPass<'a> {
+impl<'a> AstVisitor<Result<(), CompileError>> for Compiler<'a, GlobalDefPass> {
     fn visit_program(&mut self, prog: &Program) -> Result<(), CompileError> {
         for (i, stmt) in prog.statements.iter().enumerate() {
             self.line_index = i;
@@ -100,13 +84,13 @@ impl<'a> AstVisitor<Result<(), CompileError>> for GlobalDefPass<'a> {
     }
 
     fn visit_def(&mut self, stmt: &DefStmt) -> Result<(), CompileError> {
-        self.local = Some(stmt.var);
+        self.state = Some(stmt.var);
 
         let r = self.visit_expr(&stmt.expr).map(|_| {
             self.builder.define_function(stmt.func);
         });
 
-        self.local = None;
+        self.state = None;
         r
     }
 
@@ -156,7 +140,7 @@ impl<'a> AstVisitor<Result<(), CompileError>> for GlobalDefPass<'a> {
     }
 
     fn visit_variable(&mut self, lval: &Variable) -> Result<(), CompileError> {
-        if Some(*lval) != self.local {
+        if Some(*lval) != self.state {
             self.builder.define_global(*lval);
         }
 

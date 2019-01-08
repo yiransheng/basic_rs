@@ -1,3 +1,4 @@
+mod compiler;
 mod control_flow_context;
 mod error;
 mod expr_compiler;
@@ -8,8 +9,9 @@ mod non_loop;
 use crate::ast;
 use crate::scanner::{SourceLoc, SourceMapped};
 
-use crate::ir::{Builder, Program};
+use crate::ir::{Builder, FunctionName, Label, Program, Statement};
 
+use self::compiler::{Compiler, Pass};
 use self::control_flow_context::CfCtx;
 use self::for_compiler::LoopPass;
 use self::global_defs::GlobalDefPass;
@@ -44,9 +46,15 @@ pub fn compile(
             loc: SourceLoc { line: 0, col: 0 },
         })?;
 
-    GlobalDefPass::new(&mut builder).compile(program)?;
+    // GlobalDefPass::new(&mut builder).compile(program)?;
 
-    NonLoopPass::new(&cf_ctx, &mut builder).compile(program)?;
+    let mut pass: Compiler<GlobalDefPass> =
+        Compiler::new(&mut cf_ctx, &mut builder);
+    pass.compile(program)?;
+
+    let mut pass: Compiler<NonLoopPass> =
+        Compiler::new(&mut cf_ctx, &mut builder);
+    pass.compile(program)?;
 
     LoopPass::new(&mut cf_ctx, &mut builder).compile(program)?;
 
