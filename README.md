@@ -12,7 +12,7 @@ A BASIC language interpreter written in `rust`. This project is motivated and in
 Matches first version of [Dartmouth Basic](https://en.wikipedia.org/wiki/Dartmouth_BASIC) closely: reference manual [here](http://web.archive.org/web/20120716185629/http://www.bitsavers.org/pdf/dartmouth/BASIC_Oct64.pdf), which means this implementation inherits all its limitations.
 
 * [**Update**] Has an additional crate `basic2wasm` to compile BASIC programs to WebAssembly!
-  * Still hacky and buggy, but it is able to compile  [Game of Life](http://nbviewer.jupyter.org/github/norvig/pytudes/blob/master/ipynb/BASIC.ipynb), see it running [here](http://subdued-afternoon.surge.sh/)
+  * Still hacky and buggy, but it is able to compile  [Game of Life](https://nbviewer.jupyter.org/github/norvig/pytudes/blob/master/ipynb/BASIC.ipynb#Longer-Program:-Life), see it running [here](http://subdued-afternoon.surge.sh/)
 * No input support other than `DATA` statements in source program
   * [**Update**] Added `INPUT` statement support in #28
   * Not sure what the official syntax for `INPUT` is,  but statements like `10 INPUT "Prompt" X, Y` works fine
