@@ -153,12 +153,7 @@ impl CfCtx {
 
         let unreachable = cf_ctx.add_label();
 
-        loop {
-            if stack.is_empty() {
-                break;
-            }
-
-            let index = stack.pop_back().unwrap();
+        while let Some(index) = stack.pop_back() {
             let next_line_index = index + 1;
 
             let current_label = cf_ctx.get_label(index).unwrap_or_else(|| {
@@ -182,7 +177,9 @@ impl CfCtx {
                 | Stmt::Dim(_)
                 | Stmt::Rem => {
                     if !visited!(next_line_index) {
-                        cf_ctx.set_label(next_line_index, current_label);
+                        if !labeled!(next_line_index) {
+                            cf_ctx.set_label(next_line_index, current_label);
+                        }
                         cf_ctx.set_func(next_line_index, current_func)?;
 
                         stack.push_back(next_line_index);
@@ -197,18 +194,22 @@ impl CfCtx {
                     cf_ctx.branches.push((index, next_line_index));
 
                     if !visited!(to_index) {
-                        let new_label = cf_ctx.add_label();
+                        if !labeled!(to_index) {
+                            let new_label = cf_ctx.add_label();
+                            cf_ctx.set_label(to_index, new_label);
+                        }
 
-                        cf_ctx.set_label(to_index, new_label);
                         cf_ctx.set_func(to_index, current_func)?;
 
                         stack.push_back(to_index);
                     }
 
                     if !visited!(next_line_index) {
-                        let new_label = cf_ctx.add_label();
+                        if !labeled!(next_line_index) {
+                            let new_label = cf_ctx.add_label();
+                            cf_ctx.set_label(next_line_index, new_label);
+                        }
 
-                        cf_ctx.set_label(next_line_index, new_label);
                         cf_ctx.set_func(next_line_index, current_func)?;
 
                         stack.push_back(next_line_index);
@@ -220,9 +221,10 @@ impl CfCtx {
                     cf_ctx.branches.push((index, to_index));
 
                     if !visited!(to_index) {
-                        let new_label = cf_ctx.add_label();
-
-                        cf_ctx.set_label(to_index, new_label);
+                        if !labeled!(to_index) {
+                            let new_label = cf_ctx.add_label();
+                            cf_ctx.set_label(to_index, new_label);
+                        }
                         cf_ctx.set_func(to_index, current_func)?;
 
                         stack.push_back(to_index);
@@ -234,9 +236,11 @@ impl CfCtx {
                     cf_ctx.branches.push((index, next_line_index));
 
                     if !visited!(next_line_index) {
-                        let new_label = cf_ctx.add_label();
+                        if !labeled!(next_line_index) {
+                            let new_label = cf_ctx.add_label();
+                            cf_ctx.set_label(next_line_index, new_label);
+                        }
 
-                        cf_ctx.set_label(next_line_index, new_label);
                         cf_ctx.set_func(next_line_index, current_func)?;
 
                         stack.push_back(next_line_index);
