@@ -425,6 +425,11 @@ impl<'a> Parser<'a> {
                     let rhs = self.power()?;
                     lhs = Expression::Div(Box::new(lhs), Box::new(rhs));
                 }
+                Token::Percent => {
+                    self.advance()?;
+                    let rhs = self.power()?;
+                    lhs = Expression::Rem(Box::new(lhs), Box::new(rhs));
+                }
                 _ => break,
             }
         }
