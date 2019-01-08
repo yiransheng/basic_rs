@@ -2,12 +2,10 @@ use crate::ast::{Visitor as AstVisitor, *};
 use either::Either;
 
 use super::compiler::{Compiler, Pass};
-use super::control_flow_context::CfCtx;
 use super::error::CompileError;
 use super::expr_compiler::ExprCompiler;
-use super::HasLineState;
 use crate::ir::{
-    Expr, FunctionName, LValue as LV, Label, Offset, Statement as IRStatement,
+    Expr, FunctionName, LValue as LV, Offset, Statement as IRStatement,
 };
 
 pub enum NonLoopPass {}
@@ -271,6 +269,7 @@ impl<'a> AstVisitor<Result<(), CompileError>> for Compiler<'a, NonLoopPass> {
 
 #[cfg(test)]
 mod tests {
+    use super::super::control_flow_context::CfCtx;
     use super::*;
     use crate::ir::Builder;
     use crate::{Parser, Scanner};

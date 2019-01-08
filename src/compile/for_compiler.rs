@@ -2,66 +2,22 @@ use std::collections::VecDeque;
 
 use crate::ast::{Visitor as AstVisitor, *};
 
+use super::compiler::{Compiler, Pass};
 use super::control_flow_context::CfCtx;
 use super::error::CompileError;
 use super::expr_compiler::ExprCompiler;
-use super::HasLineState;
 use crate::ir::{
     BinaryOp, Builder, Expr, FunctionName, LValue as LV, Label,
     Statement as IRStatement, ValueType,
 };
 
-pub struct LoopPass<'a> {
-    cf_ctx: &'a mut CfCtx,
-    builder: &'a mut Builder,
+pub enum LoopPass {}
 
-    line_index: usize,
+impl Pass for LoopPass {
+    type State = ();
 }
 
-impl<'a> LoopPass<'a> {
-    pub fn new(cf_ctx: &'a mut CfCtx, builder: &'a mut Builder) -> Self {
-        LoopPass {
-            cf_ctx,
-            builder,
-
-            line_index: 0,
-        }
-    }
-    fn current_label(&self) -> Result<Label, CompileError> {
-        self.cf_ctx.get_label(self.line_index).ok_or_else(|| {
-            let line_no = self.cf_ctx.find_line_no(self.line_index);
-            CompileError::UnreachableCode(line_no)
-        })
-    }
-
-    fn current_func(&self) -> Result<FunctionName, CompileError> {
-        self.cf_ctx.get_func(self.line_index).ok_or_else(|| {
-            let line_no = self.cf_ctx.find_line_no(self.line_index);
-            CompileError::UnreachableCode(line_no)
-        })
-    }
-
-    fn next_line_label(&self) -> Option<Label> {
-        match (
-            self.current_func(),
-            self.cf_ctx.get_func(self.line_index + 1),
-        ) {
-            (Ok(current_func), Some(next_func))
-                if current_func == next_func =>
-            {
-                self.cf_ctx.get_label(self.line_index + 1)
-            }
-            _ => None,
-        }
-    }
-}
-impl<'a> HasLineState<CompileError> for LoopPass<'a> {
-    fn line_state(&self) -> usize {
-        self.line_index
-    }
-}
-
-impl<'a> AstVisitor<Result<(), CompileError>> for LoopPass<'a> {
+impl<'a> AstVisitor<Result<(), CompileError>> for Compiler<'a, LoopPass> {
     fn visit_program(&mut self, prog: &Program) -> Result<(), CompileError> {
         for (i, stmt) in prog.statements.iter().enumerate() {
             self.line_index = i;

@@ -1,5 +1,5 @@
 use crate::ast::{Visitor as AstVisitor, *};
-use crate::ir::{Builder, Offset};
+use crate::ir::Offset;
 use either::Either;
 
 use super::compiler::{Compiler, Pass};

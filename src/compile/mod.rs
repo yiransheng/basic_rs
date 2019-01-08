@@ -9,32 +9,15 @@ mod non_loop;
 use crate::ast;
 use crate::scanner::{SourceLoc, SourceMapped};
 
-use crate::ir::{Builder, FunctionName, Label, Program, Statement};
+use crate::ir::{Builder, Program};
 
-use self::compiler::{Compiler, Pass};
+use self::compiler::Compiler;
 use self::control_flow_context::CfCtx;
 use self::for_compiler::LoopPass;
 use self::global_defs::GlobalDefPass;
 use self::non_loop::NonLoopPass;
 
 pub use self::error::CompileError;
-
-trait HasLineState<E>: ast::Visitor<Result<(), E>> {
-    fn line_state(&self) -> usize;
-
-    fn compile(
-        &mut self,
-        program: &ast::Program,
-    ) -> Result<(), SourceMapped<E>> {
-        self.visit_program(program).map_err(|err| {
-            let line = self.line_state();
-            SourceMapped {
-                loc: program.statements[line].loc,
-                value: err,
-            }
-        })
-    }
-}
 
 pub fn compile(
     program: &ast::Program,
@@ -46,8 +29,6 @@ pub fn compile(
             loc: SourceLoc { line: 0, col: 0 },
         })?;
 
-    // GlobalDefPass::new(&mut builder).compile(program)?;
-
     let mut pass: Compiler<GlobalDefPass> =
         Compiler::new(&mut cf_ctx, &mut builder);
     pass.compile(program)?;
@@ -56,7 +37,8 @@ pub fn compile(
         Compiler::new(&mut cf_ctx, &mut builder);
     pass.compile(program)?;
 
-    LoopPass::new(&mut cf_ctx, &mut builder).compile(program)?;
+    let mut pass: Compiler<LoopPass> = Compiler::new(&mut cf_ctx, &mut builder);
+    pass.compile(program)?;
 
     Ok(builder.build())
 }
