@@ -695,6 +695,13 @@ mod print {
                 indent: "  ",
             };
 
+            env.fmt("data:")?;
+            for datum in self.data.iter().rev() {
+                env.fmt(format_args!(" {}", datum))?;
+            }
+            env.fmtln("")?;
+            env.fmtln("")?;
+
             env.fmt("globals:")?;
             for kind in &self.globals {
                 env.fmt(format_args!(" {}", kind))?;

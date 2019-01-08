@@ -25,6 +25,12 @@ impl<'a> AstVisitor<Result<(), CompileError>> for Compiler<'a, GlobalDefPass> {
         self.visit_expr(&stmt.expr)
     }
 
+    fn visit_data(&mut self, stmt: &DataStmt) -> Result<(), CompileError> {
+        self.builder.add_data(stmt.vals.iter().cloned());
+
+        Ok(())
+    }
+
     fn visit_input(&mut self, stmt: &InputStmt) -> Result<(), CompileError> {
         for var in &stmt.vars {
             self.visit_lvalue(var)?;
@@ -38,10 +44,6 @@ impl<'a> AstVisitor<Result<(), CompileError>> for Compiler<'a, GlobalDefPass> {
             self.visit_lvalue(var)?;
         }
 
-        Ok(())
-    }
-
-    fn visit_data(&mut self, _stmt: &DataStmt) -> Result<(), CompileError> {
         Ok(())
     }
 
