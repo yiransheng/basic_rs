@@ -40,6 +40,19 @@ basic_rs -d ./debug.bas
 
 
 
+## Note on `INPUT`
+
+Original BASIC does not have `INPUT` statement, and its syntax in different implementations of BASIC later varies. I have chosen the following:
+
+```
+inputStatement := (label | ";" | ",")* variable ("," variable)*
+variable       := ident ( "(" expr ")" | "(" expr "," expr ")" )?
+```
+
+Essentially, an input statement is some optional prompts followed by one or more of variables (allowing array subscripting) separated by commas.
+
+At runtime, each line is consider a single value, and empty lines are treated as 0.
+
 ## Implementation Details
 
 Compared to Norvig's implementation, the flavor of this project is more of no-hack, from-scratch approach (Norvig's version leveraged many of Python's powerful, dynamic features to get things done fast and cleverly). My goal was trying to learn how to implement a simple language as principled as I could manage.
