@@ -405,6 +405,9 @@ impl ChunkWrite for Expr {
                     BinaryOp::Div => {
                         writer.write_opcode(OpCode::Div);
                     }
+                    BinaryOp::Rem => {
+                        writer.write_opcode(OpCode::Rem);
+                    }
                     BinaryOp::Pow => {
                         writer.write_opcode(OpCode::Pow);
                     }

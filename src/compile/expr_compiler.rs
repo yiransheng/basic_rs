@@ -178,6 +178,11 @@ impl AstVisitor<Result<Expr, CompileError>> for ExprCompilerInner {
                 Box::new(self.visit_expr(lhs)?),
                 Box::new(self.visit_expr(rhs)?),
             )),
+            Expression::Rem(lhs, rhs) => Ok(Expr::Binary(
+                BinaryOp::Rem,
+                Box::new(self.visit_expr(lhs)?),
+                Box::new(self.visit_expr(rhs)?),
+            )),
             Expression::Pow(lhs, rhs) => Ok(Expr::Binary(
                 BinaryOp::Pow,
                 Box::new(self.visit_expr(lhs)?),
