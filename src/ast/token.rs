@@ -27,6 +27,7 @@ pub enum Token {
     Star,              // *
     Slash,             // /
     CaretUp,           // ^
+    Percent,           // %
     Comma,             // ,
     SemiColon,         // ;
     Eol,               // End of line
@@ -65,6 +66,7 @@ impl Token {
             Star => "Star",
             Slash => "Slash",
             CaretUp => "CaretUp",
+            Percent => "Percent",
             Comma => "Comma",
             SemiColon => "SemiColon",
             Eol => "Eol",
@@ -231,6 +233,7 @@ impl str::FromStr for Token {
             "Star" => Ok(Token::Star),                 // *
             "Slash" => Ok(Token::Slash),               // /
             "CaretUp" => Ok(Token::CaretUp),           // ^
+            "Percent" => Ok(Token::Percent),           // %
             "Comma" => Ok(Token::Comma),               // ,
             "SemiColon" => Ok(Token::SemiColon),       // ;
             "Eol" => Ok(Token::Eol),                   // End of line

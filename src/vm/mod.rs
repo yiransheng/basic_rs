@@ -600,6 +600,10 @@ impl VM {
                     let value = self.binary_op(|a, b| Ok(a / b))?;
                     self.push_value(value);
                 }
+                OpCode::Rem => {
+                    let value = self.binary_op(|a, b| Ok(a % b))?;
+                    self.push_value(value);
+                }
                 OpCode::CopySign => {
                     let value = self.binary_op(|a, b| Ok(a * b.signum()))?;
                     self.push_value(value);

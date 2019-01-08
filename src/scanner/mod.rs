@@ -213,6 +213,7 @@ impl<'a> Scanner<'a> {
             '*' => Token::Star,
             '/' => Token::Slash,
             '^' => Token::CaretUp,
+            '%' => Token::Percent,
             '(' => Token::OpenParen,
             ')' => Token::CloseParen,
             // 2 chars tokens

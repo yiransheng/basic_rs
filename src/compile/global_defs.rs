@@ -186,6 +186,10 @@ impl<'a> AstVisitor<Result<(), CompileError>> for Compiler<'a, GlobalDefPass> {
                 self.visit_expr(lhs)?;
                 self.visit_expr(rhs)
             }
+            Expression::Rem(lhs, rhs) => {
+                self.visit_expr(lhs)?;
+                self.visit_expr(rhs)
+            }
             Expression::Pow(lhs, rhs) => {
                 self.visit_expr(lhs)?;
                 self.visit_expr(rhs)

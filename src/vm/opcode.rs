@@ -48,6 +48,7 @@ pub enum OpCode {
     Sub,
     Mul,
     Div,
+    Rem,
     Pow,
     CopySign,
 
@@ -109,6 +110,7 @@ impl OpCode {
             Sub => "sub",
             Mul => "mul",
             Div => "div",
+            Rem => "rem",
             Pow => "pow",
             CopySign => "copysign",
 

@@ -159,6 +159,11 @@ impl fmt::Display for Expression {
                 write!(f, " / ")?;
                 b.fmt(f)
             }
+            Rem(ref a, ref b) => {
+                a.fmt(f)?;
+                write!(f, " % ")?;
+                b.fmt(f)
+            }
             Pow(ref a, ref b) => {
                 a.fmt(f)?;
                 write!(f, "^")?;
