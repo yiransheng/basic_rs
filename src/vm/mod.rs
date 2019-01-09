@@ -216,7 +216,6 @@ impl VM {
         }
     }
 
-    #[cfg(test)]
     pub fn run<W: io::Write, R: Rng>(
         &mut self,
         out: W,
