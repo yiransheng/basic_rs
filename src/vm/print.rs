@@ -87,7 +87,6 @@ impl<W: Write> Printer<W> {
         Ok(())
     }
 
-    #[inline(always)]
     pub fn advance_to_multiple(&mut self, k: usize) -> Result<(), PrintError> {
         debug_assert!(k > 0);
         let mut written = self.col;
