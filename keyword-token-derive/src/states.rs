@@ -83,6 +83,8 @@ fn make_trie<'a, I: IntoIterator<Item = &'a Ident>>(
     for variant in variants {
         let variant = &variant.to_string();
 
+        assert!(variant.is_ascii(), "Can only support Ascii named variant");
+
         for chars in prefixes(variant) {
             trie.insert_owned(chars, State::Intermediate(id));
             id += 1;
