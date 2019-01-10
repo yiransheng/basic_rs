@@ -37,18 +37,21 @@ pub fn impl_keyword_token<'a>(item: &'a DeriveInput) -> impl quote::ToTokens {
 
     quote::quote! {
         impl KeywordToken for #name {
-            fn from_str(s: &str) -> Option<Self> {
+            fn parse_from_str(s: &str) -> Option<(usize, Self)> {
                 let mut state: Result<Self, Option<usize>> = Err(Some(0));
                 let mut chars = s.chars();
 
                 #(#closures)*
 
+                let mut consumed: usize = 0;
+
                 loop {
                     if let Ok(x) = state {
-                        return Some(x);
+                        return Some((consumed, x));
                     }
 
                     let c = chars.next()?;
+                    consumed += 1;
 
                     state = match state {
                         Err(None) => return None,

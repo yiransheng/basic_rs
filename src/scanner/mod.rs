@@ -1,6 +1,5 @@
 mod dfa;
-mod function;
-mod keyword;
+mod keyword_token;
 mod number;
 
 use std::error;
@@ -8,12 +7,12 @@ use std::fmt;
 use std::iter::IntoIterator;
 
 use crate::ast::keyword::Keyword;
-use crate::ast::{NameError, Token, Variable};
+use crate::ast::{Func, NameError, Token, Variable};
 
 use self::dfa::Dfa;
-use self::function::FuncDFA;
-use self::keyword::KeywordDFA;
 use self::number::MatchNum;
+
+pub use self::keyword_token::KeywordToken;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct SourceMapped<T> {
@@ -98,11 +97,15 @@ impl From<NameError> for Error {
 pub type ScanResult = Result<SourceMapped<Token>, SourceMapped<Error>>;
 
 fn match_ident(s: &str) -> Result<(Token, usize), Error> {
-    let mut d = KeywordDFA::default()
-        .map(|kw| kw.into())
-        .alternative::<FuncDFA>();
+    if let Some((consumed, kw)) = Keyword::parse_from_str(s) {
+        return Ok((kw.into(), consumed));
+    }
 
-    d.match_str(s).ok_or(Error::BadIdentifier(None))
+    if let Some((consumed, func)) = Func::parse_from_str(s) {
+        return Ok((func.into(), consumed));
+    }
+
+    Err(Error::BadIdentifier(None))
 }
 
 fn match_number(s: &str) -> Result<(Token, usize), Error> {
