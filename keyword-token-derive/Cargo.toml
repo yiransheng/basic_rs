@@ -1,0 +1,15 @@
+[package]
+name = "keyword-token-derive"
+version = "0.1.0"
+authors = ["Yiran Sheng <shengyiran@gmail.com>"]
+edition = "2018"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = "0.15"
+quote = "0.6"
+proc-macro2 = "0.4.0"
+sequence_trie = "0.3.6"
+multimap = "0.4.0"

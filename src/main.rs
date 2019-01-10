@@ -1,3 +1,6 @@
+#[macro_use]
+extern crate keyword_token_derive;
+
 use std::fs::File;
 use std::io;
 use std::io::prelude::*;
@@ -71,7 +74,21 @@ fn run(source: &str, opt: &Opt) -> Result<(), InterpreterError> {
     Ok(())
 }
 
+trait KeywordToken: Copy {
+    fn from_str(s: &str) -> Option<Self>
+    where
+        Self: Sized;
+}
+
+#[derive(KeywordToken, Debug, Copy, Clone)]
+enum TestIt {
+    Foo,
+    Bar,
+}
+
 fn main() {
+    println!("TestIt: {:?}", TestIt::from_str("  f O o"));
+
     let opt = Opt::from_args();
     let source = match read_source(&opt) {
         Ok(s) => s,
