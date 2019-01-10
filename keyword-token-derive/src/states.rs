@@ -184,21 +184,3 @@ fn transition_function(
         },
     )
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_keys() {
-        let t = Transition {
-            from: 0,
-            to: Err(2),
-            character: 'd',
-        };
-        println!("{}", t.as_closure("KW"));
-
-        assert!(false);
-    }
-
-}

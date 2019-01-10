@@ -1,4 +1,3 @@
-mod dfa;
 mod keyword_token;
 mod number;
 
@@ -8,9 +7,6 @@ use std::iter::IntoIterator;
 
 use crate::ast::keyword::Keyword;
 use crate::ast::{Func, NameError, Token, Variable};
-
-use self::dfa::Dfa;
-use self::number::MatchNum;
 
 pub use self::keyword_token::KeywordToken;
 
@@ -109,7 +105,7 @@ fn match_ident(s: &str) -> Result<(Token, usize), Error> {
 }
 
 fn match_number(s: &str) -> Result<(Token, usize), Error> {
-    MatchNum.match_str(s).ok_or(Error::BadNumber)
+    self::number::match_number(s).ok_or(Error::BadNumber)
 }
 
 pub struct Scanner<'a> {
@@ -371,9 +367,8 @@ mod test_utils {
 
 #[cfg(test)]
 mod test_keyword {
-    use super::dfa::*;
-    use super::keyword::*;
     use super::test_utils::*;
+    use super::*;
 
     #[test]
     fn test_match_keywords() {
@@ -384,8 +379,7 @@ mod test_keyword {
         ];
 
         for keyword in &keywords {
-            let mut kw_dfa = KeywordDFA::default();
-            let matched = kw_dfa.match_str(keyword).map(|(x, _)| x);
+            let matched = Keyword::parse_from_str(keyword).map(|(_, x)| x);
             let matched = format!("{:?}", matched);
 
             assert_eq!(&matched, &to_debug_name(keyword));
