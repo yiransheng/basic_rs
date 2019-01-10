@@ -31,6 +31,7 @@ matches = "0.1.8"
 slotmap = "0.3.0"
 void = "1.0.2"
 cpuprofiler = "0.0.3"
+keyword-token-derive = { path = "keyword-token-derive" }
 
 [dev-dependencies]
 criterion = "0.2"

@@ -1,3 +1,6 @@
+#[macro_use]
+extern crate keyword_token_derive;
+
 use std::fs::File;
 use std::io;
 use std::io::prelude::*;

@@ -1,7 +1,17 @@
+use crate::scanner::KeywordToken;
+use keyword_token_derive::*;
 use num_derive::{FromPrimitive, ToPrimitive};
 
 #[derive(
-    Debug, Copy, Clone, Eq, PartialEq, Hash, FromPrimitive, ToPrimitive,
+    KeywordToken,
+    Debug,
+    Copy,
+    Clone,
+    Eq,
+    PartialEq,
+    Hash,
+    FromPrimitive,
+    ToPrimitive,
 )]
 pub enum Keyword {
     Let,

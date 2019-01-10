@@ -1,26 +1,19 @@
 use std::iter::{IntoIterator, Peekable};
 use std::str::FromStr;
 
-use super::dfa::Dfa;
 use crate::ast::Token;
 
-pub struct MatchNum;
-
-impl Dfa for MatchNum {
-    type Output = Token;
-
-    fn match_str(&mut self, s: &str) -> Option<(Self::Output, usize)> {
-        match MatchNumLen::new(s.bytes()).real() {
-            NumMatch::Natural(n) => {
-                let num = s.get(..n).and_then(|s| u64::from_str(s).ok())?;
-                Some((Token::Natural(num), n))
-            }
-            NumMatch::Real(n) => {
-                let num = s.get(..n).and_then(|s| f64::from_str(s).ok())?;
-                Some((Token::Real(num), n))
-            }
-            NumMatch::NA => None,
+pub fn match_number(s: &str) -> Option<(Token, usize)> {
+    match MatchNumLen::new(s.bytes()).real() {
+        NumMatch::Natural(n) => {
+            let num = s.get(..n).and_then(|s| u64::from_str(s).ok())?;
+            Some((Token::Natural(num), n))
         }
+        NumMatch::Real(n) => {
+            let num = s.get(..n).and_then(|s| f64::from_str(s).ok())?;
+            Some((Token::Real(num), n))
+        }
+        NumMatch::NA => None,
     }
 }
 
