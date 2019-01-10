@@ -14,7 +14,7 @@ use crate::states::impl_keyword_token;
 mod states;
 
 #[proc_macro_derive(KeywordToken)]
-pub fn hello_world(input: TokenStream) -> TokenStream {
+pub fn derive_keyword_token(input: TokenStream) -> TokenStream {
     let item: DeriveInput = parse2(input.into()).unwrap();
     let code = impl_keyword_token(&item);
 
@@ -23,12 +23,4 @@ pub fn hello_world(input: TokenStream) -> TokenStream {
     // println!("{}", r);
 
     r
-}
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
-    }
 }

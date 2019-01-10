@@ -1,5 +1,4 @@
 use multimap::MultiMap;
-use proc_macro::TokenStream;
 use proc_macro2::{Ident, Span};
 use sequence_trie::SequenceTrie;
 use syn::DeriveInput;
