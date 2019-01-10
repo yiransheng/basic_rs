@@ -61,7 +61,7 @@ impl<'a> AstVisitor<Result<(), CompileError>> for Compiler<'a, NonLoopPass> {
         }
         self.add_basic_block_branch()
     }
-    fn visit_data(&mut self, stmt: &DataStmt) -> Result<(), CompileError> {
+    fn visit_data(&mut self, _stmt: &DataStmt) -> Result<(), CompileError> {
         self.add_basic_block_branch()
     }
 
