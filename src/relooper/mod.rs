@@ -98,6 +98,7 @@ where
     L: fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln!(f)?;
         self.fmt(0, f)
     }
 }
