@@ -14,102 +14,67 @@ enum FlowType {
     Continue,
 }
 
-struct Branch {
-    ty: FlowType,
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Default)]
+struct ShapeId(u32);
+
+#[derive(Debug, Clone)]
+enum Branch<E> {
+    // Option used only for take operation
+    Raw(Option<E>),
+    Processed {
+        ancestor: Option<ShapeId>,
+        flow_type: FlowType,
+        data: E,
+    },
 }
 
-type Link<L> = Option<Box<Shape<L>>>;
+type Link = Option<Box<Shape>>;
+
+type NodeId = NodeIndex<u32>;
+
+enum ShapeKind {
+    Simple { internal: NodeId },
+    Loop { inner: Box<Shape> },
+    Multi { handled_shapes: Vec<Shape> },
+}
 
 // TODO: non-recursive Drop
-enum Shape<L> {
-    Simple {
-        internal: L,
-        next: Link<L>,
-    },
-    Loop {
-        inner: Box<Shape<L>>,
-        next: Link<L>,
-    },
-    Multi {
-        handled_shapes: Vec<Shape<L>>,
-        next: Link<L>,
-    },
+struct Shape {
+    id: ShapeId,
+    kind: ShapeKind,
+    next: Link,
 }
 
-impl<L> Shape<L> {
-    pub fn get_next(&self) -> Option<&Shape<L>> {
-        use std::ops::Deref;
-
-        match self {
-            Shape::Simple { next, .. } => next.as_ref().map(Deref::deref),
-            Shape::Loop { next, .. } => next.as_ref().map(Deref::deref),
-            Shape::Multi { next, .. } => next.as_ref().map(Deref::deref),
-        }
-    }
-    // returns previous next shape if set
-    pub fn set_next(&mut self, next: Shape<L>) -> Option<Shape<L>> {
-        let link = self.next();
-
-        ::std::mem::replace(link, Some(Box::new(next))).map(|boxed| *boxed)
-    }
-
-    fn next(&mut self) -> &mut Link<L> {
-        match self {
-            Shape::Simple { next, .. } => next,
-            Shape::Loop { next, .. } => next,
-            Shape::Multi { next, .. } => next,
-        }
-    }
-}
-
-impl<L> Shape<L>
-where
-    L: fmt::Debug,
-{
+impl Shape {
     fn fmt(&self, indent: usize, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Shape::Simple { internal, next } => {
+        match &self.kind {
+            ShapeKind::Simple { internal } => {
                 writeln!(f, "{}Simple", "  ".repeat(indent))?;
                 writeln!(f, "{}{:?}", "  ".repeat(indent + 1), internal)?;
-                if let Some(ref next) = next {
-                    next.fmt(indent + 1, f)
-                } else {
-                    Ok(())
-                }
             }
-            Shape::Loop { inner, next } => {
+            ShapeKind::Loop { inner } => {
                 writeln!(f, "{}Loop", "  ".repeat(indent))?;
                 inner.fmt(indent + 1, f)?;
-                if let Some(ref next) = next {
-                    next.fmt(indent + 1, f)
-                } else {
-                    Ok(())
-                }
             }
-            Shape::Multi {
-                handled_shapes,
-                next,
-            } => {
+            ShapeKind::Multi { handled_shapes } => {
                 writeln!(f, "{}Multi [", "  ".repeat(indent))?;
                 for s in handled_shapes {
                     s.fmt(indent + 1, f)?;
                 }
                 writeln!(f, "{}]", "  ".repeat(indent))?;
-                if let Some(ref next) = next {
-                    next.fmt(indent + 1, f)
-                } else {
-                    Ok(())
-                }
             }
+        }
+
+        if let Some(ref next) = self.next {
+            next.fmt(indent + 1, f)
+        } else {
+            Ok(())
         }
     }
 }
 
 // prints Shape in a similar style to emscripten paper page 9
-impl<L> fmt::Debug for Shape<L>
-where
-    L: fmt::Debug,
-{
+impl fmt::Debug for Shape {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         writeln!(f)?;
         self.fmt(0, f)
@@ -122,6 +87,12 @@ macro_rules! pop_set {
     ($set: expr) => {{
         let mut iter = $set.drain();
         iter.next()
+    }};
+}
+macro_rules! peek_set {
+    ($set: expr) => {{
+        let mut iter = $set.iter();
+        iter.next().cloned()
     }};
 }
 
@@ -166,22 +137,92 @@ impl<T> DerefMut for DblBuffer<T> {
     }
 }
 
-type NodeId = NodeIndex<u32>;
-
 struct Relooper<L, E> {
-    graph: StableGraph<L, E>,
+    shape_id_counter: u32,
+    graph: StableGraph<L, Branch<E>>,
 }
 
 impl<L, E> Relooper<L, E>
 where
-    L: Clone + ::std::fmt::Debug,
+    L: ::std::fmt::Debug,
     E: ::std::fmt::Debug,
 {
     fn add_block(&mut self, label: L) -> NodeId {
         self.graph.add_node(label)
     }
     fn add_branch(&mut self, a: NodeId, b: NodeId, data: E) {
-        self.graph.add_edge(a, b, data);
+        self.graph.add_edge(a, b, Branch::Raw(Some(data)));
+    }
+
+    fn next_shape_id(&mut self) -> ShapeId {
+        let id = ShapeId(self.shape_id_counter);
+        self.shape_id_counter += 1;
+        id
+    }
+
+    fn solipsize(
+        &mut self,
+        target: NodeId,
+        flow_type: FlowType,
+        ancestor: NodeId,
+        ancester_shape: ShapeId,
+    ) -> Option<()> {
+        let edge = self.graph.find_edge(ancestor, target)?;
+        let branch = self.graph.edge_weight_mut(edge)?;
+
+        if let Branch::Raw(data) = branch {
+            let data = data.take().unwrap();
+            ::std::mem::replace(
+                branch,
+                Branch::Processed {
+                    ancestor: Some(ancester_shape),
+                    flow_type,
+                    data,
+                },
+            );
+
+            Some(())
+        } else {
+            None
+        }
+    }
+
+    fn nodes_in<'a>(
+        &'a self,
+        node_id: NodeId,
+    ) -> impl Iterator<Item = NodeId> + 'a {
+        self.graph
+            .neighbors_directed(node_id, Direction::Incoming)
+            .filter(move |id| {
+                let edge = match self.graph.find_edge(*id, node_id) {
+                    Some(edge) => edge,
+                    _ => return false,
+                };
+                if let Some(Branch::Raw(_)) = self.graph.edge_weight(edge) {
+                    true
+                } else {
+                    false
+                }
+            })
+    }
+
+    fn nodes_out<'a>(
+        &'a self,
+        node_id: NodeId,
+    ) -> impl Iterator<Item = NodeId> + 'a {
+        self.graph
+            .neighbors_directed(node_id, Direction::Outgoing)
+            .filter(move |id| {
+                let edge = match self.graph.find_edge(node_id, *id) {
+                    Some(edge) => edge,
+                    _ => return false,
+                };
+                if let Some(Branch::Raw(_)) = self.graph.edge_weight(edge) {
+                    true
+                } else {
+                    false
+                }
+            })
     }
 
     fn make_simple<N: DerefMut<Target = HashSet<NodeId>>>(
@@ -190,25 +231,24 @@ where
         blocks: &mut HashSet<NodeId>,
         entries: &mut HashSet<NodeId>,
         next_entries: &mut N,
-    ) -> Shape<L> {
+    ) -> Shape {
         println!(" -> Make Simple");
-        let internal = self.graph.node_weight(internal_id).cloned().unwrap();
-        let shape = Shape::Simple {
-            internal,
+        let shape = Shape {
+            id: self.next_shape_id(),
+            kind: ShapeKind::Simple {
+                internal: internal_id,
+            },
             next: None,
         };
         blocks.remove(&internal_id);
 
         next_entries.extend(
-            self.graph
-                .neighbors_directed(internal_id, Direction::Outgoing)
+            self.nodes_out(internal_id)
                 .filter(|id| blocks.contains(&id)),
         );
 
-        // Solipsize
         for next_id in next_entries.iter().cloned() {
-            let edge = self.graph.find_edge(internal_id, next_id).unwrap();
-            self.graph.remove_edge(edge);
+            self.solipsize(next_id, FlowType::Break, internal_id, shape.id);
         }
 
         shape
@@ -219,7 +259,7 @@ where
         blocks: &mut HashSet<NodeId>,
         entries: &mut HashSet<NodeId>,
         next_entries: &mut N,
-    ) -> Shape<L> {
+    ) -> Shape {
         println!(" -> Make Loop");
 
         let mut inner_blocks: HashSet<NodeId> = HashSet::new();
@@ -231,9 +271,7 @@ where
                 blocks.remove(&curr_id);
                 inner_blocks.insert(curr_id);
 
-                for prev in
-                    self.graph.neighbors_directed(curr_id, Direction::Incoming)
-                {
+                for prev in self.nodes_in(curr_id) {
                     queue.insert(prev);
                 }
             }
@@ -242,29 +280,24 @@ where
         assert!(!inner_blocks.is_empty());
 
         for curr_id in inner_blocks.iter().cloned() {
-            for possible in
-                self.graph.neighbors_directed(curr_id, Direction::Outgoing)
-            {
+            for possible in self.nodes_out(curr_id) {
                 if !inner_blocks.contains(&possible) {
                     next_entries.insert(possible);
                 }
             }
         }
 
-        // Solipsize
-        for entry in entries.iter().cloned() {
-            let mut edges_to_remove = vec![];
-            for node_id in
-                self.graph.neighbors_directed(entry, Direction::Incoming)
-            {
-                if inner_blocks.contains(&node_id) {
-                    let edge = self.graph.find_edge(node_id, entry).unwrap();
-                    edges_to_remove.push(edge);
-                }
-            }
+        let shape_id = self.next_shape_id();
 
-            for edge in edges_to_remove {
-                self.graph.remove_edge(edge);
+        for entry in entries.iter().cloned() {
+            for from_id in inner_blocks.iter().cloned() {
+                self.solipsize(entry, FlowType::Continue, from_id, shape_id);
+            }
+        }
+
+        for entry in next_entries.iter().cloned() {
+            for from_id in inner_blocks.iter().cloned() {
+                self.solipsize(entry, FlowType::Break, from_id, shape_id);
             }
         }
 
@@ -272,12 +305,13 @@ where
             .process(&mut inner_blocks, entries)
             .expect("Inner block empty for some reason");
 
-        let loop_shape = Shape::Loop {
-            inner: Box::new(inner),
+        Shape {
+            id: shape_id,
+            kind: ShapeKind::Loop {
+                inner: Box::new(inner),
+            },
             next: None,
-        };
-
-        loop_shape
+        }
     }
 
     // not efficient, get it correct first
@@ -332,33 +366,32 @@ where
         next_entries: &mut N,
         indep_groups: &mut HashMap<NodeId, HashSet<NodeId>>,
         // checked: bool, // TODO: enum
-    ) -> Shape<L> {
+    ) -> Shape {
         println!(" -> Make Multi");
 
         let mut handled_shapes = vec![];
-        let mut edges = vec![];
+        let mut next_targets = vec![];
+        let shape_id = self.next_shape_id();
 
         for (entry, targets) in indep_groups.iter_mut() {
             for inner_id in targets.iter().cloned() {
-                edges.clear();
                 blocks.remove(&inner_id);
 
-                for node_id in self
-                    .graph
-                    .neighbors_directed(inner_id, Direction::Outgoing)
-                    .filter(|id| blocks.contains(&id))
-                {
-                    if !targets.contains(&node_id) {
-                        next_entries.insert(node_id);
-                        // Solipsize
-                        edges.push(
-                            self.graph.find_edge(inner_id, node_id).unwrap(),
-                        );
-                    }
-                }
+                next_targets.clear();
+                next_targets.extend(
+                    self.nodes_out(inner_id).filter(|id| blocks.contains(&id)),
+                );
 
-                for edge in edges.drain(..) {
-                    self.graph.remove_edge(edge);
+                for node_id in &next_targets {
+                    if !targets.contains(node_id) {
+                        next_entries.insert(*node_id);
+                    }
+                    self.solipsize(
+                        *node_id,
+                        FlowType::Break,
+                        inner_id,
+                        shape_id,
+                    );
                 }
             }
 
@@ -371,8 +404,9 @@ where
             }
         }
 
-        Shape::Multi {
-            handled_shapes,
+        Shape {
+            id: shape_id,
+            kind: ShapeKind::Multi { handled_shapes },
             next: None,
         }
     }
@@ -381,14 +415,14 @@ where
         &mut self,
         blocks: &mut HashSet<NodeId>,
         initial_entries: &mut HashSet<NodeId>,
-    ) -> Option<Shape<L>> {
+    ) -> Option<Shape> {
         let entries = initial_entries;
         let mut next_entries: DblBuffer<HashSet<NodeId>> = DblBuffer::new();
 
-        let mut ret: Option<Shape<L>> = None;
+        let mut ret: Option<Shape> = None;
         // borrow-chk work around
         let mut has_ret = false;
-        let mut prev: &mut Link<L> = &mut None;
+        let mut prev: &mut Link = &mut None;
 
         macro_rules! make {
             ($call: expr) => {{
@@ -397,10 +431,10 @@ where
                 if !has_ret {
                     has_ret = true;
                     ret = Some(shape);
-                    prev = (&mut ret).as_mut().map(|s| s.next()).unwrap();
+                    prev = (&mut ret).as_mut().map(|s| &mut s.next).unwrap();
                 } else {
                     *prev = Some(Box::new(shape));
-                    prev = prev.as_mut().map(|s| s.next()).unwrap();
+                    prev = prev.as_mut().map(|s| &mut s.next).unwrap();
                 }
 
                 if next_entries.is_empty() {
@@ -425,8 +459,7 @@ where
                 let node_id = entries.iter().next().cloned().unwrap();
 
                 if self
-                    .graph
-                    .neighbors_directed(node_id, Direction::Incoming)
+                    .nodes_in(node_id)
                     .filter(|id| blocks.contains(&id))
                     .count()
                     == 0
@@ -470,20 +503,21 @@ mod tests {
 
     #[test]
     fn test_run_relooper() {
-        let mut relooper: Relooper<i32, bool> = Relooper {
+        let mut relooper: Relooper<&'static str, bool> = Relooper {
+            shape_id_counter: 0,
             graph: StableGraph::new(),
         };
 
-        let a = relooper.add_block(0);
-        let b = relooper.add_block(1);
-        let c = relooper.add_block(2);
-        let d = relooper.add_block(3);
+        let a = relooper.add_block("a");
+        let b = relooper.add_block("b");
+        let c = relooper.add_block("c");
+        let d = relooper.add_block("d");
+        // let e = relooper.add_block("e");
 
         relooper.add_branch(a, b, true);
-        relooper.add_branch(b, b, true);
-        relooper.add_branch(a, c, false);
+        relooper.add_branch(b, c, true);
         relooper.add_branch(b, d, true);
-        relooper.add_branch(c, d, false);
+        relooper.add_branch(c, b, false);
 
         let mut blocks = [a, b, c, d].iter().cloned().collect();
         let mut entries = [a].iter().cloned().collect();
