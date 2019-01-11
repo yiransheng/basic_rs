@@ -1,6 +1,8 @@
 use std::cmp::{Eq, PartialEq};
 use std::collections::HashSet;
+use std::fmt;
 use std::hash::Hash;
+use std::ops::{Deref, DerefMut};
 
 use petgraph::graph::NodeIndex;
 use petgraph::stable_graph::StableGraph;
@@ -20,7 +22,6 @@ struct Branch {
 type Link<L> = Option<Box<Shape<L>>>;
 
 // TODO: non-recursive Drop
-#[derive(Debug)]
 enum Shape<L> {
     Simple {
         internal: L,
@@ -62,6 +63,45 @@ impl<L> Shape<L> {
     }
 }
 
+impl<L> Shape<L>
+where
+    L: fmt::Debug,
+{
+    fn fmt(&self, indent: usize, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Shape::Simple { internal, next } => {
+                writeln!(f, "{}Simple", "  ".repeat(indent))?;
+                writeln!(f, "{}{:?}", "  ".repeat(indent + 1), internal)?;
+                if let Some(ref next) = next {
+                    next.fmt(indent + 1, f)
+                } else {
+                    Ok(())
+                }
+            }
+            Shape::Loop { inner, next } => {
+                writeln!(f, "{}Loop", "  ".repeat(indent))?;
+                inner.fmt(indent + 1, f)?;
+                if let Some(ref next) = next {
+                    next.fmt(indent + 1, f)
+                } else {
+                    Ok(())
+                }
+            }
+            Shape::Multi { .. } => Ok(()),
+        }
+    }
+}
+
+// prints Shape in a similar style to emscripten paper page 9
+impl<L> fmt::Debug for Shape<L>
+where
+    L: fmt::Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        self.fmt(0, f)
+    }
+}
+
 // drops Drain iter after we get zero or one
 // item out
 macro_rules! pop_set {
@@ -69,6 +109,47 @@ macro_rules! pop_set {
         let mut iter = $set.drain();
         iter.next()
     }};
+}
+
+struct DblBuffer<T> {
+    swapped: bool,
+    first: T,
+    second: T,
+}
+impl<T> DblBuffer<T>
+where
+    T: Default,
+{
+    fn new() -> Self {
+        DblBuffer {
+            swapped: false,
+            first: T::default(),
+            second: T::default(),
+        }
+    }
+    fn swap(&mut self) {
+        self.swapped = !self.swapped;
+    }
+}
+impl<T> Deref for DblBuffer<T> {
+    type Target = T;
+
+    fn deref(&self) -> &T {
+        if self.swapped {
+            &self.first
+        } else {
+            &self.second
+        }
+    }
+}
+impl<T> DerefMut for DblBuffer<T> {
+    fn deref_mut(&mut self) -> &mut T {
+        if self.swapped {
+            &mut self.first
+        } else {
+            &mut self.second
+        }
+    }
 }
 
 type NodeId = NodeIndex<u32>;
@@ -95,9 +176,10 @@ where
         initial_entries: &mut HashSet<NodeId>,
     ) -> Option<Shape<L>> {
         let entries = initial_entries;
+        let mut next_entries: DblBuffer<HashSet<NodeId>> = DblBuffer::new();
 
         let mut ret: Option<Shape<L>> = None;
-        // borrow-chk wound around
+        // borrow-chk work around
         let mut has_ret = false;
         let mut prev: &mut Link<L> = &mut None;
 
@@ -113,21 +195,26 @@ where
                     prev = prev.as_mut().map(|s| s.next()).unwrap();
                 }
 
-                if entries.is_empty() {
+                if next_entries.is_empty() {
                     return ret;
                 } else {
+                    ::std::mem::swap(entries, next_entries.deref_mut());
                     continue;
                 }
             }};
         }
 
         loop {
+            next_entries.swap();
+            next_entries.clear();
+
             if entries.len() == 0 {
                 return None;
             }
             if entries.len() == 1 {
                 let node_id = entries.iter().next().cloned().unwrap();
                 println!("Node id: {:?}", node_id);
+                println!("Entries {:?}", entries);
 
                 if self
                     .graph
@@ -136,9 +223,14 @@ where
                     .count()
                     == 0
                 {
-                    make!(self.make_simple(node_id, blocks, entries));
+                    make!(self.make_simple(
+                        node_id,
+                        blocks,
+                        entries,
+                        &mut next_entries
+                    ));
                 } else {
-                    make!(self.make_loop(blocks, entries));
+                    make!(self.make_loop(blocks, entries, &mut next_entries));
                 }
             }
 
@@ -148,12 +240,14 @@ where
         }
     }
 
-    fn make_simple(
+    fn make_simple<N: DerefMut<Target = HashSet<NodeId>>>(
         &mut self,
         internal_id: NodeId,
         blocks: &mut HashSet<NodeId>,
         entries: &mut HashSet<NodeId>,
+        next_entries: &mut N,
     ) -> Shape<L> {
+        println!(" -> Make Simple");
         let internal = self.graph.node_weight(internal_id).cloned().unwrap();
         let shape = Shape::Simple {
             internal,
@@ -161,11 +255,11 @@ where
         };
         blocks.remove(&internal_id);
 
-        let next_entries: HashSet<NodeId> = self
-            .graph
-            .neighbors_directed(internal_id, Direction::Outgoing)
-            .filter(|id| blocks.contains(&id))
-            .collect();
+        next_entries.extend(
+            self.graph
+                .neighbors_directed(internal_id, Direction::Outgoing)
+                .filter(|id| blocks.contains(&id)),
+        );
 
         // Solipsize
         for next_id in next_entries.iter().cloned() {
@@ -173,16 +267,17 @@ where
             self.graph.remove_edge(edge);
         }
 
-        *entries = next_entries;
-
         shape
     }
 
-    fn make_loop(
+    fn make_loop<N: DerefMut<Target = HashSet<NodeId>>>(
         &mut self,
         blocks: &mut HashSet<NodeId>,
         entries: &mut HashSet<NodeId>,
+        next_entries: &mut N,
     ) -> Shape<L> {
+        println!(" -> Make Loop");
+
         let mut inner_blocks: HashSet<NodeId> = HashSet::new();
 
         let mut queue = entries.clone();
@@ -201,8 +296,6 @@ where
         }
 
         assert!(!inner_blocks.is_empty());
-
-        let mut next_entries = HashSet::new();
 
         for curr_id in inner_blocks.iter().cloned() {
             for possible in
@@ -234,7 +327,9 @@ where
         println!("B/e: {:?} // {:?}", inner_blocks, entries);
         println!("G: {:?}", self.graph);
 
-        let inner = self.process(&mut inner_blocks, entries).unwrap();
+        let inner = self
+            .process(&mut inner_blocks, entries)
+            .expect("Inner block empty for some reason");
 
         println!("Recur Done: {:?}", inner);
 
@@ -242,8 +337,6 @@ where
             inner: Box::new(inner),
             next: None,
         };
-
-        *entries = next_entries;
 
         loop_shape
     }
@@ -276,7 +369,7 @@ mod tests {
 
         let shape = relooper.process(&mut blocks, &mut entries);
 
-        println!("{:?}", shape);
+        println!("{:?}", shape.unwrap());
 
         assert!(false);
     }
