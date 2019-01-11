@@ -1,11 +1,10 @@
-use std::cmp::{Eq, PartialEq};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fmt;
-use std::hash::Hash;
 use std::ops::{Deref, DerefMut};
 
 use petgraph::graph::NodeIndex;
 use petgraph::stable_graph::StableGraph;
+use petgraph::visit::Dfs;
 use petgraph::Direction;
 
 #[derive(Debug, Copy, Clone)]
@@ -87,7 +86,21 @@ where
                     Ok(())
                 }
             }
-            Shape::Multi { .. } => Ok(()),
+            Shape::Multi {
+                handled_shapes,
+                next,
+            } => {
+                writeln!(f, "{}Multi [", "  ".repeat(indent))?;
+                for s in handled_shapes {
+                    s.fmt(indent + 1, f)?;
+                }
+                writeln!(f, "{}]", "  ".repeat(indent))?;
+                if let Some(ref next) = next {
+                    next.fmt(indent + 1, f)
+                } else {
+                    Ok(())
+                }
+            }
         }
     }
 }
@@ -169,76 +182,6 @@ where
     }
     fn add_branch(&mut self, a: NodeId, b: NodeId, data: E) {
         self.graph.add_edge(a, b, data);
-    }
-
-    fn process(
-        &mut self,
-        blocks: &mut HashSet<NodeId>,
-        initial_entries: &mut HashSet<NodeId>,
-    ) -> Option<Shape<L>> {
-        let entries = initial_entries;
-        let mut next_entries: DblBuffer<HashSet<NodeId>> = DblBuffer::new();
-
-        let mut ret: Option<Shape<L>> = None;
-        // borrow-chk work around
-        let mut has_ret = false;
-        let mut prev: &mut Link<L> = &mut None;
-
-        macro_rules! make {
-            ($call: expr) => {{
-                let shape = $call;
-                if !has_ret {
-                    has_ret = true;
-                    ret = Some(shape);
-                    prev = (&mut ret).as_mut().map(|s| s.next()).unwrap();
-                } else {
-                    *prev = Some(Box::new(shape));
-                    prev = prev.as_mut().map(|s| s.next()).unwrap();
-                }
-
-                if next_entries.is_empty() {
-                    return ret;
-                } else {
-                    ::std::mem::swap(entries, next_entries.deref_mut());
-                    continue;
-                }
-            }};
-        }
-
-        loop {
-            next_entries.swap();
-            next_entries.clear();
-
-            if entries.len() == 0 {
-                return None;
-            }
-            if entries.len() == 1 {
-                let node_id = entries.iter().next().cloned().unwrap();
-                println!("Node id: {:?}", node_id);
-                println!("Entries {:?}", entries);
-
-                if self
-                    .graph
-                    .neighbors_directed(node_id, Direction::Incoming)
-                    .filter(|id| blocks.contains(&id))
-                    .count()
-                    == 0
-                {
-                    make!(self.make_simple(
-                        node_id,
-                        blocks,
-                        entries,
-                        &mut next_entries
-                    ));
-                } else {
-                    make!(self.make_loop(blocks, entries, &mut next_entries));
-                }
-            }
-
-            println!("Size: {:?}", entries);
-
-            panic!("Multi block not supported yet");
-        }
     }
 
     fn make_simple<N: DerefMut<Target = HashSet<NodeId>>>(
@@ -325,14 +268,9 @@ where
             }
         }
 
-        println!("B/e: {:?} // {:?}", inner_blocks, entries);
-        println!("G: {:?}", self.graph);
-
         let inner = self
             .process(&mut inner_blocks, entries)
             .expect("Inner block empty for some reason");
-
-        println!("Recur Done: {:?}", inner);
 
         let loop_shape = Shape::Loop {
             inner: Box::new(inner),
@@ -340,6 +278,189 @@ where
         };
 
         loop_shape
+    }
+
+    // not efficient, get it correct first
+    fn find_independent_groups(
+        &self,
+        blocks: &HashSet<NodeId>,
+        entries: &HashSet<NodeId>,
+    ) -> HashMap<NodeId, HashSet<NodeId>> {
+        let mut indep_group: HashMap<NodeId, HashSet<NodeId>> = entries
+            .iter()
+            .cloned()
+            .map(|entry| (entry, HashSet::new()))
+            .collect();
+
+        let mut reachable: HashMap<NodeId, Option<NodeId>> = HashMap::new();
+
+        for entry in entries.iter().cloned() {
+            let mut dfs = Dfs::new(&self.graph, entry);
+
+            while let Some(node_id) = dfs.next(&self.graph) {
+                if !blocks.contains(&node_id) {
+                    continue;
+                }
+                match reachable.get(&node_id) {
+                    Some(Some(e)) if *e == entry => {}
+                    Some(Some(e)) if *e != entry => {
+                        reachable.insert(node_id, None);
+                    }
+                    None => {
+                        reachable.insert(node_id, Some(entry));
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        println!("INDEP: {:?}", reachable);
+
+        for (k, v) in reachable.drain() {
+            if let Some(entry) = v {
+                indep_group.get_mut(&entry).map(|set| set.insert(k));
+            }
+        }
+
+        indep_group
+    }
+
+    fn make_multiple<N: DerefMut<Target = HashSet<NodeId>>>(
+        &mut self,
+        blocks: &mut HashSet<NodeId>,
+        entries: &mut HashSet<NodeId>,
+        next_entries: &mut N,
+        indep_groups: &mut HashMap<NodeId, HashSet<NodeId>>,
+        // checked: bool, // TODO: enum
+    ) -> Shape<L> {
+        println!(" -> Make Multi");
+
+        let mut handled_shapes = vec![];
+        let mut edges = vec![];
+
+        for (entry, targets) in indep_groups.iter_mut() {
+            for inner_id in targets.iter().cloned() {
+                edges.clear();
+                blocks.remove(&inner_id);
+
+                for node_id in self
+                    .graph
+                    .neighbors_directed(inner_id, Direction::Outgoing)
+                    .filter(|id| blocks.contains(&id))
+                {
+                    if !targets.contains(&node_id) {
+                        next_entries.insert(node_id);
+                        // Solipsize
+                        edges.push(
+                            self.graph.find_edge(inner_id, node_id).unwrap(),
+                        );
+                    }
+                }
+
+                for edge in edges.drain(..) {
+                    self.graph.remove_edge(edge);
+                }
+            }
+
+            let mut inner_entries = HashSet::new();
+            inner_entries.insert(*entry);
+
+            let shape = self.process(targets, &mut inner_entries);
+            if let Some(shape) = shape {
+                handled_shapes.push(shape);
+            }
+        }
+
+        Shape::Multi {
+            handled_shapes,
+            next: None,
+        }
+    }
+
+    fn process(
+        &mut self,
+        blocks: &mut HashSet<NodeId>,
+        initial_entries: &mut HashSet<NodeId>,
+    ) -> Option<Shape<L>> {
+        let entries = initial_entries;
+        let mut next_entries: DblBuffer<HashSet<NodeId>> = DblBuffer::new();
+
+        let mut ret: Option<Shape<L>> = None;
+        // borrow-chk work around
+        let mut has_ret = false;
+        let mut prev: &mut Link<L> = &mut None;
+
+        macro_rules! make {
+            ($call: expr) => {{
+                let shape = $call;
+
+                if !has_ret {
+                    has_ret = true;
+                    ret = Some(shape);
+                    prev = (&mut ret).as_mut().map(|s| s.next()).unwrap();
+                } else {
+                    *prev = Some(Box::new(shape));
+                    prev = prev.as_mut().map(|s| s.next()).unwrap();
+                }
+
+                if next_entries.is_empty() {
+                    return ret;
+                } else {
+                    ::std::mem::swap(entries, next_entries.deref_mut());
+                    continue;
+                }
+            }};
+        }
+
+        loop {
+            next_entries.swap();
+            next_entries.clear();
+
+            println!("E/B {:?} <= {:?}", entries, blocks);
+
+            if entries.len() == 0 {
+                return None;
+            }
+            if entries.len() == 1 {
+                let node_id = entries.iter().next().cloned().unwrap();
+
+                if self
+                    .graph
+                    .neighbors_directed(node_id, Direction::Incoming)
+                    .filter(|id| blocks.contains(&id))
+                    .count()
+                    == 0
+                {
+                    make!(self.make_simple(
+                        node_id,
+                        blocks,
+                        entries,
+                        &mut next_entries
+                    ));
+                } else {
+                    make!(self.make_loop(blocks, entries, &mut next_entries));
+                }
+            }
+
+            let mut indep_groups =
+                self.find_independent_groups(blocks, entries);
+
+            println!("Indep set: {:?}", indep_groups);
+
+            let indep_count =
+                indep_groups.values().filter(|set| !set.is_empty()).count();
+
+            if indep_count > 0 {
+                make!(self.make_multiple(
+                    blocks,
+                    entries,
+                    &mut next_entries,
+                    &mut indep_groups
+                ));
+            } else {
+                make!(self.make_loop(blocks, entries, &mut next_entries));
+            }
+        }
     }
 }
 
@@ -359,17 +480,17 @@ mod tests {
         let d = relooper.add_block(3);
 
         relooper.add_branch(a, b, true);
-        relooper.add_branch(b, c, false);
+        relooper.add_branch(b, b, true);
+        relooper.add_branch(a, c, false);
         relooper.add_branch(b, d, true);
-        relooper.add_branch(c, b, false);
+        relooper.add_branch(c, d, false);
 
-        println!("{:?}", relooper.graph);
-
-        let mut blocks = [a, b, c].iter().cloned().collect();
+        let mut blocks = [a, b, c, d].iter().cloned().collect();
         let mut entries = [a].iter().cloned().collect();
 
         let shape = relooper.process(&mut blocks, &mut entries);
 
+        println!("Found shape:");
         println!("{:?}", shape.unwrap());
 
         assert!(false);
