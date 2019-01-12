@@ -8,17 +8,17 @@ use petgraph::visit::Dfs;
 use petgraph::Direction;
 
 #[derive(Debug, Copy, Clone)]
-enum FlowType {
+pub enum FlowType {
     Direct, // We will directly reach the right location through other means, no need for continue or break
     Break,
     Continue,
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Default)]
-struct ShapeId(u32);
+pub struct ShapeId(u32);
 
 #[derive(Debug, Clone)]
-enum Branch<E> {
+pub enum Branch<E> {
     // Option used only for take operation
     Raw(Option<E>),
     Processed {
@@ -553,6 +553,58 @@ impl<L, E> Relooper<L, E>
             } else {
                 make!(self.make_loop(blocks, entries, &mut next_entries));
             }
+        }
+    }
+}
+
+pub trait Render {
+    type Base;
+
+    fn render_simple(&mut self, base: &Self::Base);
+
+    fn render_loop<F>(&mut self, f: F)
+    where
+        F: FnMut(&mut Self);
+
+    fn render_multi<F>(&mut self, f: F)
+    where
+        F: FnMut(&mut Self);
+}
+
+impl<L, E> Relooper<L, E> {
+    pub fn render<R>(&mut self, entry: NodeId, renderer: &mut R)
+    where
+        R: Render<Base = L>,
+    {
+        let shape = self.calculate(entry).unwrap();
+
+        self.render_shape(&shape, renderer);
+    }
+
+    fn render_shape<R>(&mut self, shape: &Shape, renderer: &mut R)
+    where
+        R: Render<Base = L>,
+    {
+        match &shape.kind {
+            ShapeKind::Simple { internal } => {
+                let d = self.graph.node_weight(*internal).unwrap();
+                renderer.render_simple(d);
+            }
+            ShapeKind::Loop { inner } => {
+                let shape = &*inner;
+                renderer.render_loop(|r| {
+                    self.render_shape(shape, r);
+                })
+            }
+            ShapeKind::Multi { handled_shapes } => renderer.render_multi(|r| {
+                for s in handled_shapes {
+                    self.render_shape(s, r);
+                }
+            }),
+        }
+
+        if let Some(ref next) = shape.next {
+            self.render_shape(next, renderer);
         }
     }
 }
