@@ -424,13 +424,13 @@ impl<L, E> Relooper<L, E>
                 for node_id in &next_targets {
                     if !targets.contains(node_id) {
                         next_entries.insert(*node_id);
+                        self.solipsize(
+                            *node_id,
+                            FlowType::Break,
+                            inner_id,
+                            shape_id,
+                        );
                     }
-                    self.solipsize(
-                        *node_id,
-                        FlowType::Break,
-                        inner_id,
-                        shape_id,
-                    );
                 }
             }
 
@@ -577,9 +577,14 @@ mod tests {
         relooper.add_branch(c, b, false);
 
         let shape = relooper.calculate(a);
+        let shape = shape.unwrap();
 
         println!("Found shape:");
-        println!("{:?}", shape.unwrap());
+        println!("{:?}", shape);
+
+        for b in relooper.processed_branches_in(c) {
+            println!("A: {:?}", b);
+        }
 
         assert!(false);
     }
