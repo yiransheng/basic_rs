@@ -39,7 +39,7 @@ enum ShapeKind {
 }
 
 // TODO: non-recursive Drop
-struct Shape {
+pub struct Shape {
     id: ShapeId,
     kind: ShapeKind,
     next: Link,
@@ -158,6 +158,46 @@ impl<L, E> Relooper<L, E>
     }
     pub fn add_branch(&mut self, a: NodeId, b: NodeId, data: E) {
         self.graph.add_edge(a, b, Branch::Raw(Some(data)));
+    }
+
+    pub fn processed_branches_out<'a>(
+        &'a self,
+        node_id: NodeId,
+    ) -> impl Iterator<Item = &'a Branch<E>> + 'a {
+        self.graph
+            .neighbors_directed(node_id, Direction::Outgoing)
+            .filter_map(move |id| {
+                let edge = match self.graph.find_edge(node_id, id) {
+                    Some(edge) => edge,
+                    _ => return None,
+                };
+                let edge = self.graph.edge_weight(edge);
+                if let Some(Branch::Processed { .. }) = edge {
+                    edge
+                } else {
+                    None
+                }
+            })
+    }
+
+    pub fn processed_branches_in<'a>(
+        &'a self,
+        node_id: NodeId,
+    ) -> impl Iterator<Item = &'a Branch<E>> + 'a {
+        self.graph
+            .neighbors_directed(node_id, Direction::Incoming)
+            .filter_map(move |id| {
+                let edge = match self.graph.find_edge(id, node_id) {
+                    Some(edge) => edge,
+                    _ => return None,
+                };
+                let edge = self.graph.edge_weight(edge);
+                if let Some(Branch::Processed { .. }) = edge {
+                    edge
+                } else {
+                    None
+                }
+            })
     }
 
     fn next_shape_id(&mut self) -> ShapeId {
@@ -410,7 +450,7 @@ impl<L, E> Relooper<L, E>
         }
     }
 
-    fn calculate(&mut self, entry: NodeId) -> Option<Shape> {
+    pub fn calculate(&mut self, entry: NodeId) -> Option<Shape> {
         self.remove_dead(entry);
 
         let mut initial_entries = HashSet::new();
