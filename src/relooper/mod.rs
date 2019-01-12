@@ -137,7 +137,7 @@ impl<T> DerefMut for DblBuffer<T> {
     }
 }
 
-struct Relooper<L, E> {
+pub struct Relooper<L, E> {
     shape_id_counter: u32,
     graph: StableGraph<L, Branch<E>>,
 }
@@ -147,10 +147,16 @@ impl<L, E> Relooper<L, E>
 // L: ::std::fmt::Debug,
 // E: ::std::fmt::Debug,
 {
-    fn add_block(&mut self, label: L) -> NodeId {
+    pub fn new() -> Self {
+        Relooper {
+            shape_id_counter: 0,
+            graph: StableGraph::new(),
+        }
+    }
+    pub fn add_block(&mut self, label: L) -> NodeId {
         self.graph.add_node(label)
     }
-    fn add_branch(&mut self, a: NodeId, b: NodeId, data: E) {
+    pub fn add_branch(&mut self, a: NodeId, b: NodeId, data: E) {
         self.graph.add_edge(a, b, Branch::Raw(Some(data)));
     }
 
@@ -404,6 +410,31 @@ impl<L, E> Relooper<L, E>
         }
     }
 
+    fn calculate(&mut self, entry: NodeId) -> Option<Shape> {
+        self.remove_dead(entry);
+
+        let mut initial_entries = HashSet::new();
+        initial_entries.insert(entry);
+
+        self.process(
+            &mut self.graph.node_indices().collect(),
+            &mut initial_entries,
+        )
+    }
+
+    fn remove_dead(&mut self, entry: NodeId) {
+        let mut dead: HashSet<NodeId> = self.graph.node_indices().collect();
+        let mut dfs = Dfs::new(&self.graph, entry);
+
+        while let Some(node_id) = dfs.next(&self.graph) {
+            dead.remove(&node_id);
+        }
+
+        for node_id in dead.drain() {
+            self.graph.remove_node(node_id);
+        }
+    }
+
     fn process(
         &mut self,
         blocks: &mut HashSet<NodeId>,
@@ -492,26 +523,20 @@ mod tests {
 
     #[test]
     fn test_run_relooper() {
-        let mut relooper: Relooper<&'static str, bool> = Relooper {
-            shape_id_counter: 0,
-            graph: StableGraph::new(),
-        };
+        let mut relooper: Relooper<&'static str, bool> = Relooper::new();
 
         let a = relooper.add_block("a");
         let b = relooper.add_block("b");
         let c = relooper.add_block("c");
         let d = relooper.add_block("d");
-        // let e = relooper.add_block("e");
+        let e = relooper.add_block("e");
 
         relooper.add_branch(a, b, true);
         relooper.add_branch(b, c, true);
         relooper.add_branch(b, d, true);
         relooper.add_branch(c, b, false);
 
-        let mut blocks = [a, b, c, d].iter().cloned().collect();
-        let mut entries = [a].iter().cloned().collect();
-
-        let shape = relooper.process(&mut blocks, &mut entries);
+        let shape = relooper.calculate(a);
 
         println!("Found shape:");
         println!("{:?}", shape.unwrap());
