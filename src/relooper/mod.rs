@@ -22,7 +22,7 @@ enum Branch<E> {
     // Option used only for take operation
     Raw(Option<E>),
     Processed {
-        ancestor: Option<ShapeId>,
+        ancestor: ShapeId,
         flow_type: FlowType,
         data: E,
     },
@@ -49,15 +49,15 @@ impl Shape {
     fn fmt(&self, indent: usize, f: &mut fmt::Formatter) -> fmt::Result {
         match &self.kind {
             ShapeKind::Simple { internal } => {
-                writeln!(f, "{}Simple", "  ".repeat(indent))?;
+                writeln!(f, "{}Simple({})", "  ".repeat(indent), self.id.0)?;
                 writeln!(f, "{}{:?}", "  ".repeat(indent + 1), internal)?;
             }
             ShapeKind::Loop { inner } => {
-                writeln!(f, "{}Loop", "  ".repeat(indent))?;
+                writeln!(f, "{}Loop({})", "  ".repeat(indent), self.id.0)?;
                 inner.fmt(indent + 1, f)?;
             }
             ShapeKind::Multi { handled_shapes } => {
-                writeln!(f, "{}Multi [", "  ".repeat(indent))?;
+                writeln!(f, "{}Multi({}) [", "  ".repeat(indent), self.id.0)?;
                 for s in handled_shapes {
                     s.fmt(indent + 1, f)?;
                 }
@@ -143,9 +143,9 @@ struct Relooper<L, E> {
 }
 
 impl<L, E> Relooper<L, E>
-where
-    L: ::std::fmt::Debug,
-    E: ::std::fmt::Debug,
+// where
+// L: ::std::fmt::Debug,
+// E: ::std::fmt::Debug,
 {
     fn add_block(&mut self, label: L) -> NodeId {
         self.graph.add_node(label)
@@ -175,7 +175,7 @@ where
             ::std::mem::replace(
                 branch,
                 Branch::Processed {
-                    ancestor: Some(ancester_shape),
+                    ancestor: ancester_shape,
                     flow_type,
                     data,
                 },
@@ -232,7 +232,6 @@ where
         entries: &mut HashSet<NodeId>,
         next_entries: &mut N,
     ) -> Shape {
-        println!(" -> Make Simple");
         let shape = Shape {
             id: self.next_shape_id(),
             kind: ShapeKind::Simple {
@@ -260,8 +259,6 @@ where
         entries: &mut HashSet<NodeId>,
         next_entries: &mut N,
     ) -> Shape {
-        println!(" -> Make Loop");
-
         let mut inner_blocks: HashSet<NodeId> = HashSet::new();
 
         let mut queue = entries.clone();
@@ -348,8 +345,6 @@ where
             }
         }
 
-        println!("INDEP: {:?}", reachable);
-
         for (k, v) in reachable.drain() {
             if let Some(entry) = v {
                 indep_group.get_mut(&entry).map(|set| set.insert(k));
@@ -365,10 +360,8 @@ where
         entries: &mut HashSet<NodeId>,
         next_entries: &mut N,
         indep_groups: &mut HashMap<NodeId, HashSet<NodeId>>,
-        // checked: bool, // TODO: enum
+        // checked: bool, // TODO
     ) -> Shape {
-        println!(" -> Make Multi");
-
         let mut handled_shapes = vec![];
         let mut next_targets = vec![];
         let shape_id = self.next_shape_id();
@@ -450,13 +443,11 @@ where
             next_entries.swap();
             next_entries.clear();
 
-            println!("E/B {:?} <= {:?}", entries, blocks);
-
             if entries.len() == 0 {
                 return None;
             }
             if entries.len() == 1 {
-                let node_id = entries.iter().next().cloned().unwrap();
+                let node_id = peek_set!(entries).unwrap();
 
                 if self
                     .nodes_in(node_id)
@@ -477,8 +468,6 @@ where
 
             let mut indep_groups =
                 self.find_independent_groups(blocks, entries);
-
-            println!("Indep set: {:?}", indep_groups);
 
             let indep_count =
                 indep_groups.values().filter(|set| !set.is_empty()).count();
