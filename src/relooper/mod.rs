@@ -7,7 +7,7 @@ use petgraph::stable_graph::StableGraph;
 use petgraph::visit::Dfs;
 use petgraph::Direction;
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum FlowType {
     Direct, // We will directly reach the right location through other means, no need for continue or break
     Break,
@@ -15,7 +15,7 @@ pub enum FlowType {
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Default)]
-pub struct ShapeId(u32);
+pub struct ShapeId(pub u32);
 
 #[derive(Debug, Clone)]
 pub enum Branch<E> {
@@ -26,6 +26,7 @@ pub enum Branch<E> {
 #[derive(Debug, Clone)]
 pub struct ProcessedBranch<E> {
     ancestor: ShapeId,
+    target: NodeId,
     flow_type: FlowType,
     data: Option<E>,
 }
@@ -230,6 +231,7 @@ impl<L, E> Relooper<L, E>
                 branch,
                 Branch::Processed(ProcessedBranch {
                     ancestor: ancester_shape,
+                    target,
                     flow_type,
                     data,
                 }),
@@ -566,27 +568,58 @@ impl<L, E> Relooper<L, E>
 }
 
 struct SimpleBlock<'a, L, E> {
-    shape: &'a mut Shape,
+    shape: &'a Shape,
     relooper: &'a Relooper<L, E>,
 }
-impl<'a, L, E> Render for SimpleBlock<'a, L, E>
+impl<'a, L, E, S> Render<S> for SimpleBlock<'a, L, E>
 where
-    L: Render,
-    E: Render<Sink = L::Sink>,
+    L: Render<S>,
+    E: Render<S>,
+    S: RenderSink,
 {
-    type Sink = L::Sink;
-
-    fn render(&self, ctx: LoopCtx, env: &mut Self::Sink) {
+    fn render(&self, ctx: LoopCtx, sink: &mut S) {
         let internal = match self.shape.kind {
             ShapeKind::Simple { internal } => internal,
             _ => return,
         };
 
         self.relooper.graph.node_weight(internal).map(|raw| {
-            raw.render(ctx, env);
+            raw.render(ctx, sink);
         });
-        if self.relooper.processed_branches_out(internal).count() == 0 {
+
+        let mut default_target: Option<NodeId> = None;
+        let mut branches: Vec<&ProcessedBranch<E>> = vec![];
+
+        for b in self.relooper.processed_branches_out(internal) {
+            if b.data.is_none() {
+                assert!(
+                    default_target.is_none(),
+                    "Can only have one default target"
+                );
+                default_target = Some(b.target);
+            } else {
+                branches.push(b);
+            }
+        }
+
+        if default_target.is_none() && branches.is_empty() {
             return;
+        }
+
+        let default_target = default_target.expect("Missing default target");
+
+        for (i, b) in branches.drain(..).enumerate() {
+            let has_content = b.flow_type != FlowType::Direct;
+            let cond = b.data.as_ref().unwrap();
+            if i == 0 {
+                sink.render_condition(ctx, Cond::If(cond), |sink| {
+                    sink.render_flow(ctx, b.flow_type, None);
+                });
+            } else {
+                sink.render_condition(ctx, Cond::ElseIf(cond), |sink| {
+                    sink.render_flow(ctx, b.flow_type, None);
+                });
+            }
         }
     }
 }
@@ -597,24 +630,48 @@ pub enum LoopCtx {
     Outside,
 }
 
+#[derive(Debug)]
+pub enum Cond<C> {
+    If(C),
+    ElseIf(C),
+    Else,
+}
+
 pub trait RenderSink {
     fn render_loop<F>(&mut self, f: F)
     where
         F: FnMut(&mut Self);
+
+    fn render_condition<C: Render<Self>, F>(
+        &mut self,
+        ctx: LoopCtx,
+        cond: Cond<&C>,
+        f: F,
+    ) where
+        F: FnMut(&mut Self),
+        Self: Sized;
+
+    fn render_shape_id(&mut self, shape_id: ShapeId);
+
+    fn render_flow(
+        &mut self,
+        cfx: LoopCtx,
+        flow_type: FlowType,
+        shape_id: Option<ShapeId>,
+    );
 }
 
-pub trait Render {
-    type Sink: RenderSink;
-
-    fn render(&self, ctx: LoopCtx, env: &mut Self::Sink);
+pub trait Render<S: RenderSink> {
+    fn render(&self, ctx: LoopCtx, sink: &mut S);
 }
 
-impl<L, E> Relooper<L, E>
-where
-    L: Render + fmt::Debug,
-    E: Render<Sink = L::Sink>,
-{
-    pub fn render(&mut self, entry: NodeId, sink: &mut L::Sink) {
+impl<L, E> Relooper<L, E> {
+    pub fn render<S>(&mut self, entry: NodeId, sink: &mut S)
+    where
+        L: Render<S> + fmt::Debug,
+        E: Render<S>,
+        S: RenderSink,
+    {
         let shape = self.calculate(entry).unwrap();
 
         println!("{:?}", shape);
@@ -622,16 +679,19 @@ where
         self.render_shape(&shape, LoopCtx::Outside, sink);
     }
 
-    fn render_shape(
-        &mut self,
-        shape: &Shape,
-        ctx: LoopCtx,
-        sink: &mut L::Sink,
-    ) {
+    fn render_shape<S>(&mut self, shape: &Shape, ctx: LoopCtx, sink: &mut S)
+    where
+        L: Render<S> + fmt::Debug,
+        E: Render<S>,
+        S: RenderSink,
+    {
         match &shape.kind {
             ShapeKind::Simple { internal } => {
-                let d = self.graph.node_weight(*internal).unwrap();
-                d.render(ctx, sink);
+                let block = SimpleBlock {
+                    shape,
+                    relooper: &*self,
+                };
+                block.render(ctx, sink);
             }
             ShapeKind::Loop { inner } => {
                 let shape = &*inner;

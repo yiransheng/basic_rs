@@ -2,11 +2,86 @@ use std::fmt;
 use std::io::{self, Write};
 
 use crate::ir::*;
-use crate::relooper::Relooper;
+use crate::relooper::{
+    Cond, FlowType, LoopCtx, Relooper, Render, RenderSink, ShapeId,
+};
 
 struct JsCode<'a, W> {
     out: W,
     ir: &'a Program,
+}
+
+impl<'a, W> RenderSink for JsCode<'a, W>
+where
+    W: Write,
+{
+    fn render_loop<F>(&mut self, mut f: F)
+    where
+        F: FnMut(&mut Self),
+    {
+        writeln!(&mut self.out, "while (1) {}", "{");
+
+        f(self);
+
+        writeln!(&mut self.out, "{}", "}");
+    }
+
+    fn render_condition<C: Render<Self>, F>(
+        &mut self,
+        ctx: LoopCtx,
+        cond: Cond<&C>,
+        mut f: F,
+    ) where
+        F: FnMut(&mut Self),
+    {
+        match cond {
+            Cond::If(expr) => {
+                write!(&mut self.out, "if (");
+                expr.render(ctx, self);
+                writeln!(&mut self.out, ") {}", "{");
+                f(self);
+                writeln!(&mut self.out, "{}", "}");
+            }
+            Cond::ElseIf(expr) => {
+                write!(&mut self.out, " else if (");
+                expr.render(ctx, self);
+                writeln!(&mut self.out, ") {}", "{");
+                f(self);
+                writeln!(&mut self.out, "{}", "}");
+            }
+            _ => {}
+        }
+    }
+
+    fn render_shape_id(&mut self, shape_id: ShapeId) {
+        write!(&mut self.out, "$L{}", shape_id.0);
+    }
+
+    fn render_flow(
+        &mut self,
+        ctx: LoopCtx,
+        flow_type: FlowType,
+        shape_id: Option<ShapeId>,
+    ) {
+        if let LoopCtx::Outside = ctx {
+            return;
+        }
+        match flow_type {
+            FlowType::Break => {
+                write!(&mut self.out, "break");
+            }
+            FlowType::Continue => {
+                write!(&mut self.out, "continue");
+            }
+            FlowType::Direct => return,
+        }
+        if let Some(shape_id) = shape_id {
+            write!(&mut self.out, " ");
+            self.render_shape_id(shape_id);
+        }
+
+        writeln!(&mut self.out, ";");
+    }
 }
 
 struct JsFn<'a, W> {
