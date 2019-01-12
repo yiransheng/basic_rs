@@ -2,7 +2,7 @@ use std::fmt;
 use std::io::{self, Write};
 
 use crate::ir::*;
-use crate::relooper::{Relooper, Render};
+use crate::relooper::Relooper;
 
 struct JsCode<'a, W> {
     out: W,
@@ -14,39 +14,39 @@ struct JsFn<'a, W> {
     js: JsCode<'a, W>,
 }
 
-impl<'a, W: Write> Render for JsFn<'a, W> {
-    type Base = Label;
+// impl<'a, W: Write> Render for JsFn<'a, W> {
+// type Base = Label;
 
-    fn render_simple(&mut self, base: &Self::Base) {
-        let block = self.function.blocks.get(*base).unwrap();
+// fn render_simple(&mut self, base: &Self::Base) {
+// let block = self.function.blocks.get(*base).unwrap();
 
-        for s in &block.statements {
-            s.codegen(&mut self.js);
-        }
-    }
+// for s in &block.statements {
+// s.codegen(&mut self.js);
+// }
+// }
 
-    fn render_loop<F>(&mut self, mut f: F)
-    where
-        F: FnMut(&mut Self),
-    {
-        self.js.writeln("while (true) {");
+// fn render_loop<F>(&mut self, mut f: F)
+// where
+// F: FnMut(&mut Self),
+// {
+// self.js.writeln("while (true) {");
 
-        f(self);
+// f(self);
 
-        self.js.writeln("}");
-    }
+// self.js.writeln("}");
+// }
 
-    fn render_multi<F>(&mut self, mut f: F)
-    where
-        F: FnMut(&mut Self),
-    {
-        self.js.writeln("switch (true) {");
+// fn render_multi<F>(&mut self, mut f: F)
+// where
+// F: FnMut(&mut Self),
+// {
+// self.js.writeln("switch (true) {");
 
-        f(self);
+// f(self);
 
-        self.js.writeln("}");
-    }
-}
+// self.js.writeln("}");
+// }
+// }
 
 impl<'a, W: Write> JsCode<'a, W> {
     fn write_group<T1: fmt::Display, T2: fmt::Display, F>(

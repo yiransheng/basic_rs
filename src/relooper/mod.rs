@@ -21,11 +21,13 @@ pub struct ShapeId(u32);
 pub enum Branch<E> {
     // Option used only for take operation
     Raw(Option<E>),
-    Processed {
-        ancestor: ShapeId,
-        flow_type: FlowType,
-        data: E,
-    },
+    Processed(ProcessedBranch<E>),
+}
+#[derive(Debug, Clone)]
+pub struct ProcessedBranch<E> {
+    ancestor: ShapeId,
+    flow_type: FlowType,
+    data: Option<E>,
 }
 
 type Link = Option<Box<Shape>>;
@@ -33,9 +35,15 @@ type Link = Option<Box<Shape>>;
 pub type NodeId = NodeIndex<u32>;
 
 enum ShapeKind {
-    Simple { internal: NodeId },
-    Loop { inner: Box<Shape> },
-    Multi { handled_shapes: Vec<Shape> },
+    Simple {
+        internal: NodeId,
+    },
+    Loop {
+        inner: Box<Shape>,
+    },
+    Multi {
+        handled_shapes: HashMap<NodeId, Shape>,
+    },
 }
 
 // TODO: non-recursive Drop
@@ -58,7 +66,7 @@ impl Shape {
             }
             ShapeKind::Multi { handled_shapes } => {
                 writeln!(f, "{}Multi({}) [", "  ".repeat(indent), self.id.0)?;
-                for s in handled_shapes {
+                for s in handled_shapes.values() {
                     s.fmt(indent + 1, f)?;
                 }
                 writeln!(f, "{}]", "  ".repeat(indent))?;
@@ -156,14 +164,14 @@ impl<L, E> Relooper<L, E>
     pub fn add_block(&mut self, label: L) -> NodeId {
         self.graph.add_node(label)
     }
-    pub fn add_branch(&mut self, a: NodeId, b: NodeId, data: E) {
-        self.graph.add_edge(a, b, Branch::Raw(Some(data)));
+    pub fn add_branch(&mut self, a: NodeId, b: NodeId, data: Option<E>) {
+        self.graph.add_edge(a, b, Branch::Raw(data));
     }
 
     pub fn processed_branches_out<'a>(
         &'a self,
         node_id: NodeId,
-    ) -> impl Iterator<Item = &'a Branch<E>> + 'a {
+    ) -> impl Iterator<Item = &'a ProcessedBranch<E>> + 'a {
         self.graph
             .neighbors_directed(node_id, Direction::Outgoing)
             .filter_map(move |id| {
@@ -172,8 +180,8 @@ impl<L, E> Relooper<L, E>
                     _ => return None,
                 };
                 let edge = self.graph.edge_weight(edge);
-                if let Some(Branch::Processed { .. }) = edge {
-                    edge
+                if let Some(Branch::Processed(e)) = edge {
+                    Some(e)
                 } else {
                     None
                 }
@@ -183,7 +191,7 @@ impl<L, E> Relooper<L, E>
     pub fn processed_branches_in<'a>(
         &'a self,
         node_id: NodeId,
-    ) -> impl Iterator<Item = &'a Branch<E>> + 'a {
+    ) -> impl Iterator<Item = &'a ProcessedBranch<E>> + 'a {
         self.graph
             .neighbors_directed(node_id, Direction::Incoming)
             .filter_map(move |id| {
@@ -192,8 +200,8 @@ impl<L, E> Relooper<L, E>
                     _ => return None,
                 };
                 let edge = self.graph.edge_weight(edge);
-                if let Some(Branch::Processed { .. }) = edge {
-                    edge
+                if let Some(Branch::Processed(e)) = edge {
+                    Some(e)
                 } else {
                     None
                 }
@@ -217,14 +225,14 @@ impl<L, E> Relooper<L, E>
         let branch = self.graph.edge_weight_mut(edge)?;
 
         if let Branch::Raw(data) = branch {
-            let data = data.take().unwrap();
+            let data = data.take();
             ::std::mem::replace(
                 branch,
-                Branch::Processed {
+                Branch::Processed(ProcessedBranch {
                     ancestor: ancester_shape,
                     flow_type,
                     data,
-                },
+                }),
             );
 
             Some(())
@@ -408,7 +416,7 @@ impl<L, E> Relooper<L, E>
         indep_groups: &mut HashMap<NodeId, HashSet<NodeId>>,
         // checked: bool, // TODO
     ) -> Shape {
-        let mut handled_shapes = vec![];
+        let mut handled_shapes = HashMap::new();
         let mut next_targets = vec![];
         let shape_id = self.next_shape_id();
 
@@ -439,7 +447,7 @@ impl<L, E> Relooper<L, E>
 
             let shape = self.process(targets, &mut inner_entries);
             if let Some(shape) = shape {
-                handled_shapes.push(shape);
+                handled_shapes.insert(*entry, shape);
             }
         }
 
@@ -557,54 +565,86 @@ impl<L, E> Relooper<L, E>
     }
 }
 
-pub trait Render {
-    type Base;
+struct SimpleBlock<'a, L, E> {
+    shape: &'a mut Shape,
+    relooper: &'a Relooper<L, E>,
+}
+impl<'a, L, E> Render for SimpleBlock<'a, L, E>
+where
+    L: Render,
+    E: Render<Sink = L::Sink>,
+{
+    type Sink = L::Sink;
 
-    fn render_simple(&mut self, base: &Self::Base);
+    fn render(&self, ctx: LoopCtx, env: &mut Self::Sink) {
+        let internal = match self.shape.kind {
+            ShapeKind::Simple { internal } => internal,
+            _ => return,
+        };
 
+        self.relooper.graph.node_weight(internal).map(|raw| {
+            raw.render(ctx, env);
+        });
+        if self.relooper.processed_branches_out(internal).count() == 0 {
+            return;
+        }
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
+pub enum LoopCtx {
+    InLoop,
+    Outside,
+}
+
+pub trait RenderSink {
     fn render_loop<F>(&mut self, f: F)
-    where
-        F: FnMut(&mut Self);
-
-    fn render_multi<F>(&mut self, f: F)
     where
         F: FnMut(&mut Self);
 }
 
-impl<L, E> Relooper<L, E> {
-    pub fn render<R>(&mut self, entry: NodeId, renderer: &mut R)
-    where
-        R: Render<Base = L>,
-    {
+pub trait Render {
+    type Sink: RenderSink;
+
+    fn render(&self, ctx: LoopCtx, env: &mut Self::Sink);
+}
+
+impl<L, E> Relooper<L, E>
+where
+    L: Render + fmt::Debug,
+    E: Render<Sink = L::Sink>,
+{
+    pub fn render(&mut self, entry: NodeId, sink: &mut L::Sink) {
         let shape = self.calculate(entry).unwrap();
 
-        self.render_shape(&shape, renderer);
+        println!("{:?}", shape);
+
+        self.render_shape(&shape, LoopCtx::Outside, sink);
     }
 
-    fn render_shape<R>(&mut self, shape: &Shape, renderer: &mut R)
-    where
-        R: Render<Base = L>,
-    {
+    fn render_shape(
+        &mut self,
+        shape: &Shape,
+        ctx: LoopCtx,
+        sink: &mut L::Sink,
+    ) {
         match &shape.kind {
             ShapeKind::Simple { internal } => {
                 let d = self.graph.node_weight(*internal).unwrap();
-                renderer.render_simple(d);
+                d.render(ctx, sink);
             }
             ShapeKind::Loop { inner } => {
                 let shape = &*inner;
-                renderer.render_loop(|r| {
-                    self.render_shape(shape, r);
+
+                sink.render_loop(|sink| {
+                    self.render_shape(shape, LoopCtx::InLoop, sink)
                 })
             }
-            ShapeKind::Multi { handled_shapes } => renderer.render_multi(|r| {
-                for s in handled_shapes {
-                    self.render_shape(s, r);
-                }
-            }),
+            ShapeKind::Multi { handled_shapes } => {}
         }
 
         if let Some(ref next) = shape.next {
-            self.render_shape(next, renderer);
+            self.render_shape(next, ctx, sink);
         }
     }
 }
