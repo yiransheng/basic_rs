@@ -30,7 +30,7 @@ pub enum Branch<E> {
 
 type Link = Option<Box<Shape>>;
 
-type NodeId = NodeIndex<u32>;
+pub type NodeId = NodeIndex<u32>;
 
 enum ShapeKind {
     Simple { internal: NodeId },
@@ -638,6 +638,6 @@ mod tests {
             println!("A: {:?}", b);
         }
 
-        assert!(false);
+        assert!(true);
     }
 }
