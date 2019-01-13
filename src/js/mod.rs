@@ -3,7 +3,7 @@ use std::io::{self, Write};
 
 use crate::ir::*;
 use crate::relooper::{
-    Cond, FlowType, LoopCtx, Relooper, Render, RenderSink, ShapeId,
+    Cond, FlowType, LoopCtx, NodeId, Relooper, Render, RenderSink, ShapeId,
 };
 
 struct JsCode<'a, W> {
@@ -34,6 +34,17 @@ where
         f(self);
 
         writeln!(&mut self.out, "{}", "}");
+    }
+
+    fn render_multi_loop<F>(&mut self, mut f: F)
+    where
+        F: FnMut(&mut Self),
+    {
+        writeln!(&mut self.out, "do {}", "{");
+
+        f(self);
+
+        writeln!(&mut self.out, "{} while(0)", "}");
     }
 
     fn render_condition<C: Render<Self>, F>(
@@ -149,6 +160,68 @@ where
 {
     fn render(&self, ctx: LoopCtx, sink: &mut JsCode<'a, W>) {
         self.codegen(sink);
+    }
+}
+
+impl<'a, W> Render<JsCode<'a, W>> for FunctionName
+where
+    W: Write,
+{
+    fn render(&self, ctx: LoopCtx, sink: &mut JsCode<'a, W>) {
+        use std::collections::HashMap;
+
+        if *self != sink.function {
+            return;
+        }
+        let func = sink.function();
+
+        sink.write_group("() => {\n", "}", |sink| {
+            for (i, ty) in func.locals.iter().enumerate() {
+                match ty {
+                    ValueType::F64 => {
+                        sink.writeln(format_args!("var x_{};", i));
+                    }
+                    _ => unimplemented!(),
+                }
+            }
+            let mut relooper: Relooper<Label, &'_ Expr> = Relooper::new();
+
+            let mut mapping: HashMap<Label, NodeId> = HashMap::new();
+
+            for block in func.iter() {
+                let label = block.label;
+                let node_id = relooper.add_block(label);
+                mapping.insert(label, node_id);
+            }
+
+            for block in func.iter() {
+                let label = block.label;
+                let node_id = mapping.get(&label).cloned().unwrap();
+
+                match &block.exit {
+                    BlockExit::Return(_) => {}
+                    BlockExit::Jump(label) => {
+                        let to_id = mapping.get(&label).cloned().unwrap();
+                        relooper.add_branch(node_id, to_id, None);
+                    }
+                    BlockExit::Switch(cond, true_br, None) => {
+                        let to_id = mapping.get(&true_br).cloned().unwrap();
+                        relooper.add_branch(node_id, to_id, Some(cond));
+                    }
+                    BlockExit::Switch(cond, true_br, Some(false_br)) => {
+                        let to_id = mapping.get(&true_br).cloned().unwrap();
+                        relooper.add_branch(node_id, to_id, Some(cond));
+
+                        let to_id = mapping.get(&false_br).cloned().unwrap();
+                        relooper.add_branch(node_id, to_id, None);
+                    }
+                }
+            }
+
+            relooper.render(mapping.get(&func.entry).cloned().unwrap(), sink);
+
+            Ok(())
+        });
     }
 }
 
@@ -314,15 +387,18 @@ mod tests {
     fn test_it() {
         let program = indoc!(
             "
-            10 FOR I = 1 TO 10
-            20 PRINT I
+            10 FOR I = 1 TO 3
+            15 FOR J = 1 TO 2
+            20 PRINT I + J
             30 NEXT I
+            40 NEXT J
             99 END"
         );
         let scanner = Scanner::new(program);
         let ast = Parser::new(scanner).parse().unwrap();
 
-        let ir = compile(&ast).expect("it should compile successfuly");
+        let mut ir = compile(&ast).expect("it should compile successfuly");
+        ir.optimize();
 
         println!("{}", ir);
 
@@ -334,45 +410,7 @@ mod tests {
             ir: &ir,
         };
 
-        let mut relooper: Relooper<Label, &'_ Expr> = Relooper::new();
-
-        let mut mapping: HashMap<Label, NodeId> = HashMap::new();
-
-        for block in js.function().iter() {
-            let label = block.label;
-            let node_id = relooper.add_block(label);
-            mapping.insert(label, node_id);
-        }
-
-        for block in js.function().iter() {
-            let label = block.label;
-            let node_id = mapping.get(&label).cloned().unwrap();
-
-            match &block.exit {
-                BlockExit::Return(_) => {}
-                BlockExit::Jump(label) => {
-                    let to_id = mapping.get(&label).cloned().unwrap();
-                    relooper.add_branch(node_id, to_id, None);
-                }
-                BlockExit::Switch(cond, true_br, None) => {
-                    let to_id = mapping.get(&true_br).cloned().unwrap();
-                    relooper.add_branch(node_id, to_id, Some(cond));
-                }
-                BlockExit::Switch(cond, true_br, Some(false_br)) => {
-                    let to_id = mapping.get(&true_br).cloned().unwrap();
-                    relooper.add_branch(node_id, to_id, Some(cond));
-
-                    let to_id = mapping.get(&false_br).cloned().unwrap();
-                    // TODO: this is wrong
-                    relooper.add_branch(node_id, to_id, None);
-                }
-            }
-        }
-
-        relooper.render(
-            mapping.get(&js.function().entry).cloned().unwrap(),
-            &mut js,
-        );
+        ir.main.render(LoopCtx::Outside, &mut js);
 
         let js_src = ::std::str::from_utf8(&js_src).unwrap();
 

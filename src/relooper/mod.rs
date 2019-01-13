@@ -44,6 +44,7 @@ enum ShapeKind {
     },
     Multi {
         handled_shapes: HashMap<NodeId, Shape>,
+        needs_loop: usize,
     },
 }
 
@@ -420,6 +421,7 @@ impl<L, E> Relooper<L, E>
     ) -> Shape {
         let mut handled_shapes = HashMap::new();
         let mut next_targets = vec![];
+        let mut needs_loop = 0;
         let shape_id = self.next_shape_id();
 
         for (entry, targets) in indep_groups.iter_mut() {
@@ -440,6 +442,7 @@ impl<L, E> Relooper<L, E>
                             inner_id,
                             shape_id,
                         );
+                        needs_loop += 1;
                     }
                 }
             }
@@ -455,7 +458,10 @@ impl<L, E> Relooper<L, E>
 
         Shape {
             id: shape_id,
-            kind: ShapeKind::Multi { handled_shapes },
+            kind: ShapeKind::Multi {
+                handled_shapes,
+                needs_loop,
+            },
             next: None,
         }
     }
@@ -642,6 +648,10 @@ pub trait RenderSink {
     where
         F: FnMut(&mut Self);
 
+    fn render_multi_loop<F>(&mut self, f: F)
+    where
+        F: FnMut(&mut Self);
+
     fn render_condition<C: Render<Self>, F>(
         &mut self,
         ctx: LoopCtx,
@@ -700,7 +710,10 @@ impl<L, E> Relooper<L, E> {
                     self.render_shape(shape, LoopCtx::InLoop, sink)
                 })
             }
-            ShapeKind::Multi { handled_shapes } => {}
+            ShapeKind::Multi {
+                handled_shapes,
+                needs_loop,
+            } => {}
         }
 
         if let Some(ref next) = shape.next {
