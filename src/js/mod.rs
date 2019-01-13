@@ -3,7 +3,8 @@ use std::io::{self, Write};
 
 use crate::ir::*;
 use crate::relooper::{
-    Cond, FlowType, LoopCtx, NodeId, Relooper, Render, RenderSink, ShapeId,
+    Cond, FlowType, LoopCtx, NodeId, ProcessedBranch, Relooper, Render,
+    RenderSink, ShapeId,
 };
 
 struct JsCode<'a, W> {
@@ -36,16 +37,16 @@ where
         writeln!(&mut self.out, "{}", "}");
     }
 
-    fn render_multi_loop<F>(&mut self, mut f: F)
-    where
-        F: FnMut(&mut Self),
-    {
-        writeln!(&mut self.out, "do {}", "{");
+    // fn render_multi_loop<F>(&mut self, mut f: F)
+    // where
+    // F: FnMut(&mut Self),
+    // {
+    // writeln!(&mut self.out, "do {}", "{");
 
-        f(self);
+    // f(self);
 
-        writeln!(&mut self.out, "{} while(0)", "}");
-    }
+    // writeln!(&mut self.out, "{} while(0)", "}");
+    // }
 
     fn render_condition<C: Render<Self>, F>(
         &mut self,
@@ -64,9 +65,34 @@ where
                 writeln!(&mut self.out, "{}", "}");
             }
             Cond::ElseIf(expr) => {
-                write!(&mut self.out, " else if (");
+                write!(&mut self.out, "else if (");
                 expr.render(ctx, self);
                 writeln!(&mut self.out, ") {}", "{");
+                f(self);
+                writeln!(&mut self.out, "{}", "}");
+            }
+            Cond::IfLabel(id) => {
+                writeln!(
+                    &mut self.out,
+                    "if (_label === {}) {}",
+                    id.index(),
+                    "{"
+                );
+                f(self);
+                writeln!(&mut self.out, "{}", "}");
+            }
+            Cond::ElseIfLabel(id) => {
+                writeln!(
+                    &mut self.out,
+                    "else if (_label === {}) {}",
+                    id.index(),
+                    "{"
+                );
+                f(self);
+                writeln!(&mut self.out, "{}", "}");
+            }
+            Cond::Else => {
+                writeln!(&mut self.out, " else {}", "{");
                 f(self);
                 writeln!(&mut self.out, "{}", "}");
             }
@@ -78,30 +104,34 @@ where
         write!(&mut self.out, "$L{}", shape_id.0);
     }
 
-    fn render_flow(
+    fn render_branch<E: Render<Self>>(
         &mut self,
         ctx: LoopCtx,
-        flow_type: FlowType,
-        shape_id: Option<ShapeId>,
+        br: &ProcessedBranch<E>,
+        // set_label: bool, for now alawys set label
     ) {
-        if let LoopCtx::Outside = ctx {
-            return;
-        }
-        match flow_type {
-            FlowType::Break => {
-                write!(&mut self.out, "break");
-            }
-            FlowType::Continue => {
-                write!(&mut self.out, "continue");
-            }
-            FlowType::Direct => return,
-        }
-        if let Some(shape_id) = shape_id {
-            write!(&mut self.out, " ");
-            self.render_shape_id(shape_id);
-        }
+        match ctx {
+            LoopCtx::InLoop => {
+                match br.flow_type {
+                    FlowType::Break => {
+                        write!(&mut self.out, "break");
+                    }
+                    FlowType::Continue => {
+                        write!(&mut self.out, "continue");
+                    }
+                    FlowType::Direct => return,
+                }
+                if false {
+                    write!(&mut self.out, " ");
+                    self.render_shape_id(br.ancestor);
+                }
 
-        writeln!(&mut self.out, ";");
+                writeln!(&mut self.out, ";");
+            }
+            LoopCtx::Outside => {
+                writeln!(&mut self.out, "_label = {};", br.target.index());
+            }
+        }
     }
 }
 
@@ -176,10 +206,12 @@ where
         let func = sink.function();
 
         sink.write_group("() => {\n", "}", |sink| {
+            sink.writeln("var _label;");
+
             for (i, ty) in func.locals.iter().enumerate() {
                 match ty {
                     ValueType::F64 => {
-                        sink.writeln(format_args!("var x_{};", i));
+                        sink.writeln(format_args!("var $x{};", i));
                     }
                     _ => unimplemented!(),
                 }
@@ -251,7 +283,9 @@ impl ToJs for Statement {
                     &js.ir.labels.as_bytes()[*offset..*offset + *len],
                 )
                 .unwrap();
-                js.write_group("console.log(", ")", |js| js.write(s))?;
+                // not need to escape, BASIC source does not support escaping double quote, so any
+                // string that needs escaping will fail at Parser
+                js.write_group("console.log(\"", "\")", |js| js.write(s))?;
             }
             _ => {}
         }
@@ -284,7 +318,7 @@ impl ToJs for LValue {
             },
             LValue::FnPtr(func) => js.write(func)?,
             LValue::Global(var) => js.write(var)?,
-            LValue::Local(index) => js.write(format_args!("x_{}", index))?,
+            LValue::Local(index) => js.write(format_args!("$x{}", index))?,
         }
 
         Ok(())
@@ -387,11 +421,10 @@ mod tests {
     fn test_it() {
         let program = indoc!(
             "
-            10 FOR I = 1 TO 3
-            15 FOR J = 1 TO 2
-            20 PRINT I + J
-            30 NEXT I
-            40 NEXT J
+            10 IF I > 0 THEN 40
+            20 PRINT \"I <= 0\"
+            30 GOTO 99
+            40 PRINT \"I > 0\"
             99 END"
         );
         let scanner = Scanner::new(program);

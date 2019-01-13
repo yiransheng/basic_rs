@@ -25,10 +25,10 @@ pub enum Branch<E> {
 }
 #[derive(Debug, Clone)]
 pub struct ProcessedBranch<E> {
-    ancestor: ShapeId,
-    target: NodeId,
-    flow_type: FlowType,
-    data: Option<E>,
+    pub ancestor: ShapeId,
+    pub target: NodeId,
+    pub flow_type: FlowType,
+    pub data: Option<E>,
 }
 
 type Link = Option<Box<Shape>>;
@@ -634,40 +634,46 @@ where
             raw.render(ctx, sink);
         });
 
-        let mut default_target: Option<NodeId> = None;
+        let mut default_branch: Option<&'_ ProcessedBranch<E>> = None;
         let mut branches: Vec<&ProcessedBranch<E>> = vec![];
 
         for b in self.relooper.processed_branches_out(internal) {
             if b.data.is_none() {
                 assert!(
-                    default_target.is_none(),
+                    default_branch.is_none(),
                     "Can only have one default target"
                 );
-                default_target = Some(b.target);
+                default_branch = Some(b);
             } else {
                 branches.push(b);
             }
         }
 
-        if default_target.is_none() && branches.is_empty() {
+        // at most one default branch, no need to render it
+        if branches.is_empty() {
             return;
         }
 
-        let default_target = default_target.expect("Missing default target");
+        let default_branch = default_branch.expect("Missing default target");
 
         for (i, b) in branches.drain(..).enumerate() {
             let has_content = b.flow_type != FlowType::Direct;
             let cond = b.data.as_ref().unwrap();
             if i == 0 {
                 sink.render_condition(ctx, Cond::If(cond), |sink| {
-                    sink.render_flow(ctx, b.flow_type, None);
+                    sink.render_branch(ctx, b);
                 });
             } else {
                 sink.render_condition(ctx, Cond::ElseIf(cond), |sink| {
-                    sink.render_flow(ctx, b.flow_type, None);
+                    sink.render_branch(ctx, b);
                 });
             }
         }
+
+        // branches not empty use "else" for default is ok
+        sink.render_condition::<E, _>(ctx, Cond::Else, |sink| {
+            sink.render_branch(ctx, default_branch);
+        });
     }
 }
 
@@ -680,7 +686,9 @@ pub enum LoopCtx {
 #[derive(Debug)]
 pub enum Cond<C> {
     If(C),
+    IfLabel(NodeId),
     ElseIf(C),
+    ElseIfLabel(NodeId),
     Else,
 }
 
@@ -689,9 +697,9 @@ pub trait RenderSink {
     where
         F: FnMut(&mut Self);
 
-    fn render_multi_loop<F>(&mut self, f: F)
-    where
-        F: FnMut(&mut Self);
+    // fn render_multi_loop<F>(&mut self, f: F)
+    // where
+    // F: FnMut(&mut Self);
 
     fn render_condition<C: Render<Self>, F>(
         &mut self,
@@ -704,12 +712,13 @@ pub trait RenderSink {
 
     fn render_shape_id(&mut self, shape_id: ShapeId);
 
-    fn render_flow(
+    fn render_branch<E: Render<Self>>(
         &mut self,
-        cfx: LoopCtx,
-        flow_type: FlowType,
-        shape_id: Option<ShapeId>,
-    );
+        ctx: LoopCtx,
+        br: &ProcessedBranch<E>,
+        // set_label: bool, for now alawys set label
+    ) where
+        Self: Sized;
 }
 
 pub trait Render<S: RenderSink> {
@@ -757,7 +766,12 @@ impl<L, E> Relooper<L, E> {
                 needs_loop,
             } => {
                 for (i, (entry, shape)) in handled_shapes.iter().enumerate() {
-                    sink.render_loop(|sink| {
+                    let cond = if i == 0 {
+                        Cond::IfLabel(*entry)
+                    } else {
+                        Cond::ElseIfLabel(*entry)
+                    };
+                    sink.render_condition::<E, _>(ctx, cond, |sink| {
                         self.render_shape(shape, ctx, sink);
                     });
                 }
