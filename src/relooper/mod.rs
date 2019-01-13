@@ -723,10 +723,10 @@ mod tests {
         let d = relooper.add_block("d");
         let e = relooper.add_block("e");
 
-        relooper.add_branch(a, b, true);
-        relooper.add_branch(b, c, true);
-        relooper.add_branch(b, d, true);
-        relooper.add_branch(c, b, false);
+        relooper.add_branch(a, b, None);
+        relooper.add_branch(b, c, None);
+        relooper.add_branch(b, d, None);
+        relooper.add_branch(c, b, None);
 
         let shape = relooper.calculate(a);
         let shape = shape.unwrap();

@@ -8,7 +8,17 @@ use crate::relooper::{
 
 struct JsCode<'a, W> {
     out: W,
+    function: FunctionName,
     ir: &'a Program,
+}
+impl<'a, W> JsCode<'a, W> {
+    fn function(&self) -> &'a Function {
+        self.ir
+            .functions
+            .iter()
+            .find(|func| func.name == self.function)
+            .unwrap()
+    }
 }
 
 impl<'a, W> RenderSink for JsCode<'a, W>
@@ -84,44 +94,18 @@ where
     }
 }
 
-struct JsFn<'a, W> {
-    function: &'a Function,
-    js: JsCode<'a, W>,
+impl<'a, W: Write> Render<JsCode<'a, W>> for Label {
+    fn render(&self, ctx: LoopCtx, sink: &mut JsCode<'a, W>) {
+        let func = sink.function();
+        let block = match func.blocks.get(*self) {
+            Some(block) => block,
+            _ => return,
+        };
+        for s in &block.statements {
+            s.codegen(sink).expect("write error");
+        }
+    }
 }
-
-// impl<'a, W: Write> Render for JsFn<'a, W> {
-// type Base = Label;
-
-// fn render_simple(&mut self, base: &Self::Base) {
-// let block = self.function.blocks.get(*base).unwrap();
-
-// for s in &block.statements {
-// s.codegen(&mut self.js);
-// }
-// }
-
-// fn render_loop<F>(&mut self, mut f: F)
-// where
-// F: FnMut(&mut Self),
-// {
-// self.js.writeln("while (true) {");
-
-// f(self);
-
-// self.js.writeln("}");
-// }
-
-// fn render_multi<F>(&mut self, mut f: F)
-// where
-// F: FnMut(&mut Self),
-// {
-// self.js.writeln("switch (true) {");
-
-// f(self);
-
-// self.js.writeln("}");
-// }
-// }
 
 impl<'a, W: Write> JsCode<'a, W> {
     fn write_group<T1: fmt::Display, T2: fmt::Display, F>(
@@ -156,6 +140,16 @@ trait ToJs {
         &'a self,
         js: &mut JsCode<W>,
     ) -> Result<(), Self::Error>;
+}
+
+impl<'a, W, T> Render<JsCode<'a, W>> for &T
+where
+    W: Write,
+    T: ToJs,
+{
+    fn render(&self, ctx: LoopCtx, sink: &mut JsCode<'a, W>) {
+        self.codegen(sink);
+    }
 }
 
 impl ToJs for Statement {
@@ -332,53 +326,50 @@ mod tests {
 
         let mut js_src: Vec<u8> = Vec::new();
 
-        let js = JsCode {
+        let mut js = JsCode {
             out: &mut js_src,
+            function: ir.main,
             ir: &ir,
         };
 
-        let mut js_fn = JsFn {
-            function: &ir.functions[0],
-            js,
-        };
-
-        let mut relooper: Relooper<Label, Option<bool>> = Relooper::new();
+        let mut relooper: Relooper<Label, &'_ Expr> = Relooper::new();
 
         let mut mapping: HashMap<Label, NodeId> = HashMap::new();
 
-        for block in js_fn.function.iter() {
+        for block in js.function().iter() {
             let label = block.label;
             let node_id = relooper.add_block(label);
             mapping.insert(label, node_id);
         }
 
-        for block in js_fn.function.iter() {
+        for block in js.function().iter() {
             let label = block.label;
             let node_id = mapping.get(&label).cloned().unwrap();
 
             match &block.exit {
                 BlockExit::Return(_) => {}
                 BlockExit::Jump(label) => {
-                    let to_id = mapping.get(label).cloned().unwrap();
+                    let to_id = mapping.get(&label).cloned().unwrap();
                     relooper.add_branch(node_id, to_id, None);
                 }
-                BlockExit::Switch(_, true_br, None) => {
-                    let to_id = mapping.get(true_br).cloned().unwrap();
-                    relooper.add_branch(node_id, to_id, Some(true));
+                BlockExit::Switch(cond, true_br, None) => {
+                    let to_id = mapping.get(&true_br).cloned().unwrap();
+                    relooper.add_branch(node_id, to_id, Some(cond));
                 }
-                BlockExit::Switch(_, true_br, Some(false_br)) => {
-                    let to_id = mapping.get(true_br).cloned().unwrap();
-                    relooper.add_branch(node_id, to_id, Some(true));
+                BlockExit::Switch(cond, true_br, Some(false_br)) => {
+                    let to_id = mapping.get(&true_br).cloned().unwrap();
+                    relooper.add_branch(node_id, to_id, Some(cond));
 
-                    let to_id = mapping.get(false_br).cloned().unwrap();
-                    relooper.add_branch(node_id, to_id, Some(false));
+                    let to_id = mapping.get(&false_br).cloned().unwrap();
+                    // TODO: this is wrong
+                    relooper.add_branch(node_id, to_id, None);
                 }
             }
         }
 
         relooper.render(
-            mapping.get(&js_fn.function.entry).cloned().unwrap(),
-            &mut js_fn,
+            mapping.get(&js.function().entry).cloned().unwrap(),
+            &mut js,
         );
 
         let js_src = ::std::str::from_utf8(&js_src).unwrap();
