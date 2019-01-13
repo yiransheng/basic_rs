@@ -393,18 +393,10 @@ where
             .map(|entry| (entry, HashSet::new()))
             .collect();
 
-        let mut reachable: HashMap<NodeId, Option<NodeId>> = HashMap::new();
+        let mut reachable: HashMap<NodeId, Option<NodeId>> =
+            entries.iter().cloned().map(|e| (e, (Some(e)))).collect();
 
         for entry in entries.iter().cloned() {
-            match reachable.get(&entry) {
-                Some(Some(e)) if *e != entry => {
-                    reachable.insert(entry, None);
-                }
-                None => {
-                    reachable.insert(entry, Some(entry));
-                }
-                _ => {}
-            }
             reachable.insert(entry, Some(entry));
             depth_first_search(
                 &self.graph,
