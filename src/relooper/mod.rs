@@ -461,11 +461,10 @@ where
             .map(|entry| (entry, HashSet::new()))
             .collect();
 
-        let mut reachable: HashMap<NodeId, Option<NodeId>> =
+        let mut reachable_by: HashMap<NodeId, Option<NodeId>> =
             entries.iter().cloned().map(|e| (e, (Some(e)))).collect();
 
         for entry in entries.iter().cloned() {
-            reachable.insert(entry, Some(entry));
             depth_first_search(
                 &self.graph,
                 Some(entry),
@@ -483,13 +482,13 @@ where
                             return Control::Continue;
                         }
 
-                        match reachable.get(&v) {
+                        match reachable_by.get(&v) {
                             Some(Some(e)) if *e == entry => {}
                             Some(Some(e)) if *e != entry => {
-                                reachable.insert(v, None);
+                                reachable_by.insert(v, None);
                             }
                             None => {
-                                reachable.insert(v, Some(entry));
+                                reachable_by.insert(v, Some(entry));
                             }
                             _ => {}
                         }
@@ -499,7 +498,7 @@ where
             );
         }
 
-        for (k, v) in reachable.drain() {
+        for (k, v) in reachable_by.drain() {
             if let Some(entry) = v {
                 indep_group.get_mut(&entry).map(|set| set.insert(k));
             }
@@ -744,8 +743,10 @@ where
 
         if branches.is_empty() {
             // has default target
-            if let Some(ref default_branch) = default_branch {
-                self.render_branch(ctx, default_branch, sink);
+            if let Some(default_branch) = default_branch {
+                if default_branch.flow_type != FlowType::Direct {
+                    self.render_branch(ctx, &default_branch, sink);
+                }
             }
             return;
         }
