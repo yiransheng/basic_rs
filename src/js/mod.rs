@@ -421,10 +421,12 @@ mod tests {
     fn test_it() {
         let program = indoc!(
             "
+            5  FOR J = 1 TO 10
             10 IF I > 0 THEN 40
             20 PRINT \"I <= 0\"
-            30 GOTO 99
+            30 GOTO 50
             40 PRINT \"I > 0\"
+            50 NEXT J
             99 END"
         );
         let scanner = Scanner::new(program);
