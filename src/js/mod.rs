@@ -324,6 +324,8 @@ mod tests {
 
         let ir = compile(&ast).expect("it should compile successfuly");
 
+        println!("{}", ir);
+
         let mut js_src: Vec<u8> = Vec::new();
 
         let mut js = JsCode {
