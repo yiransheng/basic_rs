@@ -15,7 +15,6 @@ mod codegen;
 mod compile;
 mod error_print;
 mod ir;
-mod js;
 mod parser;
 mod relooper;
 mod scanner;

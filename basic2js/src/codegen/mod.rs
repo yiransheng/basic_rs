@@ -1,13 +1,13 @@
 use std::fmt;
 use std::io::{self, Write};
 
-use crate::ir::*;
-use crate::relooper::{
+use basic_rs::ir::*;
+use basic_rs::relooper::{
     Cond, FlowType, LoopCtx, NodeId, ProcessedBranch, Relooper, Render,
     RenderSink, ShapeId,
 };
 
-pub fn codegen_js<W: Write>(ir: &Program, out: W) {
+pub fn generate_js<W: Write>(ir: &Program, out: W) {
     let mut js = JsCode {
         out,
         function: ir.main,
@@ -234,10 +234,18 @@ trait ToJs {
     ) -> Result<(), Self::Error>;
 }
 
-impl<'a, W, T> Render<JsCode<'a, W>> for &T
+impl<'a, W> Render<JsCode<'a, W>> for &Expr
 where
     W: Write,
-    T: ToJs,
+{
+    fn render(&self, ctx: LoopCtx, sink: &mut JsCode<'a, W>) {
+        self.codegen(sink);
+    }
+}
+
+impl<'a, W> Render<JsCode<'a, W>> for &Statement
+where
+    W: Write,
 {
     fn render(&self, ctx: LoopCtx, sink: &mut JsCode<'a, W>) {
         self.codegen(sink);
