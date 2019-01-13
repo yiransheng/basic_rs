@@ -696,7 +696,7 @@ impl<'a, L, E: Clone> SimpleBlock<'a, L, E> {
             Some(MultiShape { handled_shapes, .. }) => {
                 self.relooper.borrow_mut().render_shape(
                     handled_shapes.get(&branch.target).unwrap(),
-                    LoopCtx::Outside,
+                    ctx,
                     sink,
                 );
             }
