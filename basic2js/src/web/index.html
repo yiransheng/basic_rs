@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+  <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width">
+      <title>Basic</title>
+      <script src="https://unpkg.com/word-width@1.0.1/dist/word-width.min.js"></script>
+      <style>
+      * { box-sizing: border-box }
+      body {
+        background-color: #223;
+        margin: 0;
+        padding: 0;
+      }
+      .console {
+        font-family: "Lucida Console", Monaco, monospace;
+        font-size: 16px;
+        
+        width: calc(100vw - 2em);
+        min-height: 100vh;
+        color: #a0f0a0;
+        padding: 1.5em 1em;
+      }
+      .console pre {
+        padding: 0;
+        margin: 0;
+      }
+      .console code {
+        display: block;
+        height: 1.5em;
+        line-height: 120%;
+      }
+      </style>
+  </head>
+  <body>
+    <div class="console">
+        <pre id="output"></pre>
+    </div>
+    <script src="index.js"></script>
+  </body>
+</html>
