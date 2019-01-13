@@ -406,7 +406,7 @@ impl ToJs for Expr {
 
         match self {
             Expr::RandF64 => js.write("Math.random()")?,
-            Expr::ReadData => unimplemented!(),
+            Expr::ReadData => js.write("env.read()")?,
             Expr::Input => unimplemented!(),
             Expr::Call(func, expr) => {
                 func.codegen(js)?;
@@ -470,6 +470,7 @@ mod tests {
             50 NEXT J
             99 END"
         );
+        let program = include_str!("../../sample_programs/pi.bas");
         let scanner = Scanner::new(program);
         let ast = Parser::new(scanner).parse().unwrap();
 

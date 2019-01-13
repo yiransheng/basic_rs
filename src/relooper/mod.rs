@@ -475,7 +475,7 @@ where
                         next_entries.insert(*node_id);
                         self.solipsize(
                             *node_id,
-                            // is this wrong?
+                            // maybe wrong
                             FlowType::Direct,
                             inner_id,
                             shape_id,
@@ -640,6 +640,7 @@ where
         let mut branches: Vec<&ProcessedBranch<E>> = vec![];
 
         for b in self.relooper.processed_branches_out(internal) {
+            println!("Internal: {:?}", internal);
             if b.data.is_none() {
                 assert!(
                     default_branch.is_none(),
@@ -651,8 +652,30 @@ where
             }
         }
 
-        // at most one default branch, no need to render it
+        let can_skip_default_branck = |default_branch: &ProcessedBranch<E>| {
+            // this simple shape has a next
+            if let Some(next_shape) = &self.shape.next {
+                // next shape is also simple
+                if let ShapeKind::Simple { internal } = next_shape.kind {
+                    // default target is next shape's internal node
+                    if internal == default_branch.target {
+                        return true;
+                    }
+                }
+            }
+
+            false
+        };
+
         if branches.is_empty() {
+            // this is messy... :(
+            //
+            // has default target
+            if let Some(default_branch) = default_branch {
+                if !can_skip_default_branck(default_branch) {
+                    sink.render_branch(default_branch);
+                }
+            }
             return;
         }
 
@@ -672,10 +695,12 @@ where
             }
         }
 
-        // branches not empty use "else" for default is ok
-        sink.render_condition::<E, _>(ctx, Cond::Else, |sink| {
-            sink.render_branch(default_branch);
-        });
+        if !can_skip_default_branck(default_branch) {
+            // branches not empty use "else" for default is ok
+            sink.render_condition::<E, _>(ctx, Cond::Else, |sink| {
+                sink.render_branch(default_branch);
+            });
+        }
     }
 }
 

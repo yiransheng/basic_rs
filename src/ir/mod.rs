@@ -98,8 +98,15 @@ impl<'a> Iterator for BlockIter<'a> {
     type Item = &'a BasicBlock;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let label = self.stack.pop_back()?;
-        self.visited.insert(label, ());
+        let mut label;
+        loop {
+            label = self.stack.pop_back()?;
+            if self.visited.get(label).is_some() {
+                continue;
+            }
+            self.visited.insert(label, ());
+            break;
+        }
 
         let block = match self.function.blocks.get(label) {
             Some(block) => block,
