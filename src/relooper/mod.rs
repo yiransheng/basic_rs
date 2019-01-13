@@ -652,29 +652,10 @@ where
             }
         }
 
-        let can_skip_default_branck = |default_branch: &ProcessedBranch<E>| {
-            // this simple shape has a next
-            if let Some(next_shape) = &self.shape.next {
-                // next shape is also simple
-                if let ShapeKind::Simple { internal } = next_shape.kind {
-                    // default target is next shape's internal node
-                    if internal == default_branch.target {
-                        return true;
-                    }
-                }
-            }
-
-            false
-        };
-
         if branches.is_empty() {
-            // this is messy... :(
-            //
             // has default target
             if let Some(default_branch) = default_branch {
-                if !can_skip_default_branck(default_branch) {
-                    sink.render_branch(default_branch);
-                }
+                sink.render_branch(default_branch);
             }
             return;
         }
@@ -682,7 +663,7 @@ where
         let default_branch = default_branch.expect("Missing default target");
 
         for (i, b) in branches.drain(..).enumerate() {
-            let has_content = b.flow_type != FlowType::Direct;
+            // let has_content = b.flow_type != FlowType::Direct;
             let cond = b.data.as_ref().unwrap();
             if i == 0 {
                 sink.render_condition(ctx, Cond::If(cond), |sink| {
@@ -695,12 +676,10 @@ where
             }
         }
 
-        if !can_skip_default_branck(default_branch) {
-            // branches not empty use "else" for default is ok
-            sink.render_condition::<E, _>(ctx, Cond::Else, |sink| {
-                sink.render_branch(default_branch);
-            });
-        }
+        // branches not empty use "else" for default is ok
+        sink.render_condition::<E, _>(ctx, Cond::Else, |sink| {
+            sink.render_branch(default_branch);
+        });
     }
 }
 

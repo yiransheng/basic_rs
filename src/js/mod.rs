@@ -310,8 +310,18 @@ impl ToJs for Statement {
                 let name = js.function_name_string(*name);
                 js.write(format_args!("{}()", name))?;
             }
-            Statement::Alloc1d(..) => unimplemented!(),
-            Statement::Alloc2d(..) => unimplemented!(),
+            Statement::Alloc1d(lval, ..) => {
+                let var = match lval {
+                    LValue::ArrPtr(var, ..) => var,
+                    _ => panic!("type error"),
+                };
+            }
+            Statement::Alloc2d(lval, ..) => {
+                let var = match lval {
+                    LValue::ArrPtr(var, ..) => var,
+                    _ => panic!("type error"),
+                };
+            }
             Statement::Print(expr) => {
                 js.write_group("console.log(", ")", |js| expr.codegen(js))?;
             }

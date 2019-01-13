@@ -18,14 +18,14 @@ function pi(n) {
 const NANOS = 1000;
 
 const rl = readline.createInterface({
-  input: process.stdin,
+  input: process.stdin
 });
 
 rl.on("line", function(line) {
   const start = performance.now();
 
   const iter = parseInt(line, 10);
-  for (let i=0; i<iter; i++) {
+  for (let i = 0; i < iter; i++) {
     pi(1000);
   }
 
