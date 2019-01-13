@@ -36,8 +36,8 @@ pub enum ValueType {
 }
 #[derive(Debug, Copy, Clone)]
 pub struct FnType {
-    arg: Option<ValueType>,
-    ret: Option<ValueType>,
+    pub arg: Option<ValueType>,
+    pub ret: Option<ValueType>,
 }
 impl FnType {
     pub fn def_type() -> Self {

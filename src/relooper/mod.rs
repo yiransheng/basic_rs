@@ -314,7 +314,8 @@ where
         );
 
         for next_id in next_entries.iter().cloned() {
-            self.solipsize(next_id, FlowType::Break, internal_id, shape.id);
+            // is Direct wrong here?
+            self.solipsize(next_id, FlowType::Direct, internal_id, shape.id);
         }
 
         shape
@@ -474,7 +475,8 @@ where
                         next_entries.insert(*node_id);
                         self.solipsize(
                             *node_id,
-                            FlowType::Break,
+                            // is this wrong?
+                            FlowType::Direct,
                             inner_id,
                             shape_id,
                         );
@@ -661,18 +663,18 @@ where
             let cond = b.data.as_ref().unwrap();
             if i == 0 {
                 sink.render_condition(ctx, Cond::If(cond), |sink| {
-                    sink.render_branch(ctx, b);
+                    sink.render_branch(b);
                 });
             } else {
                 sink.render_condition(ctx, Cond::ElseIf(cond), |sink| {
-                    sink.render_branch(ctx, b);
+                    sink.render_branch(b);
                 });
             }
         }
 
         // branches not empty use "else" for default is ok
         sink.render_condition::<E, _>(ctx, Cond::Else, |sink| {
-            sink.render_branch(ctx, default_branch);
+            sink.render_branch(default_branch);
         });
     }
 }
@@ -693,7 +695,7 @@ pub enum Cond<C> {
 }
 
 pub trait RenderSink {
-    fn render_loop<F>(&mut self, f: F)
+    fn render_loop<F>(&mut self, shape_id: Option<ShapeId>, f: F)
     where
         F: FnMut(&mut Self);
 
@@ -714,7 +716,6 @@ pub trait RenderSink {
 
     fn render_branch<E: Render<Self>>(
         &mut self,
-        ctx: LoopCtx,
         br: &ProcessedBranch<E>,
         // set_label: bool, for now alawys set label
     ) where
@@ -755,10 +756,10 @@ impl<L, E> Relooper<L, E> {
                 block.render(ctx, sink);
             }
             ShapeKind::Loop { inner } => {
-                let shape = &*inner;
+                let inner_shape = &*inner;
 
-                sink.render_loop(|sink| {
-                    self.render_shape(shape, LoopCtx::InLoop, sink)
+                sink.render_loop(Some(shape.id), |sink| {
+                    self.render_shape(inner_shape, LoopCtx::InLoop, sink)
                 })
             }
             ShapeKind::Multi {

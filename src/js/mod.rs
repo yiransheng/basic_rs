@@ -20,16 +20,37 @@ impl<'a, W> JsCode<'a, W> {
             .find(|func| func.name == self.function)
             .unwrap()
     }
+    fn function_name_string(&self, name: FunctionName) -> String {
+        if name == self.ir.main {
+            return "main".to_string();
+        }
+        self.ir
+            .functions
+            .iter()
+            .enumerate()
+            .find_map(|(i, func)| {
+                if func.name == name {
+                    Some(format!("fn${}", i))
+                } else {
+                    None
+                }
+            })
+            .unwrap_or_else(|| "undefined".to_string())
+    }
 }
 
 impl<'a, W> RenderSink for JsCode<'a, W>
 where
     W: Write,
 {
-    fn render_loop<F>(&mut self, mut f: F)
+    fn render_loop<F>(&mut self, shape_id: Option<ShapeId>, mut f: F)
     where
         F: FnMut(&mut Self),
     {
+        if let Some(id) = shape_id {
+            self.render_shape_id(id);
+            write!(&mut self.out, ": ");
+        }
         writeln!(&mut self.out, "while (1) {}", "{");
 
         f(self);
@@ -106,32 +127,24 @@ where
 
     fn render_branch<E: Render<Self>>(
         &mut self,
-        ctx: LoopCtx,
         br: &ProcessedBranch<E>,
         // set_label: bool, for now alawys set label
     ) {
-        match ctx {
-            LoopCtx::InLoop => {
-                match br.flow_type {
-                    FlowType::Break => {
-                        write!(&mut self.out, "break");
-                    }
-                    FlowType::Continue => {
-                        write!(&mut self.out, "continue");
-                    }
-                    FlowType::Direct => return,
-                }
-                if false {
-                    write!(&mut self.out, " ");
-                    self.render_shape_id(br.ancestor);
-                }
-
-                writeln!(&mut self.out, ";");
-            }
-            LoopCtx::Outside => {
+        match br.flow_type {
+            FlowType::Direct => {
                 writeln!(&mut self.out, "_label = {};", br.target.index());
+                return;
+            }
+            FlowType::Break => {
+                write!(&mut self.out, "break");
+            }
+            FlowType::Continue => {
+                write!(&mut self.out, "continue");
             }
         }
+        write!(&mut self.out, " ");
+        self.render_shape_id(br.ancestor);
+        writeln!(&mut self.out, ";");
     }
 }
 
@@ -144,6 +157,18 @@ impl<'a, W: Write> Render<JsCode<'a, W>> for Label {
         };
         for s in &block.statements {
             s.codegen(sink).expect("write error");
+        }
+
+        match block.exit {
+            BlockExit::Return(None) => {
+                sink.writeln("return;");
+            }
+            BlockExit::Return(Some(ref expr)) => {
+                sink.write("return ");
+                expr.codegen(sink);
+                sink.writeln(";");
+            }
+            _ => {}
         }
     }
 }
@@ -205,7 +230,12 @@ where
         }
         let func = sink.function();
 
-        sink.write_group("() => {\n", "}", |sink| {
+        let sig = match func.ty.arg {
+            Some(_) => "function ($x0) {\n",
+            _ => "function () {\n",
+        };
+
+        sink.write_group(sig, "}", |sink| {
             sink.writeln("var _label;");
 
             for (i, ty) in func.locals.iter().enumerate() {
@@ -270,8 +300,16 @@ impl ToJs for Statement {
                 js.write(" = ")?;
                 expr.codegen(js)?;
             }
-            Statement::DefFn(..) => unimplemented!(),
-            Statement::CallSub(..) => unimplemented!(),
+            Statement::DefFn(lval, func) => {
+                lval.codegen(js)?;
+                js.write(" = ")?;
+                let name = js.function_name_string(*func);
+                js.write(name)?;
+            }
+            Statement::CallSub(name) => {
+                let name = js.function_name_string(*name);
+                js.write(format_args!("{}()", name))?;
+            }
             Statement::Alloc1d(..) => unimplemented!(),
             Statement::Alloc2d(..) => unimplemented!(),
             Statement::Print(expr) => {
@@ -370,7 +408,10 @@ impl ToJs for Expr {
             Expr::RandF64 => js.write("Math.random()")?,
             Expr::ReadData => unimplemented!(),
             Expr::Input => unimplemented!(),
-            Expr::Call(..) => unimplemented!(),
+            Expr::Call(func, expr) => {
+                func.codegen(js)?;
+                js.write_group("(", ")", |js| expr.codegen(js))?;
+            }
             Expr::Const(v) => js.write(v)?,
             Expr::Get(lval) => lval.codegen(js)?,
             Expr::Unary(op, operand) => match op {
