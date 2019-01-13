@@ -232,7 +232,8 @@ where
 
         let sig = match func.ty.arg {
             Some(_) => "function ($x0) {\n",
-            _ => "function () {\n",
+            // generator
+            _ => "function* () {\n",
         };
 
         sink.write_group(sig, "}", |sink| {
@@ -311,21 +312,14 @@ impl ToJs for Statement {
                 js.write(format_args!("{}()", name))?;
             }
             Statement::Alloc1d(lval, ..) => {
-                let var = match lval {
-                    LValue::ArrPtr(var, ..) => var,
-                    _ => panic!("type error"),
-                };
+                // do nothing
             }
             Statement::Alloc2d(lval, ..) => {
-                let var = match lval {
-                    LValue::ArrPtr(var, ..) => var,
-                    _ => panic!("type error"),
-                };
+                // do nothing
             }
             Statement::Print(expr) => {
-                js.write_group("console.log(", ")", |js| expr.codegen(js))?;
+                js.write_group("env.print(", ")", |js| expr.codegen(js))?;
             }
-
             Statement::PrintLabel(offset, len) => {
                 let s = ::std::str::from_utf8(
                     &js.ir.labels.as_bytes()[*offset..*offset + *len],
@@ -333,9 +327,14 @@ impl ToJs for Statement {
                 .unwrap();
                 // not need to escape, BASIC source does not support escaping double quote, so any
                 // string that needs escaping will fail at Parser
-                js.write_group("console.log(\"", "\")", |js| js.write(s))?;
+                js.write_group("env.printLabel(\"", "\")", |js| js.write(s))?;
             }
-            _ => {}
+            Statement::PrintAdvance3 => {
+                js.write("env.printAdvance3()")?;
+            }
+            Statement::PrintAdvance15 => {
+                js.write("env.printAdvance15()")?;
+            }
         }
 
         js.writeln(";")?;
@@ -354,14 +353,16 @@ impl ToJs for LValue {
         match self {
             LValue::ArrPtr(var, offset) => match offset {
                 Offset::OneD(i) => {
-                    js.write(var)?;
-                    js.write_group("[", "]", |js| i.codegen(js))?;
+                    js.write(format_args!("env.getArray({}).index1d(", var))?;
+                    i.codegen(js)?;
+                    js.write(").value")?;
                 }
                 Offset::TwoD(i, j) => {
-                    js.write(var)?;
-
-                    js.write_group("[", "]", |js| i.codegen(js))?;
-                    js.write_group("[", "]", |js| j.codegen(js))?;
+                    js.write(format_args!("env.getArray({}).index2d(", var))?;
+                    i.codegen(js)?;
+                    js.write(", ")?;
+                    j.codegen(js)?;
+                    js.write(").value")?;
                 }
             },
             LValue::FnPtr(func) => js.write(func)?,
@@ -417,7 +418,7 @@ impl ToJs for Expr {
         match self {
             Expr::RandF64 => js.write("Math.random()")?,
             Expr::ReadData => js.write("env.read()")?,
-            Expr::Input => unimplemented!(),
+            Expr::Input => js.write("yield env.input()")?,
             Expr::Call(func, expr) => {
                 func.codegen(js)?;
                 js.write_group("(", ")", |js| expr.codegen(js))?;
@@ -449,7 +450,10 @@ impl ToJs for Expr {
                     js.write("Math.pow")?;
                     binary!(lhs, ",", rhs)
                 }
-                BinaryOp::CopySign => unimplemented!(),
+                BinaryOp::CopySign => {
+                    js.write("env.copySign")?;
+                    binary!(lhs, ",", rhs)
+                }
             },
         }
 

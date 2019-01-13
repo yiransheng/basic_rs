@@ -1,111 +1,13 @@
-class Printer {
-  constructor(el) {
-    this._container = el;
-    this._element = null;
-    this._line = -1;
-    this._col = 0;
-    this._decoder = new TextDecoder("utf-8");
-    this._buffer = null;
-    this._currentLine = [];
 
-    this.newline();
+function* sub() {
+  const a = yield env.input();
+  const b = yield env.input();
 
-    if (window.WordWidth) {
-      this._widthOf = WordWidth;
-    } else {
-      this._widthOf = s => s.length;
-    }
-  }
-
-  setBuffer(wasmInstance) {
-    this._buffer = wasmInstance.exports.data.buffer;
-  }
-
-  printNumber(n) {
-    const str = n.toString();
-    this._write(str);
-  }
-  printStr(offset, len) {
-    if (!this._buffer) {
-      return;
-    }
-    const array = new Uint8Array(this._buffer, offset, len);
-    const str = this._decoder.decode(array);
-    this._write(str);
-  }
-
-  newline() {
-    console.log(this._currentLine.join(""));
-    this._currentLine.length = 0;
-    const line = document.createElement("CODE");
-    this._container.appendChild(line);
-
-    this._col = 0;
-    this._line += 1;
-
-    this._element = line;
-  }
-
-  advanceMultiple(k) {
-    const rem = this._col % k;
-    const n = k - rem;
-    this._write(" ".repeat(n));
-  }
-
-  _write(str) {
-    this._currentLine.push(str);
-    this._element.textContent += str;
-    this._col += this._widthOf(str);
-  }
+  env.print(a + b);
 }
 
-const printer = new Printer(document.getElementById("output"));
+function* main() {
+   yield* sub();
+}
 
-const importObject = {
-  env: {
-    print: number => {
-      printer.printNumber(number);
-    },
-    printNewline: () => {
-      printer.newline();
-    },
-    printLabel: (offset, len) => {
-      printer.printStr(offset, len);
-    },
-    printAdvance3: () => {
-      printer.advanceMultiple(3);
-    },
-    printAdvance15: () => {
-      printer.advanceMultiple(15);
-    },
-    rand: () => {
-      return Math.random();
-    },
-    input: () => {
-      const v = window
-        .prompt("Please open console (F12) to view program output.")
-        .trim();
-      const n = v.length ? parseFloat(v) : 0;
-      if (Number.isNaN(n)) {
-        throw TypeError("Not a number");
-      } else {
-        return n;
-      }
-    },
-    pow: (a, b) => {
-      return Math.pow(a, b);
-    }
-  }
-};
-
-fetch("main.wasm")
-  .then(response => response.arrayBuffer())
-  .then(bytes => WebAssembly.instantiate(bytes, importObject))
-  .then(results => {
-    instance = results.instance;
-    window.wasm = instance;
-    printer.setBuffer(instance);
-
-    instance.exports.main();
-  })
-  .catch(console.error.bind(console));
+env.run(main());
