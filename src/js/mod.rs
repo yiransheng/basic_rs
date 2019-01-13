@@ -7,6 +7,32 @@ use crate::relooper::{
     RenderSink, ShapeId,
 };
 
+pub fn codegen_js<W: Write>(ir: &Program, out: W) {
+    let mut js = JsCode {
+        out,
+        function: ir.main,
+        ir,
+    };
+
+    for d in &ir.data {
+        js.writeln(format_args!("env.addData({});", d));
+    }
+
+    for global in &ir.globals {
+        global.codegen(&mut js).unwrap();
+    }
+
+    for func in ir.functions.iter() {
+        let name = func.name;
+        js.function = name;
+        js.write(format_args!("var {} = ", js.function_name_string(name)));
+        name.render(LoopCtx::Outside, &mut js);
+        js.writeln("");
+    }
+
+    js.write("env.run(main());");
+}
+
 struct JsCode<'a, W> {
     out: W,
     function: FunctionName,
@@ -309,7 +335,7 @@ impl ToJs for Statement {
             }
             Statement::CallSub(name) => {
                 let name = js.function_name_string(*name);
-                js.write(format_args!("{}()", name))?;
+                js.write(format_args!("yield* {}()", name))?;
             }
             Statement::Alloc1d(lval, ..) => {
                 // do nothing
@@ -335,11 +361,36 @@ impl ToJs for Statement {
             Statement::PrintAdvance15 => {
                 js.write("env.printAdvance15()")?;
             }
+            Statement::PrintNewline => {
+                js.write("env.printNewline()")?;
+            }
         }
 
         js.writeln(";")?;
 
         Ok(())
+    }
+}
+
+impl ToJs for GlobalKind {
+    type Error = io::Error;
+
+    fn codegen<'a, W: Write>(
+        &'a self,
+        js: &mut JsCode<W>,
+    ) -> Result<(), Self::Error> {
+        match self {
+            GlobalKind::Variable(var) => {
+                js.writeln(format_args!("var {} = 0;", var))
+            }
+            GlobalKind::ArrPtr(var, _) => js.writeln(format_args!(
+                "var ARRAY_{} = new SparseArray();",
+                var
+            )),
+            GlobalKind::FnPtr(var) => {
+                js.writeln(format_args!("var {} = null;", var))
+            }
+        }
     }
 }
 
@@ -353,12 +404,12 @@ impl ToJs for LValue {
         match self {
             LValue::ArrPtr(var, offset) => match offset {
                 Offset::OneD(i) => {
-                    js.write(format_args!("env.getArray({}).index1d(", var))?;
+                    js.write(format_args!("ARRAY_{}.index1d(", var))?;
                     i.codegen(js)?;
                     js.write(").value")?;
                 }
                 Offset::TwoD(i, j) => {
-                    js.write(format_args!("env.getArray({}).index2d(", var))?;
+                    js.write(format_args!("ARRAY_{}.index2d(", var))?;
                     i.codegen(js)?;
                     js.write(", ")?;
                     j.codegen(js)?;
@@ -484,7 +535,7 @@ mod tests {
             50 NEXT J
             99 END"
         );
-        let program = include_str!("../../sample_programs/pi.bas");
+        let program = include_str!("../../input.bas");
         let scanner = Scanner::new(program);
         let ast = Parser::new(scanner).parse().unwrap();
 
@@ -495,13 +546,7 @@ mod tests {
 
         let mut js_src: Vec<u8> = Vec::new();
 
-        let mut js = JsCode {
-            out: &mut js_src,
-            function: ir.main,
-            ir: &ir,
-        };
-
-        ir.main.render(LoopCtx::Outside, &mut js);
+        codegen_js(&ir, &mut js_src);
 
         let js_src = ::std::str::from_utf8(&js_src).unwrap();
 

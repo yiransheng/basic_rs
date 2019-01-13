@@ -26,7 +26,7 @@ class SparseArray {
       cell = this._map.get(hash);
     } else {
       cell = new Cell();
-      this._map.set(hash, value);
+      this._map.set(hash, cell);
     }
 
     return cell;
@@ -58,7 +58,7 @@ class Data {
   pop() {
     if (this._count > 0) {
       this._count--;
-      return this._values(this._count);
+      return this._values[this._count];
     } else {
       throw Error("No Data");
     }
