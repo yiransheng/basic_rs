@@ -17,8 +17,8 @@ class SparseArray {
   index1d(i) {
     return this._cell(this._hash1d(i));
   }
-  index2d(i) {
-    return this._cell(this._hash2d(i));
+  index2d(i, j) {
+    return this._cell(this._hash2d(i, j));
   }
   _cell(hash) {
     let cell;
