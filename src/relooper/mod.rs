@@ -755,7 +755,13 @@ impl<L, E> Relooper<L, E> {
             ShapeKind::Multi {
                 handled_shapes,
                 needs_loop,
-            } => {}
+            } => {
+                for (i, (entry, shape)) in handled_shapes.iter().enumerate() {
+                    sink.render_loop(|sink| {
+                        self.render_shape(shape, ctx, sink);
+                    });
+                }
+            }
         }
 
         if let Some(ref next) = shape.next {
