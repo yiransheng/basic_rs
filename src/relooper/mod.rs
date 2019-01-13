@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::ops::{Deref, DerefMut};
@@ -35,41 +36,108 @@ type Link = Option<Box<Shape>>;
 
 pub type NodeId = NodeIndex<u32>;
 
-enum ShapeKind {
-    Simple {
-        internal: NodeId,
-    },
-    Loop {
-        inner: Box<Shape>,
-    },
-    Multi {
-        handled_shapes: HashMap<NodeId, Shape>,
-        needs_loop: usize,
-    },
-}
-
-// TODO: non-recursive Drop
 pub struct Shape {
     id: ShapeId,
     kind: ShapeKind,
     next: Link,
 }
 
+// TODO: non-recursive Drop
+enum ShapeKind {
+    Simple(SimpleShape),
+    SimpleFused(SimpleShape, MultiShape),
+    Loop(LoopShape),
+    Multi(MultiShape),
+}
+
+#[derive(Copy, Clone)]
+pub struct SimpleShape {
+    internal: NodeId,
+}
+pub struct LoopShape {
+    inner: Box<Shape>,
+}
+pub struct MultiShape {
+    handled_shapes: HashMap<NodeId, Shape>,
+    needs_loop: usize,
+}
+impl Shape {
+    fn fuse(&mut self) {
+        match self.kind {
+            ShapeKind::Simple(_) => self.fuse_simple(),
+            ShapeKind::SimpleFused(_, ref mut multi) => {
+                for (_, shape) in multi.handled_shapes.iter_mut() {
+                    shape.fuse();
+                }
+            }
+            ShapeKind::Multi(ref mut multi) => {
+                for (_, shape) in multi.handled_shapes.iter_mut() {
+                    shape.fuse();
+                }
+            }
+            ShapeKind::Loop(ref mut loop_shape) => {
+                loop_shape.inner.fuse();
+            }
+        }
+
+        if let Some(ref mut next) = self.next {
+            next.fuse();
+        }
+    }
+    fn fuse_simple(&mut self) {
+        let next = self.next.take();
+        if let ShapeKind::Simple(SimpleShape { ref internal }) = self.kind {
+            // next exists
+            if let Some(next) = next {
+                // and is multi
+                if let ShapeKind::Multi(multi_shape) = next.kind {
+                    self.kind = ShapeKind::SimpleFused(
+                        SimpleShape {
+                            internal: *internal,
+                        },
+                        multi_shape,
+                    );
+                    self.next = next.next;
+                } else {
+                    // put back the take
+                    self.next = Some(next);
+                }
+            }
+        }
+    }
+}
+
 impl Shape {
     fn fmt(&self, indent: usize, f: &mut fmt::Formatter) -> fmt::Result {
         match &self.kind {
-            ShapeKind::Simple { internal } => {
+            ShapeKind::Simple(SimpleShape { internal }) => {
                 writeln!(f, "{}Simple({})", "  ".repeat(indent), self.id.0)?;
                 writeln!(f, "{}{:?}", "  ".repeat(indent + 1), internal)?;
             }
-            ShapeKind::Loop { inner } => {
+            ShapeKind::SimpleFused(
+                SimpleShape { internal },
+                MultiShape { handled_shapes, .. },
+            ) => {
+                writeln!(
+                    f,
+                    "{}SimpleFused({}) [",
+                    "  ".repeat(indent),
+                    self.id.0
+                )?;
+                writeln!(f, "{}{:?}", "  ".repeat(indent + 1), internal)?;
+                for s in handled_shapes.values() {
+                    s.fmt(indent + 2, f)?;
+                }
+                writeln!(f, "{}]", "  ".repeat(indent + 1))?;
+            }
+            ShapeKind::Loop(LoopShape { inner }) => {
                 writeln!(f, "{}Loop({})", "  ".repeat(indent), self.id.0)?;
                 inner.fmt(indent + 1, f)?;
             }
-            ShapeKind::Multi {
+            ShapeKind::Multi(MultiShape {
                 handled_shapes,
                 needs_loop,
-            } => {
+            }) => {
                 writeln!(
                     f,
                     "{}Multi({}) Loop({}) [",
@@ -301,9 +369,9 @@ where
     ) -> Shape {
         let shape = Shape {
             id: self.next_shape_id(),
-            kind: ShapeKind::Simple {
+            kind: ShapeKind::Simple(SimpleShape {
                 internal: internal_id,
-            },
+            }),
             next: None,
         };
         blocks.remove(&internal_id);
@@ -371,9 +439,9 @@ where
 
         Shape {
             id: shape_id,
-            kind: ShapeKind::Loop {
+            kind: ShapeKind::Loop(LoopShape {
                 inner: Box::new(inner),
-            },
+            }),
             next: None,
         }
     }
@@ -488,10 +556,10 @@ where
 
         Shape {
             id: shape_id,
-            kind: ShapeKind::Multi {
+            kind: ShapeKind::Multi(MultiShape {
                 handled_shapes,
                 needs_loop,
-            },
+            }),
             next: None,
         }
     }
@@ -609,45 +677,75 @@ where
 }
 
 struct SimpleBlock<'a, L, E> {
-    shape: &'a Shape,
-    relooper: &'a Relooper<L, E>,
+    internal: NodeId,
+    next: Option<&'a MultiShape>,
+    relooper: RefCell<&'a mut Relooper<L, E>>,
 }
+impl<'a, L, E: Clone> SimpleBlock<'a, L, E> {
+    fn render_branch<S>(
+        &self,
+        ctx: LoopCtx,
+        branch: &ProcessedBranch<E>,
+        sink: &mut S,
+    ) where
+        L: Render<S> + fmt::Debug,
+        E: Render<S> + fmt::Debug,
+        S: RenderSink,
+    {
+        match self.next {
+            Some(MultiShape { handled_shapes, .. }) => {
+                self.relooper.borrow_mut().render_shape(
+                    handled_shapes.get(&branch.target).unwrap(),
+                    LoopCtx::Outside,
+                    sink,
+                );
+            }
+            None => sink.render_branch(branch),
+        }
+    }
+}
+
 impl<'a, L, E, S> Render<S> for SimpleBlock<'a, L, E>
 where
     L: Render<S> + fmt::Debug,
-    E: Render<S> + fmt::Debug,
+    E: Render<S> + Clone + fmt::Debug,
     S: RenderSink,
 {
     fn render(&self, ctx: LoopCtx, sink: &mut S) {
-        let internal = match self.shape.kind {
-            ShapeKind::Simple { internal } => internal,
-            _ => return,
-        };
+        let internal = self.internal;
 
-        self.relooper.graph.node_weight(internal).map(|raw| {
-            raw.render(ctx, sink);
-        });
+        {
+            self.relooper
+                .borrow()
+                .graph
+                .node_weight(internal)
+                .map(|raw| {
+                    raw.render(ctx, sink);
+                });
+        }
 
-        let mut default_branch: Option<&'_ ProcessedBranch<E>> = None;
-        let mut branches: Vec<&ProcessedBranch<E>> = vec![];
+        let mut default_branch: Option<ProcessedBranch<E>> = None;
+        let mut branches: Vec<ProcessedBranch<E>> = vec![];
 
-        for b in self.relooper.processed_branches_out(internal) {
-            println!("Internal: {:?}", internal);
-            if b.data.is_none() {
-                assert!(
-                    default_branch.is_none(),
-                    "Can only have one default target"
-                );
-                default_branch = Some(b);
-            } else {
-                branches.push(b);
+        {
+            let relooper = self.relooper.borrow();
+            for b in relooper.processed_branches_out(internal) {
+                if b.data.is_none() {
+                    assert!(
+                        default_branch.is_none(),
+                        "Can only have one default target"
+                    );
+                    default_branch = Some(b.clone());
+                } else {
+                    branches.push(b.clone());
+                }
             }
         }
 
         if branches.is_empty() {
             // has default target
-            if let Some(default_branch) = default_branch {
-                sink.render_branch(default_branch);
+            if let Some(ref default_branch) = default_branch {
+                self.render_branch(ctx, default_branch, sink);
             }
             return;
         }
@@ -655,22 +753,20 @@ where
         let default_branch = default_branch.expect("Missing default target");
 
         for (i, b) in branches.drain(..).enumerate() {
-            // let has_content = b.flow_type != FlowType::Direct;
             let cond = b.data.as_ref().unwrap();
-            if i == 0 {
-                sink.render_condition(ctx, Cond::If(cond), |sink| {
-                    sink.render_branch(b);
-                });
+            let cond = if i == 0 {
+                Cond::If(cond)
             } else {
-                sink.render_condition(ctx, Cond::ElseIf(cond), |sink| {
-                    sink.render_branch(b);
-                });
-            }
+                Cond::ElseIf(cond)
+            };
+            sink.render_condition(ctx, cond, |sink| {
+                self.render_branch(ctx, &b, sink);
+            });
         }
 
         // branches not empty use "else" for default is ok
         sink.render_condition::<E, _>(ctx, Cond::Else, |sink| {
-            sink.render_branch(default_branch);
+            self.render_branch(ctx, &default_branch, sink);
         });
     }
 }
@@ -726,11 +822,12 @@ impl<L, E> Relooper<L, E> {
     pub fn render<S>(&mut self, entry: NodeId, sink: &mut S)
     where
         L: Render<S> + fmt::Debug,
-        E: Render<S> + fmt::Debug,
+        E: Render<S> + Clone + fmt::Debug,
         S: RenderSink,
     {
         println!("Graph: {:?}", self.graph);
-        let shape = self.calculate(entry).unwrap();
+        let mut shape = self.calculate(entry).unwrap();
+        shape.fuse();
 
         println!("{:?}", shape);
 
@@ -740,28 +837,37 @@ impl<L, E> Relooper<L, E> {
     fn render_shape<S>(&mut self, shape: &Shape, ctx: LoopCtx, sink: &mut S)
     where
         L: Render<S> + fmt::Debug,
-        E: Render<S> + fmt::Debug,
+        E: Render<S> + Clone + fmt::Debug,
         S: RenderSink,
     {
         match &shape.kind {
-            ShapeKind::Simple { internal } => {
+            ShapeKind::Simple(SimpleShape { internal }) => {
                 let block = SimpleBlock {
-                    shape,
-                    relooper: &*self,
+                    internal: *internal,
+                    relooper: RefCell::new(self),
+                    next: None,
                 };
                 block.render(ctx, sink);
             }
-            ShapeKind::Loop { inner } => {
+            ShapeKind::SimpleFused(SimpleShape { internal }, multi) => {
+                let block = SimpleBlock {
+                    internal: *internal,
+                    relooper: RefCell::new(self),
+                    next: Some(multi),
+                };
+                block.render(ctx, sink);
+            }
+            ShapeKind::Loop(LoopShape { inner }) => {
                 let inner_shape = &*inner;
 
                 sink.render_loop(Some(shape.id), |sink| {
                     self.render_shape(inner_shape, LoopCtx::InLoop, sink)
                 })
             }
-            ShapeKind::Multi {
+            ShapeKind::Multi(MultiShape {
                 handled_shapes,
                 needs_loop,
-            } => {
+            }) => {
                 for (i, (entry, shape)) in handled_shapes.iter().enumerate() {
                     let cond = if i == 0 {
                         Cond::IfLabel(*entry)
