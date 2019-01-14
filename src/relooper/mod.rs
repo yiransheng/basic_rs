@@ -462,9 +462,6 @@ where
         blocks: &HashSet<NodeId>,
         entries: &HashSet<NodeId>,
     ) -> HashMap<NodeId, HashSet<NodeId>> {
-        use petgraph::visit::depth_first_search;
-        use petgraph::visit::{Control, DfsEvent};
-
         let mut indep_group: HashMap<NodeId, HashSet<NodeId>> = entries
             .iter()
             .cloned()
@@ -473,39 +470,40 @@ where
 
         let mut reachable_by: HashMap<NodeId, Option<NodeId>> =
             entries.iter().cloned().map(|e| (e, (Some(e)))).collect();
+        let mut visited = HashSet::new();
+        let mut queue = HashSet::new();
 
         for entry in entries.iter().cloned() {
-            depth_first_search(
-                &self.graph,
-                Some(entry),
-                |event| -> Control<()> {
-                    if let DfsEvent::TreeEdge(u, v) = event {
-                        // ignore labels not in blocks
-                        if !blocks.contains(&v) {
-                            return Control::Break(());
-                        }
+            visited.clear();
+            queue.clear();
 
-                        // ignore processed edges
-                        let edge = self.graph.find_edge(u, v).unwrap();
-                        let edge = self.graph.edge_weight(edge).unwrap();
-                        if let Branch::Processed(_) = edge {
-                            return Control::Break(());
-                        }
+            queue.insert(entry);
 
-                        match reachable_by.get(&v) {
-                            Some(Some(e)) if *e == entry => {}
-                            Some(Some(e)) if *e != entry => {
-                                reachable_by.insert(v, None);
-                            }
-                            None => {
-                                reachable_by.insert(v, Some(entry));
-                            }
-                            _ => {}
-                        }
+            while let Some(v) = pop_set!(queue) {
+                // ignore labels not in blocks
+                if !blocks.contains(&v) {
+                    continue;
+                }
+                visited.insert(v);
+
+                match reachable_by.get(&v) {
+                    Some(None) => {}
+                    Some(Some(u)) if *u == entry => {}
+                    Some(Some(u)) if *u != entry => {
+                        reachable_by.insert(v, None);
                     }
-                    Control::Continue
-                },
-            );
+                    None => {
+                        reachable_by.insert(v, Some(entry));
+                    }
+                    _ => unreachable!(),
+                }
+
+                for u in self.nodes_out(v) {
+                    if !visited.contains(&u) {
+                        queue.insert(u);
+                    }
+                }
+            }
         }
 
         for (k, v) in reachable_by.drain() {
@@ -549,8 +547,7 @@ where
                         next_entries.insert(*node_id);
                         self.solipsize(
                             *node_id,
-                            // maybe wrong
-                            FlowType::Direct,
+                            FlowType::Break,
                             inner_id,
                             shape_id,
                         );
@@ -810,9 +807,9 @@ pub trait RenderSink {
     where
         F: FnMut(&mut Self);
 
-    // fn render_multi_loop<F>(&mut self, f: F)
-    // where
-    // F: FnMut(&mut Self);
+    fn render_multi_loop<F>(&mut self, shape_id: Option<ShapeId>, f: F)
+    where
+        F: FnMut(&mut Self);
 
     fn render_condition<C: Render<Self>, F>(
         &mut self,
@@ -846,11 +843,18 @@ impl<L, E> Relooper<L, E> {
         E: Render<S> + Clone + fmt::Debug,
         S: RenderSink,
     {
-        println!("Graph: {:?}", self.graph);
+        use petgraph::dot::{Config, Dot};
+
         let mut shape = self.calculate(entry).unwrap();
-        shape.fuse();
+        // some multi uses loop, fuse cannot work with that yet
+        // shape.fuse();
 
         println!("{:?}", shape);
+
+        println!(
+            "{:?}",
+            Dot::with_config(&self.graph, &[Config::NodeIndexLabel])
+        );
 
         self.render_shape(&shape, LoopCtx::Outside, sink);
     }
@@ -889,15 +893,23 @@ impl<L, E> Relooper<L, E> {
                 handled_shapes,
                 needs_loop,
             }) => {
-                for (i, (entry, shape)) in handled_shapes.iter().enumerate() {
-                    let cond = if i == 0 {
-                        Cond::IfLabel(*entry)
-                    } else {
-                        Cond::ElseIfLabel(*entry)
-                    };
-                    sink.render_condition::<E, _>(ctx, cond, |sink| {
-                        self.render_shape(shape, ctx, sink);
-                    });
+                let mut render_inner = |sink: &mut S| {
+                    for (i, (entry, shape)) in handled_shapes.iter().enumerate()
+                    {
+                        let cond = if i == 0 {
+                            Cond::IfLabel(*entry)
+                        } else {
+                            Cond::ElseIfLabel(*entry)
+                        };
+                        sink.render_condition::<E, _>(ctx, cond, |sink| {
+                            self.render_shape(shape, ctx, sink);
+                        });
+                    }
+                };
+                if *needs_loop > 0 {
+                    sink.render_multi_loop(Some(shape.id), render_inner);
+                } else {
+                    render_inner(sink);
                 }
             }
         }

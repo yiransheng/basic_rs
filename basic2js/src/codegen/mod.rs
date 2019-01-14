@@ -129,16 +129,20 @@ where
         self.writeln_("}");
     }
 
-    // fn render_multi_loop<F>(&mut self, mut f: F)
-    // where
-    // F: FnMut(&mut Self),
-    // {
-    // writeln!(&mut self.out, "do {}", "{");
+    fn render_multi_loop<F>(&mut self, shape_id: Option<ShapeId>, mut f: F)
+    where
+        F: FnMut(&mut Self),
+    {
+        if let Some(id) = shape_id {
+            self.render_shape_id(id);
+            self.write_(": ");
+        }
+        writeln!(&mut self.out, "do {}", "{");
 
-    // f(self);
+        f(self);
 
-    // writeln!(&mut self.out, "{} while(0)", "}");
-    // }
+        writeln!(&mut self.out, "{} while(0)", "}");
+    }
 
     fn render_condition<C: Render<Self>, F>(
         &mut self,
@@ -198,9 +202,10 @@ where
     }
 
     fn render_branch<E: Render<Self>>(&mut self, br: &ProcessedBranch<E>) {
+        self.writeln_(format_args!("_label = {};", br.target.index()));
+
         match br.flow_type {
             FlowType::Direct => {
-                self.writeln_(format_args!("_label = {};", br.target.index()));
                 return;
             }
             FlowType::Break => {
