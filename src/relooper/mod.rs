@@ -636,9 +636,9 @@ where
         }
 
         loop {
-            println!("Entries: {:?}", entries);
-            println!("Blocks: {:?}", blocks);
-            println!();
+            // println!("Entries: {:?}", entries);
+            // println!("Blocks: {:?}", blocks);
+            // println!();
 
             next_entries.swap();
             next_entries.clear();
@@ -669,7 +669,7 @@ where
             let mut indep_groups =
                 self.find_independent_groups(blocks, entries);
 
-            println!("Indep g: {:?}", indep_groups);
+            // println!("Indep g: {:?}", indep_groups);
 
             let indep_count =
                 indep_groups.values().filter(|set| !set.is_empty()).count();
@@ -849,12 +849,12 @@ impl<L, E> Relooper<L, E> {
         // some multi uses loop, fuse cannot work with that yet
         // shape.fuse();
 
-        println!("{:?}", shape);
+        // println!("{:?}", shape);
 
-        println!(
-            "{:?}",
-            Dot::with_config(&self.graph, &[Config::NodeIndexLabel])
-        );
+        // println!(
+        // "{:?}",
+        // Dot::with_config(&self.graph, &[Config::NodeIndexLabel])
+        // );
 
         self.render_shape(&shape, LoopCtx::Outside, sink);
     }
