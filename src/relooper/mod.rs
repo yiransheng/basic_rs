@@ -145,8 +145,14 @@ impl Shape {
                     self.id.0,
                     needs_loop,
                 )?;
-                for s in handled_shapes.values() {
-                    s.fmt(indent + 1, f)?;
+                for (target, s) in handled_shapes.iter() {
+                    writeln!(
+                        f,
+                        "{}Entry: {:?}",
+                        "  ".repeat(indent + 1),
+                        target
+                    )?;
+                    s.fmt(indent + 2, f)?;
                 }
                 writeln!(f, "{}]", "  ".repeat(indent))?;
             }
@@ -437,6 +443,10 @@ where
             .process(&mut inner_blocks, entries)
             .expect("Inner block empty for some reason");
 
+        for b in inner_blocks.iter() {
+            blocks.remove(b);
+        }
+
         Shape {
             id: shape_id,
             kind: ShapeKind::Loop(LoopShape {
@@ -521,6 +531,11 @@ where
         let shape_id = self.next_shape_id();
 
         for (entry, targets) in indep_groups.iter_mut() {
+            if targets.is_empty() {
+                next_entries.insert(*entry);
+                continue;
+            }
+            blocks.remove(&entry);
             for inner_id in targets.iter().cloned() {
                 blocks.remove(&inner_id);
 
@@ -693,11 +708,11 @@ impl<'a, L, E: Clone> SimpleBlock<'a, L, E> {
     {
         match self.next {
             Some(MultiShape { handled_shapes, .. }) => {
-                self.relooper.borrow_mut().render_shape(
-                    handled_shapes.get(&branch.target).unwrap(),
-                    ctx,
-                    sink,
-                );
+                if let Some(shape) = handled_shapes.get(&branch.target) {
+                    self.relooper.borrow_mut().render_shape(shape, ctx, sink);
+                } else {
+                    sink.render_branch(branch);
+                }
             }
             None => sink.render_branch(branch),
         }
@@ -751,8 +766,6 @@ where
             return;
         }
 
-        let default_branch = default_branch.expect("Missing default target");
-
         for (i, b) in branches.drain(..).enumerate() {
             let cond = b.data.as_ref().unwrap();
             let cond = if i == 0 {
@@ -765,10 +778,14 @@ where
             });
         }
 
-        // branches not empty use "else" for default is ok
-        sink.render_condition::<E, _>(ctx, Cond::Else, |sink| {
-            self.render_branch(ctx, &default_branch, sink);
-        });
+        if let Some(default_branch) = default_branch {
+            // branches not empty use "else" for default is ok
+            sink.render_condition::<E, _>(ctx, Cond::Else, |sink| {
+                self.render_branch(ctx, &default_branch, sink);
+            });
+        } else {
+            sink.render_trap();
+        }
     }
 }
 
@@ -806,6 +823,8 @@ pub trait RenderSink {
         Self: Sized;
 
     fn render_shape_id(&mut self, shape_id: ShapeId);
+
+    fn render_trap(&mut self);
 
     fn render_branch<E: Render<Self>>(
         &mut self,
