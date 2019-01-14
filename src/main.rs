@@ -16,6 +16,7 @@ mod compile;
 mod error_print;
 mod ir;
 mod parser;
+mod relooper;
 mod scanner;
 mod vm;
 

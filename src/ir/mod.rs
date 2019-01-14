@@ -36,8 +36,8 @@ pub enum ValueType {
 }
 #[derive(Debug, Copy, Clone)]
 pub struct FnType {
-    arg: Option<ValueType>,
-    ret: Option<ValueType>,
+    pub arg: Option<ValueType>,
+    pub ret: Option<ValueType>,
 }
 impl FnType {
     pub fn def_type() -> Self {
@@ -98,8 +98,15 @@ impl<'a> Iterator for BlockIter<'a> {
     type Item = &'a BasicBlock;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let label = self.stack.pop_back()?;
-        self.visited.insert(label, ());
+        let mut label;
+        loop {
+            label = self.stack.pop_back()?;
+            if self.visited.get(label).is_some() {
+                continue;
+            }
+            self.visited.insert(label, ());
+            break;
+        }
 
         let block = match self.function.blocks.get(label) {
             Some(block) => block,

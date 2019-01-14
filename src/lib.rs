@@ -7,6 +7,7 @@ mod vm;
 
 pub mod ast;
 pub mod ir;
+pub mod relooper;
 
 pub use crate::codegen::{codegen, WriteError};
 pub use crate::compile::{compile, CompileError};
