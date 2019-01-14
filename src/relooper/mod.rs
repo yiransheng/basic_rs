@@ -370,7 +370,7 @@ where
         &mut self,
         internal_id: NodeId,
         blocks: &mut HashSet<NodeId>,
-        entries: &mut HashSet<NodeId>,
+        _entries: &mut HashSet<NodeId>,
         next_entries: &mut N,
     ) -> Shape {
         let shape = Shape {
@@ -518,7 +518,7 @@ where
     fn make_multiple<N: DerefMut<Target = HashSet<NodeId>>>(
         &mut self,
         blocks: &mut HashSet<NodeId>,
-        entries: &mut HashSet<NodeId>,
+        _entries: &mut HashSet<NodeId>,
         next_entries: &mut N,
         indep_groups: &mut HashMap<NodeId, HashSet<NodeId>>,
         // checked: bool, // TODO
@@ -845,7 +845,7 @@ impl<L, E> Relooper<L, E> {
     {
         use petgraph::dot::{Config, Dot};
 
-        let mut shape = self.calculate(entry).unwrap();
+        let shape = self.calculate(entry).unwrap();
         // some multi uses loop, fuse cannot work with that yet
         // shape.fuse();
 
