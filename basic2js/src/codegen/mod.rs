@@ -223,7 +223,7 @@ where
 }
 
 impl<'a, W: Write> Render<JsCode<'a, W>> for Label {
-    fn render(&self, ctx: LoopCtx, sink: &mut JsCode<'a, W>) {
+    fn render(&self, _ctx: LoopCtx, sink: &mut JsCode<'a, W>) {
         let func = sink.function();
         let block = match func.blocks.get(*self) {
             Some(block) => block,
@@ -251,7 +251,7 @@ impl<'a, W> Render<JsCode<'a, W>> for &Expr
 where
     W: Write,
 {
-    fn render(&self, ctx: LoopCtx, sink: &mut JsCode<'a, W>) {
+    fn render(&self, _ctx: LoopCtx, sink: &mut JsCode<'a, W>) {
         self.codegen(sink).unwrap();
     }
 }
@@ -260,7 +260,7 @@ impl<'a, W> Render<JsCode<'a, W>> for &Statement
 where
     W: Write,
 {
-    fn render(&self, ctx: LoopCtx, sink: &mut JsCode<'a, W>) {
+    fn render(&self, _ctx: LoopCtx, sink: &mut JsCode<'a, W>) {
         self.codegen(sink).unwrap();
     }
 }
@@ -269,7 +269,7 @@ impl<'a, W> Render<JsCode<'a, W>> for FunctionName
 where
     W: Write,
 {
-    fn render(&self, ctx: LoopCtx, sink: &mut JsCode<'a, W>) {
+    fn render(&self, _ctx: LoopCtx, sink: &mut JsCode<'a, W>) {
         use std::collections::HashMap;
 
         if *self != sink.function {
@@ -342,10 +342,10 @@ mod tests {
     use indoc::*;
     use std::collections::HashMap;
 
-    use crate::compile::compile;
-    use crate::parser::Parser;
-    use crate::relooper::NodeId;
-    use crate::scanner::Scanner;
+    use basic_rs::compile::compile;
+    use basic_rs::parser::Parser;
+    use basic_rs::relooper::NodeId;
+    use basic_rs::scanner::Scanner;
 
     #[test]
     fn test_it() {
