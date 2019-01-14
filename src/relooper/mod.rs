@@ -482,14 +482,14 @@ where
                     if let DfsEvent::TreeEdge(u, v) = event {
                         // ignore labels not in blocks
                         if !blocks.contains(&v) {
-                            return Control::Continue;
+                            return Control::Break(());
                         }
 
                         // ignore processed edges
                         let edge = self.graph.find_edge(u, v).unwrap();
                         let edge = self.graph.edge_weight(edge).unwrap();
                         if let Branch::Processed(_) = edge {
-                            return Control::Continue;
+                            return Control::Break(());
                         }
 
                         match reachable_by.get(&v) {
@@ -641,6 +641,7 @@ where
         loop {
             println!("Entries: {:?}", entries);
             println!("Blocks: {:?}", blocks);
+            println!();
 
             next_entries.swap();
             next_entries.clear();
