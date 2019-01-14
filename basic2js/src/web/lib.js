@@ -101,8 +101,16 @@ class Printer {
 
     this._element = line;
   }
-
   inputLine() {
+    return this._inputLine().catch(() => { 
+      this.printStr("Illegal Number");
+      this.newline();
+      
+      return this._inputLine()
+    });
+  }
+
+  _inputLine() {
     const line = document.createElement("CODE");
     const input = document.createElement("INPUT");
 

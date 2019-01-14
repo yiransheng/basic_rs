@@ -137,11 +137,11 @@ where
             self.render_shape_id(id);
             self.write_(": ");
         }
-        writeln!(&mut self.out, "do {}", "{");
+        self.writeln_("do {");
 
         f(self);
 
-        writeln!(&mut self.out, "{} while(0)", "}");
+        self.writeln_("} while(0)");
     }
 
     fn render_condition<C: Render<Self>, F>(
