@@ -45,7 +45,7 @@ The current `basic2js` compiles it to:
 
 ```javascript
 var main = function*() {
-  var _label; // relooper output, not relevant here (no branching in this program)
+  var _label;
   var $x0;
   var $x1;
   $x0 = 0;
@@ -67,7 +67,13 @@ env.run(main());
 The central idea is to represent BASIC program (and subroutines) as JavaScript **generators** (notice the `*` next to `main`). The js sources reads very much like a blocking IO program, however, it runs as a co-routine. Additional runtime machinery is packed in `env` object / namespace, `env.run` is as such:
 
 ```javascript
-function run(gen, x = undefined) {
+const INPUT = Symbol("Input");
+
+env.input = function() {
+  return INPUT;    
+};
+
+env.run = function (gen, x = undefined) {
   const { done, value } = gen.next(x);
 
   if (done) {
@@ -82,7 +88,7 @@ function run(gen, x = undefined) {
       return run(gen, undefined);
     }
   }
-}
+};
 ```
 
 `printer.inputLine` returns a `Promise` that resolves to a number when user presses `Enter` key on rendered `input` DOM element.
