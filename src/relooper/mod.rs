@@ -1,12 +1,16 @@
+mod double_buffer;
+
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
-use std::ops::{Deref, DerefMut};
+use std::ops::DerefMut;
 
 use petgraph::graph::NodeIndex;
 use petgraph::stable_graph::StableGraph;
 use petgraph::visit::Dfs;
 use petgraph::Direction;
+
+use self::double_buffer::DblBuffer;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum FlowType {
@@ -20,7 +24,6 @@ pub struct ShapeId(pub u32);
 
 #[derive(Debug, Clone)]
 pub enum Branch<E> {
-    // Option used only for take operation
     Raw(Option<E>),
     Processed(ProcessedBranch<E>),
 }
@@ -32,9 +35,9 @@ pub struct ProcessedBranch<E> {
     pub data: Option<E>,
 }
 
-type Link = Option<Box<Shape>>;
-
 pub type NodeId = NodeIndex<u32>;
+
+type Link = Option<Box<Shape>>;
 
 pub struct Shape {
     id: ShapeId,
@@ -159,6 +162,7 @@ impl Shape {
         }
 
         if let Some(ref next) = self.next {
+            writeln!(f, "{}|", "  ".repeat(indent + 1))?;
             next.fmt(indent + 1, f)
         } else {
             Ok(())
@@ -188,47 +192,6 @@ macro_rules! peek_set {
         let mut iter = $set.iter();
         iter.next().cloned()
     }};
-}
-
-struct DblBuffer<T> {
-    swapped: bool,
-    first: T,
-    second: T,
-}
-impl<T> DblBuffer<T>
-where
-    T: Default,
-{
-    fn new() -> Self {
-        DblBuffer {
-            swapped: false,
-            first: T::default(),
-            second: T::default(),
-        }
-    }
-    fn swap(&mut self) {
-        self.swapped = !self.swapped;
-    }
-}
-impl<T> Deref for DblBuffer<T> {
-    type Target = T;
-
-    fn deref(&self) -> &T {
-        if self.swapped {
-            &self.first
-        } else {
-            &self.second
-        }
-    }
-}
-impl<T> DerefMut for DblBuffer<T> {
-    fn deref_mut(&mut self) -> &mut T {
-        if self.swapped {
-            &mut self.first
-        } else {
-            &mut self.second
-        }
-    }
 }
 
 pub struct Relooper<L, E> {
@@ -575,7 +538,7 @@ where
         }
     }
 
-    pub fn calculate(&mut self, entry: NodeId) -> Option<Shape> {
+    fn calculate(&mut self, entry: NodeId) -> Option<Shape> {
         self.remove_dead(entry);
 
         let mut initial_entries = HashSet::new();
