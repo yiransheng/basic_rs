@@ -1,4 +1,4 @@
-# `basic_rs` : a BASIC Interpreter for the Original Dartmouth Version
+# `basic_rs` : a BASIC Interpreter/Compiler for the Original Dartmouth Version
 
 [![Build Status](https://travis-ci.org/yiransheng/basic_rs.svg?branch=master)](https://travis-ci.org/yiransheng)
 

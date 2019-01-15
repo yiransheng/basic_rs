@@ -1,6 +1,6 @@
 # `basic2js`
 
-This is a most likely not bug free (non-trivial bugs either).
+This is a most likely not bug free (non-trivial bugs either), due to my custom `Relooper` implementation.
 
 ## Demo
 
