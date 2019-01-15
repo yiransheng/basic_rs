@@ -9,7 +9,7 @@ use basic_rs::{compile, print_source_error, Parser, Scanner};
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
-#[structopt(name = "bas2wasm", about = "bas2wasm file")]
+#[structopt(name = "bas2js", about = "bas2js file")]
 struct Opt {
     /// Input file
     #[structopt(parse(from_os_str))]
@@ -35,11 +35,6 @@ impl Opt {
     fn js_path(&self) -> PathBuf {
         let mut path = self.out_dir.clone();
         path.push("index.js");
-        path
-    }
-    fn js_lib_path(&self) -> PathBuf {
-        let mut path = self.out_dir.clone();
-        path.push("lib.js");
         path
     }
     fn html_path(&self) -> PathBuf {
