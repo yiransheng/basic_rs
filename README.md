@@ -17,6 +17,8 @@ The repo contains an interpreter and two compilers of the original Dartmouth BAS
   * [README](./basic2js/README.md)
 * `not-yet`: crate `basic2rs`, compiles BASIC to `rust` source code, and to subsequently native code with `rustc` :)
 
+This is primarily a learning project, to get myself familiar with compiler constructions and optimizations. However, I will continue to add tests and bug fixes and strive to make this a solid BASIC implementation.
+
 ## Features and Limitations
 
 Matches first version of [Dartmouth Basic](https://en.wikipedia.org/wiki/Dartmouth_BASIC) closely: reference manual [here](http://web.archive.org/web/20120716185629/http://www.bitsavers.org/pdf/dartmouth/BASIC_Oct64.pdf), which means this implementation inherits all its limitations.
