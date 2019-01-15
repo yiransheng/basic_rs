@@ -252,8 +252,36 @@ fn test_with_cfg(entry: i32, graph: &StableGraph<i32, i32>) -> bool {
     true
 }
 
+#[derive(Debug, Clone)]
+struct ArbitraryBranches {
+    inner: HashSet<(i32, i32, i32)>,
+}
+
+impl Arbitrary for ArbitraryBranches {
+    fn arbitrary<G: Gen>(g: &mut G) -> Self {
+        // limit of number of nodes
+        const SIZE_LIMIT: i32 = 10;
+
+        let from = i32::arbitrary(g) % SIZE_LIMIT;
+        let to = i32::arbitrary(g) % SIZE_LIMIT;
+
+        let weight = i32::arbitrary(g);
+        let n_branches = usize::arbitrary(g) % 100 + 10;
+
+        let mut inner = HashSet::new();
+
+        for _ in 0..n_branches {
+            inner.insert((from, to, weight));
+        }
+
+        ArbitraryBranches { inner }
+    }
+}
+
 quickcheck! {
-    fn cfg_equiv(branches: HashSet<(i32, i32, i32)>) -> bool {
+    fn cfg_equiv(branches: ArbitraryBranches) -> bool {
+        let branches = branches.inner;
+
         if branches.is_empty() {
             return true;
         }
