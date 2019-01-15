@@ -1,6 +1,5 @@
 // Source: ../sample_programs/batnum.bas
-// Compiler output is ran through Google Closure Compiler
-
+// Compiler Output was run through Google Closure Compiler
 "use strict";
 class a {
   constructor() {}
@@ -21,39 +20,39 @@ class e {
 }
 class f {
   constructor(b) {
-    this.l = b;
+    this.m = b;
     this.g = null;
     this.c = 0;
     this.i = [];
     this.h();
-    window.WordWidth ? (this.o = WordWidth) : (this.o = b => b.length);
+    window.WordWidth ? (this.s = WordWidth) : (this.s = b => b.length);
   }
-  A(b) {
+  B(b) {
     this.j(b.toString());
   }
-  u(b) {
+  v(b) {
     this.j(b);
   }
   h() {
     console.log(this.i.join(""));
     this.i.length = 0;
     const b = document.createElement("CODE");
-    this.l.appendChild(b);
+    this.m.appendChild(b);
     this.c = 0;
     this.g = b;
   }
-  v() {
-    return this.m().catch(() => {
-      this.u("Illegal Number");
+  w() {
+    return this.o().catch(() => {
+      this.v("Illegal Number");
       this.h();
-      return this.m();
+      return this.o();
     });
   }
-  m() {
+  o() {
     const b = document.createElement("CODE"),
       d = document.createElement("INPUT");
     b.appendChild(d);
-    this.l.appendChild(b);
+    this.m.appendChild(b);
     this.g = d;
     d.focus();
     this.c = 0;
@@ -79,14 +78,14 @@ class f {
       document.addEventListener("focus", q, !0);
     });
   }
-  s(b) {
+  u(b) {
     this.j(" ".repeat(b - this.c % b));
   }
   j(b) {
     this.i.push(b);
     "INPUT" === this.g.tagName && this.h();
     this.g.textContent += b;
-    this.c += this.o(b);
+    this.c += this.s(b);
   }
 }
 const g = new f(document.getElementById("output")),
@@ -96,7 +95,7 @@ function k(b, d = void 0) {
   if (B) return Promise.resolve(p);
   switch (p) {
     case h:
-      return g.v().then(d => k(b, d));
+      return g.w().then(d => k(b, d));
     default:
       return k(b, void 0);
   }
@@ -105,30 +104,30 @@ const m = {},
   n = new e(),
   r = {
     print: b => {
-      g.A(b);
+      g.B(b);
     },
     a: () => {
       g.h();
     },
     b: b => {
-      g.u(b);
+      g.v(b);
     },
     f: () => {
-      g.s(3);
+      g.u(3);
     },
-    G: () => {
-      g.s(15);
+    l: () => {
+      g.u(15);
     },
-    C: (b, d) => b * Math.sign(d),
-    B: b => {
+    D: (b, d) => b * Math.sign(d),
+    C: b => {
       n.add(b);
     },
     read: () => n.h(),
-    F: b => {
+    G: b => {
       m[b] = new a();
     },
-    D: b => m[b],
-    w: k,
+    F: b => m[b],
+    A: k,
     input: function() {
       return h;
     }
@@ -152,17 +151,6 @@ function* C() {
   while (0);
   d = 1 === w ? 10 : 3;
   a: do {
-    if (10 === d) {
-      if (t > x) break a;
-      A = 1;
-      r.b("COMPUTER TAKES");
-      r.f();
-      r.print(t);
-      r.f();
-      r.b("AND WINS.");
-      r.a();
-      return;
-    }
     if (3 === d) {
       if (t > z) break a;
       A = 1;
@@ -171,6 +159,17 @@ function* C() {
       r.print(t);
       r.f();
       r.b("AND LOSES.");
+      r.a();
+      return;
+    }
+    if (10 === d) {
+      if (t > x) break a;
+      A = 1;
+      r.b("COMPUTER TAKES");
+      r.f();
+      r.print(t);
+      r.f();
+      r.b("AND WINS.");
       r.a();
       return;
     }
@@ -250,7 +249,7 @@ function* D() {
         (A = 1))
       : 15 === b && (A = 0);
 }
-r.w(
+r.A(
   (function*() {
     r.b("BATNUM");
     r.a();
@@ -279,18 +278,18 @@ r.w(
     r.a();
     a: for (;;) {
       r.b("ENTER PILE SIZE");
-      r.a();
+      r.l();
       r.a();
       t = yield r.input();
       var b = 1 > t ? 2 : 3;
-      if (2 !== b && 3 === b) {
+      if (3 === b) {
         b = t !== Math.trunc(t) ? 17 : 4;
         b: do
           if (4 === b) {
             if (1 > t) break b;
             c: for (;;) {
               r.b("ENTER WIN OPTION - 1 TO TAKE LAST, 2 TO AVOID LAST: ");
-              r.a();
+              r.l();
               r.a();
               w = yield r.input();
               if (1 === w) break c;
@@ -298,10 +297,9 @@ r.w(
             }
             c: for (;;) {
               r.b("ENTER MIN AND MAX ");
-              r.a();
+              r.f();
               r.a();
               z = yield r.input();
-              r.a();
               x = yield r.input();
               if (z > x) continue c;
               if (1 > z) continue c;
@@ -310,7 +308,7 @@ r.w(
             }
             c: for (;;) {
               r.b("ENTER START OPTION - 1 COMPUTER FIRST, 2 YOU FIRST ");
-              r.a();
+              r.l();
               r.a();
               b = yield r.input();
               r.a();
