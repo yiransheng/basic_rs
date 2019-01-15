@@ -8,7 +8,7 @@ Vintage BASIC game **batnum**, (found [here](https://www.atariarchives.org/basic
 
 http://batnum.surge.sh/
 
-![](/home/yiran/dev/rusty/basic_rs/basic2js/batnum.png)
+![](./batnum.png)
 
 ## High Level Goals
 
