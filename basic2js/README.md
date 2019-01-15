@@ -45,7 +45,7 @@ The current `basic2js` compiles it to:
 
 ```javascript
 var main = function*() {
-  var _label;
+  var __label__;
   var $x0;
   var $x1;
   $x0 = 0;

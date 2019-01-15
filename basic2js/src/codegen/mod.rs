@@ -169,7 +169,7 @@ where
             }
             Cond::IfLabel(id) => {
                 self.writeln_(format_args!(
-                    "if (_label === {}) {}",
+                    "if (__label__ === {}) {}",
                     id.index(),
                     "{"
                 ));
@@ -178,7 +178,7 @@ where
             }
             Cond::ElseIfLabel(id) => {
                 self.writeln_(format_args!(
-                    "else if (_label === {}) {}",
+                    "else if (__label__ === {}) {}",
                     id.index(),
                     "{"
                 ));
@@ -202,7 +202,7 @@ where
     }
 
     fn render_branch<E: Render<Self>>(&mut self, br: &ProcessedBranch<E>) {
-        self.writeln_(format_args!("_label = {};", br.target.index()));
+        self.writeln_(format_args!("__label__ = {};", br.target.index()));
 
         match br.flow_type {
             FlowType::Direct => {
@@ -284,7 +284,7 @@ where
         };
 
         sink.write_group(sig, "}", |sink| {
-            sink.writeln_("var _label;");
+            sink.writeln_("var __label__;");
 
             for (i, ty) in func.locals.iter().enumerate() {
                 match ty {
