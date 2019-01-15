@@ -13,7 +13,7 @@ The repo contains an interpreter and two compilers of the original Dartmouth BAS
   * example: wasm  [Game of Life](https://nbviewer.jupyter.org/github/norvig/pytudes/blob/master/ipynb/BASIC.ipynb#Longer-Program:-Life) from BASIC source, see it running [here](http://subdued-afternoon.surge.sh/)
   * [README](./basic2wasm/README.md)
 * Crate `basic2js` compiles BASIC to JavaScript (using generator functions for async `INPUT` handling)
-  * example: vintage **batnum** game, see it running [here](http://batnum.surge.sh/)
+  * example: vintage [**batnum**](https://www.atariarchives.org/basicgames/showpage.php?page=14) game, see it running [here](http://batnum.surge.sh/)
   * [README](./basic2js/README.md)
 * `not-yet`: crate `basic2rs`, compiles BASIC to `rust` source code, and to subsequently native code with `rustc` :)
 
