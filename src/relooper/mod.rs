@@ -651,105 +651,6 @@ where
     }
 }
 
-struct SimpleBlock<'a, L, E> {
-    internal: NodeId,
-    next: Option<&'a MultiShape>,
-    relooper: RefCell<&'a mut Relooper<L, E>>,
-}
-impl<'a, L, E: Clone> SimpleBlock<'a, L, E> {
-    fn render_branch<S>(
-        &self,
-        ctx: LoopCtx,
-        branch: &ProcessedBranch<E>,
-        sink: &mut S,
-    ) where
-        L: Render<S> + fmt::Debug,
-        E: Render<S> + fmt::Debug,
-        S: RenderSink,
-    {
-        match self.next {
-            Some(MultiShape { handled_shapes, .. }) => {
-                if let Some(shape) = handled_shapes.get(&branch.target) {
-                    self.relooper.borrow_mut().render_shape(shape, ctx, sink);
-                } else {
-                    sink.render_branch(branch);
-                }
-            }
-            None => sink.render_branch(branch),
-        }
-    }
-}
-
-impl<'a, L, E, S> Render<S> for SimpleBlock<'a, L, E>
-where
-    L: Render<S> + fmt::Debug,
-    E: Render<S> + Clone + fmt::Debug,
-    S: RenderSink,
-{
-    fn render(&self, ctx: LoopCtx, sink: &mut S) {
-        let internal = self.internal;
-
-        {
-            self.relooper
-                .borrow()
-                .graph
-                .node_weight(internal)
-                .map(|raw| {
-                    raw.render(ctx, sink);
-                });
-        }
-
-        let mut default_branch: Option<ProcessedBranch<E>> = None;
-        let mut branches: Vec<ProcessedBranch<E>> = vec![];
-
-        {
-            let relooper = self.relooper.borrow();
-            for b in relooper.processed_branches_out(internal) {
-                if b.data.is_none() {
-                    assert!(
-                        default_branch.is_none(),
-                        "Can only have one default target"
-                    );
-                    default_branch = Some(b.clone());
-                } else {
-                    branches.push(b.clone());
-                }
-            }
-        }
-
-        if branches.is_empty() {
-            // has default target
-            if let Some(default_branch) = default_branch {
-                if default_branch.flow_type != FlowType::Direct {
-                    self.render_branch(ctx, &default_branch, sink);
-                }
-            }
-            return;
-        }
-
-        for (i, b) in branches.drain(..).enumerate() {
-            let cond = b.data.as_ref().unwrap();
-            let cond = if i == 0 {
-                Cond::If(cond)
-            } else {
-                Cond::ElseIf(cond)
-            };
-            sink.render_condition(ctx, cond, |sink| {
-                self.render_branch(ctx, &b, sink);
-            });
-        }
-
-        if let Some(default_branch) = default_branch {
-            // branches not empty use "else" for default is ok
-            sink.render_condition::<E, _>(ctx, Cond::Else, |sink| {
-                self.render_branch(ctx, &default_branch, sink);
-            });
-        } else {
-            sink.render_trap();
-        }
-    }
-}
-
 #[derive(Debug, Copy, Clone)]
 pub enum LoopCtx {
     InLoop,
@@ -879,6 +780,105 @@ impl<L, E> Relooper<L, E> {
 
         if let Some(ref next) = shape.next {
             self.render_shape(next, ctx, sink);
+        }
+    }
+}
+
+struct SimpleBlock<'a, L, E> {
+    internal: NodeId,
+    next: Option<&'a MultiShape>,
+    relooper: RefCell<&'a mut Relooper<L, E>>,
+}
+impl<'a, L, E: Clone> SimpleBlock<'a, L, E> {
+    fn render_branch<S>(
+        &self,
+        ctx: LoopCtx,
+        branch: &ProcessedBranch<E>,
+        sink: &mut S,
+    ) where
+        L: Render<S> + fmt::Debug,
+        E: Render<S> + fmt::Debug,
+        S: RenderSink,
+    {
+        match self.next {
+            Some(MultiShape { handled_shapes, .. }) => {
+                if let Some(shape) = handled_shapes.get(&branch.target) {
+                    self.relooper.borrow_mut().render_shape(shape, ctx, sink);
+                } else {
+                    sink.render_branch(branch);
+                }
+            }
+            None => sink.render_branch(branch),
+        }
+    }
+}
+
+impl<'a, L, E, S> Render<S> for SimpleBlock<'a, L, E>
+where
+    L: Render<S> + fmt::Debug,
+    E: Render<S> + Clone + fmt::Debug,
+    S: RenderSink,
+{
+    fn render(&self, ctx: LoopCtx, sink: &mut S) {
+        let internal = self.internal;
+
+        {
+            self.relooper
+                .borrow()
+                .graph
+                .node_weight(internal)
+                .map(|raw| {
+                    raw.render(ctx, sink);
+                });
+        }
+
+        let mut default_branch: Option<ProcessedBranch<E>> = None;
+        let mut branches: Vec<ProcessedBranch<E>> = vec![];
+
+        {
+            let relooper = self.relooper.borrow();
+            for b in relooper.processed_branches_out(internal) {
+                if b.data.is_none() {
+                    assert!(
+                        default_branch.is_none(),
+                        "Can only have one default target"
+                    );
+                    default_branch = Some(b.clone());
+                } else {
+                    branches.push(b.clone());
+                }
+            }
+        }
+
+        if branches.is_empty() {
+            // has default target
+            if let Some(default_branch) = default_branch {
+                if default_branch.flow_type != FlowType::Direct {
+                    self.render_branch(ctx, &default_branch, sink);
+                }
+            }
+            return;
+        }
+
+        for (i, b) in branches.drain(..).enumerate() {
+            let cond = b.data.as_ref().unwrap();
+            let cond = if i == 0 {
+                Cond::If(cond)
+            } else {
+                Cond::ElseIf(cond)
+            };
+            sink.render_condition(ctx, cond, |sink| {
+                self.render_branch(ctx, &b, sink);
+            });
+        }
+
+        if let Some(default_branch) = default_branch {
+            // branches not empty use "else" for default is ok
+            sink.render_condition::<E, _>(ctx, Cond::Else, |sink| {
+                self.render_branch(ctx, &default_branch, sink);
+            });
+        } else {
+            sink.render_trap();
         }
     }
 }
