@@ -1,4 +1,6 @@
 mod double_buffer;
+#[cfg(test)]
+mod tests;
 
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
@@ -882,38 +884,5 @@ where
         } else {
             sink.render_trap();
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_run_relooper() {
-        // let mut relooper: Relooper<&'static str, bool> = Relooper::new();
-
-        // let a = relooper.add_block("a");
-        // let b = relooper.add_block("b");
-        // let c = relooper.add_block("c");
-        // let d = relooper.add_block("d");
-        // let e = relooper.add_block("e");
-
-        // relooper.add_branch(a, b, None);
-        // relooper.add_branch(b, c, None);
-        // relooper.add_branch(b, d, None);
-        // relooper.add_branch(c, b, None);
-
-        // let shape = relooper.calculate(a);
-        // let shape = shape.unwrap();
-
-        // println!("Found shape:");
-        // println!("{:?}", shape);
-
-        // for b in relooper.processed_branches_in(c) {
-        // println!("A: {:?}", b);
-        // }
-
-        assert!(true);
     }
 }
