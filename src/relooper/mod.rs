@@ -86,6 +86,8 @@ impl Shape {
         if let Some(ref mut next) = self.next {
             next.fuse();
         }
+
+        panic!("SimpleFused rendering currently is not supported!");
     }
     fn fuse_simple(&mut self) {
         let next = self.next.take();
