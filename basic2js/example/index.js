@@ -1,377 +1,342 @@
 // Source: ../sample_programs/batnum.bas
-// Formatted using `prettier`, otherwise left unmodified
-// from compiler output
-var N = 0;
-var C = 0;
-var M = 0;
-var B = 0;
-var P = 0;
-var A = 0;
-var W = 0;
-var fn$0 = function*() {
-  var _label;
-  var $x0;
-  $x0 = 0;
-  $x0 = N;
-  if (M === 1) {
-    _label = 2;
-  } else {
-    _label = 1;
+// Compiler output is ran through Google Closure Compiler
+
+"use strict";
+class a {
+  constructor() {}
+}
+class e {
+  constructor() {
+    this.g = [];
+    this.c = 0;
   }
-  $L1: do {
-    if (_label === 1) {
-      $x0 = $x0 - 1;
-      _label = 2;
-      break $L1;
-    }
-  } while (0);
-  if (M === 1) {
-    _label = 10;
-  } else {
-    _label = 3;
+  add(b) {
+    this.g.push(b);
+    this.c++;
   }
-  $L4: do {
-    if (_label === 3) {
-      if (N > A) {
-        _label = 5;
-        break $L4;
-      } else {
-        _label = 4;
-      }
-      W = 1;
-      env.printLabel("COMPUTER TAKES");
-      env.printAdvance3();
-      env.print(N);
-      env.printAdvance3();
-      env.printLabel("AND LOSES.");
-      env.printNewline();
-      return;
-    } else if (_label === 10) {
-      if (N > B) {
-        _label = 5;
-        break $L4;
-      } else {
-        _label = 11;
-      }
-      W = 1;
-      env.printLabel("COMPUTER TAKES");
-      env.printAdvance3();
-      env.print(N);
-      env.printAdvance3();
-      env.printLabel("AND WINS.");
-      env.printNewline();
-      return;
-    }
-  } while (0);
-  P = $x0 - C * Math.trunc($x0 / C);
-  if (!(P < A)) {
-    _label = 7;
-  } else {
-    _label = 6;
+  h() {
+    if (0 < this.c) return this.c--, this.g[this.c];
+    throw Error("No Data");
   }
-  $L10: do {
-    if (_label === 6) {
-      P = A;
-      _label = 7;
-      break $L10;
-    }
-  } while (0);
-  if (!(P > B)) {
-    _label = 9;
-  } else {
-    _label = 8;
+}
+class f {
+  constructor(b) {
+    this.l = b;
+    this.g = null;
+    this.c = 0;
+    this.i = [];
+    this.h();
+    window.WordWidth ? (this.o = WordWidth) : (this.o = b => b.length);
   }
-  $L13: do {
-    if (_label === 8) {
-      P = B;
-      _label = 9;
-      break $L13;
-    }
-  } while (0);
-  N = N - P;
-  env.printLabel("COMPUTER TAKES");
-  env.printAdvance3();
-  env.print(P);
-  env.printAdvance3();
-  env.printLabel("AND LEAVES");
-  env.printAdvance3();
-  env.print(N);
-  env.printNewline();
-  W = 0;
-  return;
-};
-var fn$1 = function*() {
-  var _label;
-  env.printNewline();
-  env.printLabel("YOUR MOVE ");
-  env.printAdvance3();
-  $L1: while (1) {
-    env.printNewline();
-    P = yield env.input();
-    if (!(P === 0)) {
-      _label = 3;
-    } else {
-      _label = 2;
-      break $L1;
-    }
-    if (!(P === Math.trunc(P))) {
-      _label = 7;
-    } else {
-      _label = 4;
-    }
-    $L4: do {
-      if (_label === 4) {
-        if (!(P < A)) {
-          _label = 11;
-        } else {
-          _label = 5;
-        }
-        if (_label === 11) {
-          if (!(P > B)) {
-            _label = 12;
-          } else {
-            _label = 7;
-            break $L4;
-          }
-          N = N - P;
-          if (!(N === 0)) {
-            _label = 13;
-          } else {
-            _label = 8;
-            break $L1;
-          }
-          if (!(N < 0)) {
-            _label = 15;
-            break $L1;
-          } else {
-            _label = 14;
-          }
-          N = N + P;
-          _label = 7;
-          break $L4;
-        } else if (_label === 5) {
-          if (P === N) {
-            _label = 8;
-            break $L1;
-          } else {
-            _label = 6;
-          }
-          _label = 7;
-          break $L4;
-        }
-      }
-    } while (0);
-    env.printLabel("ILLEGAL MOVE, REENTER IT ");
-    env.printAdvance3();
-    _label = 1;
-    continue $L1;
+  A(b) {
+    this.j(b.toString());
   }
-  if (_label === 2) {
-    env.printLabel("I TOLD YOU NOT TO USE ZERO! COMPUTER WINS BY FORFEIT.");
-    env.printNewline();
-    W = 1;
-    return;
-  } else if (_label === 8) {
-    if (M === 1) {
-      _label = 10;
-    } else {
-      _label = 9;
+  u(b) {
+    this.j(b);
+  }
+  h() {
+    console.log(this.i.join(""));
+    this.i.length = 0;
+    const b = document.createElement("CODE");
+    this.l.appendChild(b);
+    this.c = 0;
+    this.g = b;
+  }
+  v() {
+    return this.m().catch(() => {
+      this.u("Illegal Number");
+      this.h();
+      return this.m();
+    });
+  }
+  m() {
+    const b = document.createElement("CODE"),
+      d = document.createElement("INPUT");
+    b.appendChild(d);
+    this.l.appendChild(b);
+    this.g = d;
+    d.focus();
+    this.c = 0;
+    return new Promise((b, p) => {
+      const q = () => {
+          requestAnimationFrame(() => {
+            d.disabled || d.focus();
+          });
+        },
+        u = l => {
+          13 === l.keyCode &&
+            (document.removeEventListener("blur", q),
+            document.removeEventListener("focus", q),
+            d.removeEventListener("keyup", u),
+            (d.disabled = !0),
+            (l = d.value.trim())
+              ? ((l = parseFloat(l)),
+                Number.isNaN(l) ? p(new TypeError("not a number")) : b(l))
+              : b(0));
+        };
+      d.addEventListener("keyup", u);
+      document.addEventListener("blur", q, !0);
+      document.addEventListener("focus", q, !0);
+    });
+  }
+  s(b) {
+    this.j(" ".repeat(b - this.c % b));
+  }
+  j(b) {
+    this.i.push(b);
+    "INPUT" === this.g.tagName && this.h();
+    this.g.textContent += b;
+    this.c += this.o(b);
+  }
+}
+const g = new f(document.getElementById("output")),
+  h = Symbol();
+function k(b, d = void 0) {
+  const { done: B, value: p } = b.next(d);
+  if (B) return Promise.resolve(p);
+  switch (p) {
+    case h:
+      return g.v().then(d => k(b, d));
+    default:
+      return k(b, void 0);
+  }
+}
+const m = {},
+  n = new e(),
+  r = {
+    print: b => {
+      g.A(b);
+    },
+    a: () => {
+      g.h();
+    },
+    b: b => {
+      g.u(b);
+    },
+    f: () => {
+      g.s(3);
+    },
+    G: () => {
+      g.s(15);
+    },
+    C: (b, d) => b * Math.sign(d),
+    B: b => {
+      n.add(b);
+    },
+    read: () => n.h(),
+    F: b => {
+      m[b] = new a();
+    },
+    D: b => m[b],
+    w: k,
+    input: function() {
+      return h;
     }
-    if (_label === 10) {
-      env.printLabel("CONGRATULATIONS, YOU WIN.");
-      env.printNewline();
-      W = 1;
-      return;
-    } else if (_label === 9) {
-      env.printLabel("TOUGH LUCK, YOU LOSE.");
-      env.printNewline();
-      W = 1;
+  };
+window.c = r;
+var t = 0,
+  v = 0,
+  w = 0,
+  x = 0,
+  y = 0,
+  z = 0,
+  A = 0;
+function* C() {
+  var b = t;
+  var d = 1 === w ? 2 : 1;
+  a: do
+    if (1 === d) {
+      --b;
+      break a;
+    }
+  while (0);
+  d = 1 === w ? 10 : 3;
+  a: do {
+    if (10 === d) {
+      if (t > x) break a;
+      A = 1;
+      r.b("COMPUTER TAKES");
+      r.f();
+      r.print(t);
+      r.f();
+      r.b("AND WINS.");
+      r.a();
       return;
     }
-  } else if (_label === 15) {
-    W = 0;
-    return;
-  }
-};
-var main = function*() {
-  var _label;
-  var $x0;
-  var $x1;
-  $x0 = 0;
-  $x1 = 0;
-  env.printLabel("BATNUM");
-  env.printNewline();
-  env.printLabel("CREATIVE COMPUTING  MORRISTOWN, NEW JERSEY");
-  env.printNewline();
-  env.printNewline();
-  env.printNewline();
-  env.printNewline();
-  env.printLabel("THIS PROGRAM IS A 'BATTLE OF NUMBERS' GAME, WHERE THE");
-  env.printNewline();
-  env.printLabel("COMPUTER IS YOUR OPPONENT.");
-  env.printNewline();
-  env.printNewline();
-  env.printLabel("THE GAME STARTS WITH AN ASSUMED PILE OF OBJECTS. YOU");
-  env.printNewline();
-  env.printLabel("AND YOUR OPPONENT ALTERNATELY REMOVE OBJECTS FROM THE PILE.");
-  env.printNewline();
-  env.printLabel("WINNING IS DEFINED IN ADVANCE AS TAKING THE LAST OBJECT OR");
-  env.printNewline();
-  env.printLabel("NOT. YOU CAN ALSO SPECIFY SOME OTHER BEGINNING CONDITIONS.");
-  env.printNewline();
-  env.printLabel("DON'T USE ZERO, HOWEVER, IN PLAYING THE GAME.");
-  env.printNewline();
-  env.printLabel("ENTER A NEGATIVE NUMBER FOR NEW PILE SIZE TO STOP PLAYING.");
-  env.printNewline();
-  env.printNewline();
-  $L1: while (1) {
-    env.printLabel("ENTER PILE SIZE");
-    env.printNewline();
-    env.printNewline();
-    N = yield env.input();
-    if (!(N < 1)) {
-      _label = 3;
-    } else {
-      _label = 2;
+    if (3 === d) {
+      if (t > z) break a;
+      A = 1;
+      r.b("COMPUTER TAKES");
+      r.f();
+      r.print(t);
+      r.f();
+      r.b("AND LOSES.");
+      r.a();
+      return;
     }
-    if (_label === 2) {
-      _label = 1;
-      continue $L1;
-    } else if (_label === 3) {
-      if (!(N === Math.trunc(N))) {
-        _label = 17;
-      } else {
-        _label = 4;
-      }
-      $L5: do {
-        if (_label === 4) {
-          if (N < 1) {
-            _label = 17;
-            break $L5;
-          } else {
-            _label = 5;
+  } while (0);
+  y = b - v * Math.trunc(b / v);
+  d = y < z ? 6 : 7;
+  a: do
+    if (6 === d) {
+      y = z;
+      break a;
+    }
+  while (0);
+  d = y > x ? 8 : 9;
+  a: do
+    if (8 === d) {
+      y = x;
+      break a;
+    }
+  while (0);
+  t -= y;
+  r.b("COMPUTER TAKES");
+  r.f();
+  r.print(y);
+  r.f();
+  r.b("AND LEAVES");
+  r.f();
+  r.print(t);
+  r.a();
+  A = 0;
+}
+function* D() {
+  r.a();
+  r.b("YOUR MOVE ");
+  r.f();
+  a: for (;;) {
+    r.a();
+    y = yield r.input();
+    if (0 === y) {
+      var b = 2;
+      break a;
+    }
+    b = y !== Math.trunc(y) ? 7 : 4;
+    b: do
+      if (4 === b)
+        if (((b = y < z ? 5 : 11), 11 === b)) {
+          if (y > x) break b;
+          t -= y;
+          if (0 === t) {
+            b = 8;
+            break a;
           }
-          $L7: while (1) {
-            env.printLabel(
-              "ENTER WIN OPTION - 1 TO TAKE LAST, 2 TO AVOID LAST: "
-            );
-            env.printNewline();
-            env.printNewline();
-            M = yield env.input();
-            if (M === 1) {
-              _label = 7;
-              break $L7;
-            } else {
-              _label = 6;
-            }
-            if (!(M === 2)) {
-              _label = 5;
-              continue $L7;
-            } else {
-              _label = 7;
-              break $L7;
-            }
+          if (!(0 > t)) {
+            b = 15;
+            break a;
           }
-          $L10: while (1) {
-            env.printLabel("ENTER MIN AND MAX ");
-            env.printNewline();
-            env.printNewline();
-            A = yield env.input();
-            env.printNewline();
-            B = yield env.input();
-            if (A > B) {
-              _label = 7;
-              continue $L10;
-            } else {
-              _label = 8;
-            }
-            if (A < 1) {
-              _label = 7;
-              continue $L10;
-            } else {
-              _label = 9;
-            }
-            if (!(A === Math.trunc(A))) {
-              _label = 7;
-              continue $L10;
-            } else {
-              _label = 10;
-            }
-            if (!(B === Math.trunc(B))) {
-              _label = 7;
-              continue $L10;
-            } else {
-              _label = 11;
-              break $L10;
-            }
+          t += y;
+          break b;
+        } else if (5 === b) {
+          if (y === t) {
+            b = 8;
+            break a;
           }
-          $L15: while (1) {
-            env.printLabel(
-              "ENTER START OPTION - 1 COMPUTER FIRST, 2 YOU FIRST "
-            );
-            env.printNewline();
-            env.printNewline();
-            $x1 = yield env.input();
-            env.printNewline();
-            env.printNewline();
-            if ($x1 === 1) {
-              _label = 13;
-              break $L15;
-            } else {
-              _label = 12;
-            }
-            if (!($x1 === 2)) {
-              _label = 11;
-              continue $L15;
-            } else {
-              _label = 13;
-              break $L15;
-            }
-          }
-          C = A + B;
-          if ($x1 === 2) {
-            _label = 15;
-          } else {
-            _label = 14;
-          }
-          $L19: while (1) {
-            if (_label === 14) {
-              yield* fn$0();
-              if (W === 1) {
-                _label = 17;
-                break $L5;
-              } else {
-                _label = 15;
-                continue $L19;
-              }
-            } else if (_label === 15) {
-              yield* fn$1();
-              if (W === 1) {
-                _label = 17;
-                break $L5;
-              } else {
-                _label = 16;
-              }
-              _label = 14;
-              continue $L19;
-            }
-          }
+          break b;
         }
-      } while (0);
-      $x0 = 1;
-      $L25: while (1) {
-        if ($x0 - 10 > 0) {
-          _label = 1;
-          continue $L1;
-        } else {
-          _label = 19;
+    while (0);
+    r.b("ILLEGAL MOVE, REENTER IT ");
+    r.f();
+  }
+  8 === b
+    ? ((b = 1 === w ? 10 : 9),
+      9 === b
+        ? (r.b("TOUGH LUCK, YOU LOSE."), r.a(), (A = 1))
+        : 10 === b && (r.b("CONGRATULATIONS, YOU WIN."), r.a(), (A = 1)))
+    : 2 === b
+      ? (r.b("I TOLD YOU NOT TO USE ZERO! COMPUTER WINS BY FORFEIT."),
+        r.a(),
+        (A = 1))
+      : 15 === b && (A = 0);
+}
+r.w(
+  (function*() {
+    r.b("BATNUM");
+    r.a();
+    r.b("CREATIVE COMPUTING  MORRISTOWN, NEW JERSEY");
+    r.a();
+    r.a();
+    r.a();
+    r.a();
+    r.b("THIS PROGRAM IS A 'BATTLE OF NUMBERS' GAME, WHERE THE");
+    r.a();
+    r.b("COMPUTER IS YOUR OPPONENT.");
+    r.a();
+    r.a();
+    r.b("THE GAME STARTS WITH AN ASSUMED PILE OF OBJECTS. YOU");
+    r.a();
+    r.b("AND YOUR OPPONENT ALTERNATELY REMOVE OBJECTS FROM THE PILE.");
+    r.a();
+    r.b("WINNING IS DEFINED IN ADVANCE AS TAKING THE LAST OBJECT OR");
+    r.a();
+    r.b("NOT. YOU CAN ALSO SPECIFY SOME OTHER BEGINNING CONDITIONS.");
+    r.a();
+    r.b("DON'T USE ZERO, HOWEVER, IN PLAYING THE GAME.");
+    r.a();
+    r.b("ENTER A NEGATIVE NUMBER FOR NEW PILE SIZE TO STOP PLAYING.");
+    r.a();
+    r.a();
+    a: for (;;) {
+      r.b("ENTER PILE SIZE");
+      r.a();
+      r.a();
+      t = yield r.input();
+      var b = 1 > t ? 2 : 3;
+      if (2 !== b && 3 === b) {
+        b = t !== Math.trunc(t) ? 17 : 4;
+        b: do
+          if (4 === b) {
+            if (1 > t) break b;
+            c: for (;;) {
+              r.b("ENTER WIN OPTION - 1 TO TAKE LAST, 2 TO AVOID LAST: ");
+              r.a();
+              r.a();
+              w = yield r.input();
+              if (1 === w) break c;
+              if (2 === w) break c;
+            }
+            c: for (;;) {
+              r.b("ENTER MIN AND MAX ");
+              r.a();
+              r.a();
+              z = yield r.input();
+              r.a();
+              x = yield r.input();
+              if (z > x) continue c;
+              if (1 > z) continue c;
+              if (z !== Math.trunc(z)) continue c;
+              if (x === Math.trunc(x)) break c;
+            }
+            c: for (;;) {
+              r.b("ENTER START OPTION - 1 COMPUTER FIRST, 2 YOU FIRST ");
+              r.a();
+              r.a();
+              b = yield r.input();
+              r.a();
+              r.a();
+              if (1 === b) break c;
+              if (2 === b) break c;
+            }
+            v = z + x;
+            b = 2 === b ? 15 : 14;
+            for (;;)
+              if (15 === b) {
+                yield* D();
+                if (1 === A) break b;
+                b = 14;
+              } else if (14 === b)
+                if ((yield* C(), 1 === A)) break b;
+                else b = 15;
+          }
+        while (0);
+        b = 1;
+        for (;;) {
+          if (0 < b - 10) continue a;
+          r.a();
+          b += 1;
         }
-        env.printNewline();
-        $x0 = $x0 + 1;
-        _label = 18;
-        continue $L25;
       }
     }
-  }
-};
-env.run(main());
+  })()
+);

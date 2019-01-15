@@ -86,10 +86,8 @@ fn main() {
 
     if !opt.dry_run {
         let mut buffer = File::create(opt.js_path()).unwrap();
-        codegen::generate_js(&ir, &mut buffer);
-
-        let mut buffer = File::create(opt.js_lib_path()).unwrap();
         buffer.write(JS.as_bytes()).expect("failed to write");
+        codegen::generate_js(&ir, &mut buffer);
 
         let mut buffer = File::create(opt.html_path()).unwrap();
         buffer.write(HTML.as_bytes()).expect("failed to write");
