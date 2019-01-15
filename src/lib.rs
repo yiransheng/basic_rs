@@ -1,3 +1,7 @@
+#[cfg(test)]
+#[macro_use]
+extern crate quickcheck;
+
 mod codegen;
 mod compile;
 mod error_print;

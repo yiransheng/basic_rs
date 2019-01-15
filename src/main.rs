@@ -1,10 +1,6 @@
 #[macro_use]
 extern crate keyword_token_derive;
 
-#[cfg(test)]
-#[macro_use]
-extern crate quickcheck;
-
 use std::fs::File;
 use std::io;
 use std::io::prelude::*;
@@ -20,7 +16,6 @@ mod compile;
 mod error_print;
 mod ir;
 mod parser;
-mod relooper;
 mod scanner;
 mod vm;
 
