@@ -106,4 +106,6 @@ var main = function* () {
 
 ## Relooper
 
-TODO: write up
+I have written a `Relooper` algorithm implementation from `emscripten` project, basic on the original `emscripten` paper. It's missing a lot of optimizations and improvements since incorporated into `emscripten`. It's probably buggy in some way as well.
+
+TODO: more details
