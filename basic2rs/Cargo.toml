@@ -1,0 +1,11 @@
+[package]
+name = "basic2js"
+version = "0.1.0"
+authors = ["Yiran Sheng <shengyiran@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+indoc = "0.2"
+slotmap = "0.3.0"
+structopt = "0.2.13"
+basic_rs = { path = "../" }
