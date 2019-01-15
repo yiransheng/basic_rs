@@ -2,17 +2,25 @@
 
 [![Build Status](https://travis-ci.org/yiransheng/basic_rs.svg?branch=master)](https://travis-ci.org/yiransheng)
 
-
 A BASIC language interpreter written in `rust`. This project is motivated and inspired by Peter Norvig's [BASIC interpreter in python](http://nbviewer.jupyter.org/github/norvig/pytudes/blob/master/ipynb/BASIC.ipynb), reading that notebook helped me tremendously.
 
+## Overview
 
+The repo contains an interpreter and two compilers of the original Dartmouth BASIC language.
+
+* Main crate `basic_rs` implements the frontend of BASIC (scanner, parser, ast), and a VM-based interpreter
+* Crate `basic2wasm` compiles BASIC to Web Assembly using [binaryen](https://github.com/WebAssembly/binaryen) (`INPUT` statement only works with console output, due to lack of blocking IO in browser environment)
+  * example: wasm  [Game of Life](https://nbviewer.jupyter.org/github/norvig/pytudes/blob/master/ipynb/BASIC.ipynb#Longer-Program:-Life) from BASIC source, see it running [here](http://subdued-afternoon.surge.sh/)
+  * [README](./basic2wasm/README.md)
+* Crate `basic2js` compiles BASIC to JavaScript (using generator functions for async `INPUT` handling)
+  * example: vintage **batnum** game, see it running [here](http://batnum.surge.sh/)
+  * [README](./basic2js/README.md)
+* `not-yet`: crate `basic2rs`, compiles BASIC to `rust` source code, and to subsequently native code with `rustc` :)
 
 ## Features and Limitations
 
 Matches first version of [Dartmouth Basic](https://en.wikipedia.org/wiki/Dartmouth_BASIC) closely: reference manual [here](http://web.archive.org/web/20120716185629/http://www.bitsavers.org/pdf/dartmouth/BASIC_Oct64.pdf), which means this implementation inherits all its limitations.
 
-* [**Update**] Has an additional crate `basic2wasm` to compile BASIC programs to WebAssembly!
-  * Still hacky and buggy, but it is able to compile  [Game of Life](https://nbviewer.jupyter.org/github/norvig/pytudes/blob/master/ipynb/BASIC.ipynb#Longer-Program:-Life), see it running [here](http://subdued-afternoon.surge.sh/)
 * No input support other than `DATA` statements in source program
   * [**Update**] Added `INPUT` statement support in #28
   * Not sure what the official syntax for `INPUT` is,  but statements like `10 INPUT "Prompt" X, Y` works fine
