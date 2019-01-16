@@ -101,16 +101,16 @@ impl ToRs for LValue {
         match self {
             LValue::ArrPtr(var, offset) => match offset {
                 Offset::OneD(i) => {
-                    rs.write(format_args!("*env.array_{}.mut_1d(", var))?;
+                    rs.write(format_args!("(*env.array_{}.mut_1d(", var))?;
                     i.codegen(rs)?;
-                    rs.write(")")?;
+                    rs.write("))")?;
                 }
                 Offset::TwoD(i, j) => {
-                    rs.write(format_args!("*env.array_{}.mut_2d(", var))?;
+                    rs.write(format_args!("(*env.array_{}.mut_2d(", var))?;
                     i.codegen(rs)?;
                     rs.write(", ")?;
                     j.codegen(rs)?;
-                    rs.write(")")?;
+                    rs.write("))")?;
                 }
             },
             LValue::FnPtr(func) => rs.write(func)?,
