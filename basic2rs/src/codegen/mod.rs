@@ -25,10 +25,20 @@ pub fn generate_rs<W: Write>(ir: &Program, out: W) {
         ir,
     };
 
+    rs.writeln_("#[derive(Default)]");
+    rs.writeln_("struct Env {");
+
+    for global in &ir.globals {
+        global.codegen(&mut rs).unwrap();
+    }
+
+    rs.writeln_("}");
+
     rs.writeln_("fn main() {");
     rs.writeln_("use std::io;");
     rs.writeln_(
         "
+        let mut env = Env::default();
         let stdout = io::stdout();
         let stdin = io::stdin();
     ",
@@ -41,10 +51,6 @@ pub fn generate_rs<W: Write>(ir: &Program, out: W) {
     }
     rs.writeln_("];");
 
-    for global in &ir.globals {
-        global.codegen(&mut rs).unwrap();
-    }
-
     for func in ir.functions.iter() {
         let name = func.name;
         rs.function = name;
@@ -53,7 +59,7 @@ pub fn generate_rs<W: Write>(ir: &Program, out: W) {
         rs.writeln_(";");
     }
 
-    rs.writeln_("__main__();");
+    rs.writeln_("__main__(&mut env);");
 
     rs.writeln_("}");
 }
@@ -82,7 +88,7 @@ impl<'a, W> RsCode<'a, W> {
             .enumerate()
             .find_map(|(i, func)| {
                 if func.name == name {
-                    Some(format!("fn${}", i))
+                    Some(format!("__fn_{}__", i))
                 } else {
                     None
                 }
@@ -151,10 +157,11 @@ where
             self.render_shape_id(id);
             self.write_(": ");
         }
-        self.writeln_("{");
+        self.writeln_("loop {{");
 
         f(self);
 
+        self.writeln_("} break;");
         self.writeln_("}");
     }
 
@@ -183,7 +190,7 @@ where
             }
             Cond::IfLabel(id) => {
                 self.writeln_(format_args!(
-                    "if (__label__ === {}) {}",
+                    "if (__label__ == {}) {}",
                     id.index(),
                     "{"
                 ));
@@ -192,7 +199,7 @@ where
             }
             Cond::ElseIfLabel(id) => {
                 self.writeln_(format_args!(
-                    "else if (__label__ === {}) {}",
+                    "else if (__label__ == {}) {}",
                     id.index(),
                     "{"
                 ));
@@ -295,7 +302,7 @@ where
             // TODO: not hard code type
             Some(_) => "|local_0: f64| {\n",
             // generator
-            _ => "|| {\n",
+            _ => "|env: &mut Env| {\n",
         };
 
         sink.write_group(sig, "}", |sink| {

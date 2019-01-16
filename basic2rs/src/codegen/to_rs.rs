@@ -12,19 +12,23 @@ impl ToRs for Statement {
     ) -> Result<(), Self::Error> {
         match self {
             Statement::Assign(lval, expr) => {
+                // rs.write("{")?;
                 lval.codegen(rs)?;
                 rs.write(" = ")?;
                 expr.codegen(rs)?;
+                // rs.write("}")?;
             }
             Statement::DefFn(lval, func) => {
+                // rs.write("{")?;
                 lval.codegen(rs)?;
                 rs.write(" = ")?;
                 let name = rs.function_name_string(*func);
                 rs.write(name)?;
+                // rs.write("}")?;
             }
             Statement::CallSub(name) => {
                 let name = rs.function_name_string(*name);
-                rs.write(format_args!("{}()", name))?;
+                rs.write(format_args!("{}(env)", name))?;
             }
             Statement::Alloc1d(..) => {
                 // do nothing
@@ -74,14 +78,14 @@ impl ToRs for GlobalKind {
     ) -> Result<(), Self::Error> {
         match self {
             GlobalKind::Variable(var) => {
-                rs.writeln(format_args!("let mut {} = 0;", var))
+                rs.writeln(format_args!("{}: f64,", var))
             }
-            GlobalKind::ArrPtr(var, _) => rs.writeln(format_args!(
-                "var ARRAY_{} = new SparseArray();",
-                var
-            )),
+            GlobalKind::ArrPtr(var, _) => {
+                rs.writeln(format_args!("array_{}: SparseArray,", var))
+            }
             GlobalKind::FnPtr(var) => {
-                rs.writeln(format_args!("let mut {};", var))
+                // rs.writeln(format_args!("let mut {};", var))
+                unimplemented!()
             }
         }
     }
@@ -97,20 +101,22 @@ impl ToRs for LValue {
         match self {
             LValue::ArrPtr(var, offset) => match offset {
                 Offset::OneD(i) => {
-                    rs.write(format_args!("ARRAY_{}.index1d(", var))?;
+                    rs.write(format_args!("*env.array_{}.mut_1d(", var))?;
                     i.codegen(rs)?;
-                    rs.write(").value")?;
+                    rs.write(")")?;
                 }
                 Offset::TwoD(i, j) => {
-                    rs.write(format_args!("ARRAY_{}.index2d(", var))?;
+                    rs.write(format_args!("*env.array_{}.mut_2d(", var))?;
                     i.codegen(rs)?;
                     rs.write(", ")?;
                     j.codegen(rs)?;
-                    rs.write(").value")?;
+                    rs.write(")")?;
                 }
             },
             LValue::FnPtr(func) => rs.write(func)?,
-            LValue::Global(var) => rs.write(var)?,
+            LValue::Global(var) => {
+                rs.write(format_args!("env.{}", var))?;
+            }
             LValue::Local(index) => {
                 rs.write(format_args!("local_{}", index))?
             }
@@ -200,15 +206,14 @@ impl ToRs for Expr {
                 BinaryOp::Rem => binary!(lhs, "%", rhs),
                 BinaryOp::Less => binary!(lhs, "<", rhs),
                 BinaryOp::Greater => binary!(lhs, ">", rhs),
-                BinaryOp::Equal => binary!(lhs, "===", rhs),
+                BinaryOp::Equal => binary!(lhs, "==", rhs),
                 BinaryOp::Pow => {
                     lhs.codegen(rs)?;
                     rs.write(".")?;
                     call!("powf", rhs)
                 }
                 BinaryOp::CopySign => {
-                    unimplemented!();
-                    rs.write("env.copySign")?;
+                    rs.write("copysign")?;
                     binary!(lhs, ",", rhs)
                 }
             },

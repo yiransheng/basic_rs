@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::error;
 use std::fmt;
 use std::io::{BufWriter, Error, Write};
@@ -98,5 +99,48 @@ impl<W: Write> Printer<W> {
         self.col = written;
 
         Ok(())
+    }
+}
+
+#[inline(always)]
+fn copysign(a: f64, b: f64) -> f64 {
+    a * b.signum()
+}
+
+#[derive(Default)]
+struct SparseArray {
+    data: HashMap<usize, f64>,
+}
+
+impl SparseArray {
+    fn mut_1d(&mut self, i: f64) -> &mut f64 {
+        let key = SparseArray::hash1d(i);
+
+        let key = SparseArray::hash1d(i);
+        if !self.data.contains_key(&key) {
+            self.data.insert(key, 0.0);
+        }
+
+        self.data.get_mut(&key).unwrap()
+    }
+    fn mut_2d(&mut self, i: f64, j: f64) -> &mut f64 {
+        let key = SparseArray::hash2d(i, j);
+
+        let key = SparseArray::hash1d(i);
+        if !self.data.contains_key(&key) {
+            self.data.insert(key, 0.0);
+        }
+
+        self.data.get_mut(&key).unwrap()
+    }
+
+    fn hash1d(i: f64) -> usize {
+        SparseArray::hash2d(i, 0.0)
+    }
+    fn hash2d(i: f64, j: f64) -> usize {
+        let i = i.trunc() as usize;
+        let j = j.trunc() as usize;
+
+        (i + j) * (i + j + 1) / 2 + j
     }
 }
