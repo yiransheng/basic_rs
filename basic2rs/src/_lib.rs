@@ -1,38 +1,9 @@
 use std::collections::HashMap;
-use std::error;
-use std::fmt;
 use std::io::{BufWriter, Error, Write};
 use std::mem;
 use std::str::from_utf8_unchecked;
 
 use unicode_width::UnicodeWidthStr;
-
-#[derive(Debug)]
-pub enum PrintError {
-    Io(Error),
-}
-
-impl From<Error> for PrintError {
-    fn from(err: Error) -> Self {
-        PrintError::Io(err)
-    }
-}
-
-impl fmt::Display for PrintError {
-    fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            PrintError::Io(err) => err.fmt(formatter),
-        }
-    }
-}
-
-impl error::Error for PrintError {
-    fn description(&self) -> &str {
-        match self {
-            PrintError::Io(err) => err.description(),
-        }
-    }
-}
 
 pub struct Printer<W> {
     num: Vec<u8>,
@@ -41,14 +12,6 @@ pub struct Printer<W> {
 }
 
 impl<W: Write> Printer<W> {
-    #[allow(dead_code)]
-    pub fn new(out: W) -> Self {
-        Printer {
-            num: Vec::new(),
-            out,
-            col: 0,
-        }
-    }
     pub fn new_buffered(out: W) -> Printer<BufWriter<W>> {
         Printer {
             num: Vec::new(),
@@ -56,12 +19,12 @@ impl<W: Write> Printer<W> {
             col: 0,
         }
     }
-    pub fn flush(&mut self) -> Result<(), PrintError> {
+    pub fn flush(&mut self) -> Result<(), Error> {
         self.out.flush()?;
 
         Ok(())
     }
-    pub fn write_num(&mut self, n: f64) -> Result<(), PrintError> {
+    pub fn write_num(&mut self, n: f64) -> Result<(), Error> {
         let mut num = mem::replace(&mut self.num, Vec::new());
         num.clear();
         write!(&mut num, "{}", n as f32)?;
@@ -72,7 +35,7 @@ impl<W: Write> Printer<W> {
         r
     }
 
-    pub fn write_str(&mut self, s: &str) -> Result<(), PrintError> {
+    pub fn write_str(&mut self, s: &str) -> Result<(), Error> {
         debug_assert!(!s.contains('\n'));
 
         let w = UnicodeWidthStr::width(s);
@@ -81,14 +44,14 @@ impl<W: Write> Printer<W> {
 
         Ok(())
     }
-    pub fn writeln(&mut self) -> Result<(), PrintError> {
+    pub fn writeln(&mut self) -> Result<(), Error> {
         writeln!(self.out)?;
         self.col = 0;
 
         Ok(())
     }
 
-    pub fn advance_to_multiple(&mut self, k: usize) -> Result<(), PrintError> {
+    pub fn advance_to_multiple(&mut self, k: usize) -> Result<(), Error> {
         debug_assert!(k > 0);
         let mut written = self.col;
         let n = k - written % k;
@@ -103,12 +66,12 @@ impl<W: Write> Printer<W> {
 }
 
 #[inline(always)]
-fn copysign(a: f64, b: f64) -> f64 {
+pub fn copysign(a: f64, b: f64) -> f64 {
     a * b.signum()
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
-enum Rank {
+pub enum Rank {
     One,
     Two,
     Unknown,
@@ -120,7 +83,7 @@ impl Default for Rank {
 }
 
 #[derive(Default, Debug)]
-struct SparseArray {
+pub struct SparseArray {
     data: HashMap<[i32; 2], f64>,
     rank: Rank,
 }
@@ -136,7 +99,7 @@ macro_rules! validate_index {
 }
 
 impl SparseArray {
-    fn mut_1d(&mut self, i: f64) -> &mut f64 {
+    pub fn mut_1d(&mut self, i: f64) -> &mut f64 {
         self.assert_rank(Rank::One);
         validate_index!(i);
 
@@ -148,7 +111,7 @@ impl SparseArray {
 
         self.data.get_mut(&key).unwrap()
     }
-    fn mut_2d(&mut self, i: f64, j: f64) -> &mut f64 {
+    pub fn mut_2d(&mut self, i: f64, j: f64) -> &mut f64 {
         self.assert_rank(Rank::Two);
         validate_index!(i, j);
 

@@ -25,6 +25,9 @@ pub fn generate_rs<W: Write>(ir: &Program, out: W) {
         ir,
     };
 
+    rs.writeln_("mod runtime;");
+    rs.writeln_("use crate::runtime::*;");
+
     rs.writeln_("#[derive(Debug, Default)]");
     rs.writeln_("struct Env {");
 

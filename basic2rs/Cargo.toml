@@ -6,6 +6,6 @@ edition = "2018"
 
 [dependencies]
 indoc = "0.2"
-slotmap = "0.3.0"
 structopt = "0.2.13"
+toml = "0.4.10"
 basic_rs = { path = "../" }

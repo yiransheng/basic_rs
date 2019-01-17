@@ -1,12 +1,13 @@
 mod codegen;
 
-use std::fs::File;
+use std::fs::{create_dir_all, File};
 use std::io;
 use std::io::prelude::*;
 use std::path::PathBuf;
 
 use basic_rs::{compile, print_source_error, Parser, Scanner};
 use structopt::StructOpt;
+use toml::{self, Value};
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "bas2rs", about = "bas2rs file")]
@@ -27,15 +28,36 @@ struct Opt {
 }
 
 impl Opt {
+    fn app_name(&self) -> Option<&str> {
+        self.input
+            .as_path()
+            .file_stem()
+            .and_then(|name| name.to_str())
+    }
+
     fn rs_path(&self) -> PathBuf {
         let mut path = self.out_dir.clone();
         path.push("src/main.rs");
+        path
+    }
+    fn runtime_path(&self) -> PathBuf {
+        let mut path = self.out_dir.clone();
+        path.push("src/runtime.rs");
         path
     }
     fn conf_path(&self) -> PathBuf {
         let mut path = self.out_dir.clone();
         path.push("Cargo.toml");
         path
+    }
+
+    fn create_sub_dirs(&self) {
+        let path = self.out_dir.as_path();
+        assert!(!path.exists() || path.is_dir(), "Invalid output directory");
+
+        let mut src = self.out_dir.clone();
+        src.push("src");
+        create_dir_all(src.as_path()).unwrap();
     }
 }
 
@@ -75,13 +97,22 @@ fn main() {
     }
 
     if !opt.dry_run {
+        let mut cargo_toml = CARGO_TOML.parse::<Value>().unwrap();
+        cargo_toml["package"]["name"] =
+            opt.app_name().map(Value::from).unwrap();
+        opt.create_sub_dirs();
+
         let mut buffer = File::create(opt.conf_path()).unwrap();
         buffer
-            .write(CARGO_TOML.as_bytes())
-            .expect("failed to write");
+            .write(toml::to_string_pretty(&cargo_toml).unwrap().as_bytes())
+            .expect("failed to write Cargo.toml");
+
+        let mut buffer = File::create(opt.runtime_path()).unwrap();
+        buffer
+            .write(RS_LIB.as_bytes())
+            .expect("failed to write runtime.rs");
 
         let mut buffer = File::create(opt.rs_path()).unwrap();
-        buffer.write(RS_LIB.as_bytes()).expect("failed to write");
         codegen::generate_rs(&ir, &mut buffer);
     }
 }
