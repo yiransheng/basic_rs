@@ -6,7 +6,7 @@ A BASIC language interpreter written in `rust`. This project is motivated and in
 
 ## Overview
 
-The repo contains an interpreter and two compilers of the original Dartmouth BASIC language.
+The repo contains an interpreter and a couple compilers of the original Dartmouth BASIC language.
 
 * Main crate `basic_rs` implements the frontend of BASIC (scanner, parser, ast), and a VM-based interpreter
 * Crate `basic2wasm` compiles BASIC to Web Assembly using [binaryen](https://github.com/WebAssembly/binaryen) (`INPUT` statement only works with console output, due to lack of blocking IO in browser environment)
