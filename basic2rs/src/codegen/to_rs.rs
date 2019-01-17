@@ -37,7 +37,7 @@ impl ToRs for Statement {
                 // do nothing
             }
             Statement::Print(expr) => {
-                rs.write_group("printer.write_num(", ")", |rs| {
+                rs.write_group("printer.write_num_(", ")", |rs| {
                     expr.codegen(rs)
                 })?;
             }
@@ -48,18 +48,18 @@ impl ToRs for Statement {
                 .unwrap();
                 // not need to escape, BASIC source does not support escaping double quote, so any
                 // string that needs escaping will fail at Parser
-                rs.write_group("printer.write_str(\"", "\")", |rs| {
+                rs.write_group("printer.write_str_(\"", "\")", |rs| {
                     rs.write(s)
                 })?;
             }
             Statement::PrintAdvance3 => {
-                rs.write("printer.advance_to_multiple(3)")?;
+                rs.write("printer.advance_to_multiple_(3)")?;
             }
             Statement::PrintAdvance15 => {
-                rs.write("printer.advance_to_multiple(15)")?;
+                rs.write("printer.advance_to_multiple_(15)")?;
             }
             Statement::PrintNewline => {
-                rs.write("printer.writeln()")?;
+                rs.write("printer.writeln_()")?;
             }
         }
 
@@ -179,7 +179,7 @@ impl ToRs for Expr {
         match self {
             Expr::RandF64 => rs.write("rng.gen()")?,
             Expr::ReadData => rs.write("data.pop().expect(\"no data\")")?,
-            Expr::Input => rs.write("{ printer.flush(); env.input() }")?,
+            Expr::Input => rs.write("printer.input(stdin.lock())")?,
             Expr::Call(func, expr) => {
                 func.codegen(rs)?;
                 rs.write_group("(", ")", |rs| expr.codegen(rs))?;

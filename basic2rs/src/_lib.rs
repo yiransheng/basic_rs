@@ -1,14 +1,20 @@
 use std::collections::HashMap;
-use std::io::{BufWriter, Error, Write};
+use std::io::{BufRead, BufWriter, Error, Write};
 use std::mem;
 use std::str::from_utf8_unchecked;
 
 use unicode_width::UnicodeWidthStr;
 
+pub fn exit_io_error<T>(err: Error) -> T {
+    eprintln!("{}", err);
+    ::std::process::exit(1)
+}
+
 pub struct Printer<W> {
     num: Vec<u8>,
     out: W,
     col: usize,
+    input_string: String,
 }
 
 impl<W: Write> Printer<W> {
@@ -17,12 +23,20 @@ impl<W: Write> Printer<W> {
             num: Vec::new(),
             out: BufWriter::with_capacity(100, out),
             col: 0,
+            input_string: String::new(),
         }
     }
-    pub fn flush(&mut self) -> Result<(), Error> {
-        self.out.flush()?;
-
-        Ok(())
+    pub fn write_str_(&mut self, s: &str) {
+        self.write_str(s).unwrap_or_else(exit_io_error);
+    }
+    pub fn write_num_(&mut self, n: f64) {
+        self.write_num(n).unwrap_or_else(exit_io_error);
+    }
+    pub fn advance_to_multiple_(&mut self, k: usize) {
+        self.advance_to_multiple(k).unwrap_or_else(exit_io_error);
+    }
+    pub fn writeln_(&mut self) {
+        self.writeln().unwrap_or_else(exit_io_error);
     }
     pub fn write_num(&mut self, n: f64) -> Result<(), Error> {
         let mut num = mem::replace(&mut self.num, Vec::new());
@@ -60,6 +74,34 @@ impl<W: Write> Printer<W> {
             write!(self.out, " ")?;
         }
         self.col = written;
+
+        Ok(())
+    }
+
+    pub fn input<R: BufRead>(&mut self, mut inp: R) -> f64 {
+        self.flush().unwrap_or_else(exit_io_error);
+        self.input_string.clear();
+
+        inp.read_line(&mut self.input_string)
+            .unwrap_or_else(exit_io_error);
+
+        let s = (&self.input_string).trim();
+        let v: f64 = if s.is_empty() {
+            0.0
+        } else {
+            s.parse().unwrap_or_else(|_| {
+                self.write_str_("Invalid INPUT");
+                self.writeln_();
+
+                self.input(inp)
+            })
+        };
+
+        v
+    }
+
+    fn flush(&mut self) -> Result<(), Error> {
+        self.out.flush()?;
 
         Ok(())
     }
