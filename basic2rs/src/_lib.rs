@@ -107,16 +107,41 @@ fn copysign(a: f64, b: f64) -> f64 {
     a * b.signum()
 }
 
-#[derive(Default)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+enum Rank {
+    One,
+    Two,
+    Unknown,
+}
+impl Default for Rank {
+    fn default() -> Self {
+        Rank::Unknown
+    }
+}
+
+#[derive(Default, Debug)]
 struct SparseArray {
-    data: HashMap<usize, f64>,
+    data: HashMap<[i32; 2], f64>,
+    rank: Rank,
+}
+
+macro_rules! validate_index {
+    ($i:expr) => {
+        assert!($i >= 0f64 && $i == $i.trunc());
+    };
+    ($i:expr, $j: expr) => {
+        validate_index!($i);
+        validate_index!($j);
+    };
 }
 
 impl SparseArray {
     fn mut_1d(&mut self, i: f64) -> &mut f64 {
-        let key = SparseArray::hash1d(i);
+        self.assert_rank(Rank::One);
+        validate_index!(i);
 
         let key = SparseArray::hash1d(i);
+
         if !self.data.contains_key(&key) {
             self.data.insert(key, 0.0);
         }
@@ -124,9 +149,11 @@ impl SparseArray {
         self.data.get_mut(&key).unwrap()
     }
     fn mut_2d(&mut self, i: f64, j: f64) -> &mut f64 {
+        self.assert_rank(Rank::Two);
+        validate_index!(i, j);
+
         let key = SparseArray::hash2d(i, j);
 
-        let key = SparseArray::hash1d(i);
         if !self.data.contains_key(&key) {
             self.data.insert(key, 0.0);
         }
@@ -134,13 +161,27 @@ impl SparseArray {
         self.data.get_mut(&key).unwrap()
     }
 
-    fn hash1d(i: f64) -> usize {
-        SparseArray::hash2d(i, 0.0)
+    #[inline]
+    fn assert_rank(&mut self, rank: Rank) {
+        match self.rank {
+            Rank::Unknown => {
+                self.rank = rank;
+                return;
+            }
+            r if r != rank => {
+                panic!("Runtime Error: incorrect List/Table access");
+            }
+            _ => {}
+        }
     }
-    fn hash2d(i: f64, j: f64) -> usize {
-        let i = i.trunc() as usize;
-        let j = j.trunc() as usize;
 
-        (i + j) * (i + j + 1) / 2 + j
+    fn hash1d(i: f64) -> [i32; 2] {
+        SparseArray::hash2d(i, -1.0)
+    }
+    fn hash2d(i: f64, j: f64) -> [i32; 2] {
+        let i = i.trunc() as i32;
+        let j = j.trunc() as i32;
+
+        [i, j]
     }
 }

@@ -107,7 +107,7 @@ fn copysign(a: f64, b: f64) -> f64 {
     a * b.signum()
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 struct SparseArray {
     data: HashMap<usize, f64>,
 }
@@ -144,7 +144,7 @@ impl SparseArray {
         (i + j) * (i + j + 1) / 2 + j
     }
 }
-#[derive(Default)]
+#[derive(Debug, Default)]
 struct Env {
     I: f64,
     array_B: SparseArray,
@@ -191,7 +191,7 @@ fn main() {
                 } else {
                     __label__ = 5;
                 }
-                if (*env.array_A.mut_2d(env.X, env.Y) == 1f64) {
+                if ((*env.array_A.mut_2d(env.X, env.Y)) == 1f64) {
                     __label__ = 8;
                 } else {
                     __label__ = 6;
@@ -247,19 +247,19 @@ fn main() {
                 } else {
                     __label__ = 5;
                 }
-                local_2 = (((((((*env
+                local_2 = ((((((((*env
                     .array_A
-                    .mut_2d((env.X - 1f64), env.Y)
-                    + *env.array_A.mut_2d((env.X + 1f64), env.Y))
-                    + *env.array_A.mut_2d(env.X, (env.Y - 1f64)))
-                    + *env.array_A.mut_2d(env.X, (env.Y + 1f64)))
-                    + *env.array_A.mut_2d((env.X - 1f64), (env.Y - 1f64)))
-                    + *env.array_A.mut_2d((env.X + 1f64), (env.Y + 1f64)))
-                    + *env.array_A.mut_2d((env.X - 1f64), (env.Y + 1f64)))
-                    + *env.array_A.mut_2d((env.X + 1f64), (env.Y - 1f64)));
-                *env.array_B.mut_2d(env.X, env.Y) = *env
+                    .mut_2d((env.X - 1f64), env.Y))
+                    + (*env.array_A.mut_2d((env.X + 1f64), env.Y)))
+                    + (*env.array_A.mut_2d(env.X, (env.Y - 1f64))))
+                    + (*env.array_A.mut_2d(env.X, (env.Y + 1f64))))
+                    + (*env.array_A.mut_2d((env.X - 1f64), (env.Y - 1f64))))
+                    + (*env.array_A.mut_2d((env.X + 1f64), (env.Y + 1f64))))
+                    + (*env.array_A.mut_2d((env.X - 1f64), (env.Y + 1f64))))
+                    + (*env.array_A.mut_2d((env.X + 1f64), (env.Y - 1f64))));
+                (*env.array_B.mut_2d(env.X, env.Y)) = (*env
                     .array_L
-                    .mut_2d(*env.array_A.mut_2d(env.X, env.Y), local_2);
+                    .mut_2d((*env.array_A.mut_2d(env.X, env.Y)), local_2));
                 env.X = (env.X + 1f64);
                 __label__ = 4;
                 continue 'a5;
@@ -292,8 +292,8 @@ fn main() {
                 } else {
                     __label__ = 5;
                 }
-                *env.array_A.mut_2d(env.X, env.Y) =
-                    *env.array_B.mut_2d(env.X, env.Y);
+                (*env.array_A.mut_2d(env.X, env.Y)) =
+                    (*env.array_B.mut_2d(env.X, env.Y));
                 env.X = (env.X + 1f64);
                 __label__ = 4;
                 continue 'a5;
@@ -312,16 +312,16 @@ fn main() {
 ;
         local_1 = data.pop().expect("no data");
         env.M = data.pop().expect("no data");
-        *env.array_L.mut_2d(0f64, 3f64) = data.pop().expect("no data");
-        *env.array_L.mut_2d(1f64, 3f64) = data.pop().expect("no data");
-        *env.array_L.mut_2d(1f64, 2f64) = data.pop().expect("no data");
-        *env.array_A.mut_2d(3f64, 4f64) = data.pop().expect("no data");
-        *env.array_A.mut_2d(3f64, 5f64) = data.pop().expect("no data");
-        *env.array_A.mut_2d(3f64, 6f64) = data.pop().expect("no data");
-        *env.array_A.mut_2d(6f64, 5f64) = data.pop().expect("no data");
-        *env.array_A.mut_2d(6f64, 6f64) = data.pop().expect("no data");
-        *env.array_A.mut_2d(7f64, 5f64) = data.pop().expect("no data");
-        *env.array_A.mut_2d(7f64, 6f64) = data.pop().expect("no data");
+        (*env.array_L.mut_2d(0f64, 3f64)) = data.pop().expect("no data");
+        (*env.array_L.mut_2d(1f64, 3f64)) = data.pop().expect("no data");
+        (*env.array_L.mut_2d(1f64, 2f64)) = data.pop().expect("no data");
+        (*env.array_A.mut_2d(3f64, 4f64)) = data.pop().expect("no data");
+        (*env.array_A.mut_2d(3f64, 5f64)) = data.pop().expect("no data");
+        (*env.array_A.mut_2d(3f64, 6f64)) = data.pop().expect("no data");
+        (*env.array_A.mut_2d(6f64, 5f64)) = data.pop().expect("no data");
+        (*env.array_A.mut_2d(6f64, 6f64)) = data.pop().expect("no data");
+        (*env.array_A.mut_2d(7f64, 5f64)) = data.pop().expect("no data");
+        (*env.array_A.mut_2d(7f64, 6f64)) = data.pop().expect("no data");
         env.I = 0f64;
         __fn_0__(env);
         local_0 = local_1;

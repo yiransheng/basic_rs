@@ -25,7 +25,7 @@ pub fn generate_rs<W: Write>(ir: &Program, out: W) {
         ir,
     };
 
-    rs.writeln_("#[derive(Default)]");
+    rs.writeln_("#[derive(Debug, Default)]");
     rs.writeln_("struct Env {");
 
     for global in &ir.globals {
@@ -38,9 +38,17 @@ pub fn generate_rs<W: Write>(ir: &Program, out: W) {
     rs.writeln_("use std::io;");
     rs.writeln_(
         "
+        use rand::Rng;
+        use rand::rngs::SmallRng;
+        use rand::FromEntropy;",
+    );
+
+    rs.writeln_(
+        "
         let mut env = Env::default();
         let stdout = io::stdout();
         let stdin = io::stdin();
+        let mut rng = SmallRng::from_entropy();
     ",
     );
     rs.writeln_("let mut printer = Printer::new_buffered(stdout.lock());");
